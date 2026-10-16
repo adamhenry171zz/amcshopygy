@@ -1,0 +1,11 @@
+{
+  "name": "amc-shopping-site",
+  "private": true,
+  "version": "5.2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@netlify/blobs": "11.1.4"
+  }
+}

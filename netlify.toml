@@ -1,0 +1,18 @@
+[build]
+  publish = "site"
+
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/generate-mailbox"
+  to = "/.netlify/functions/generate-mailbox"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
