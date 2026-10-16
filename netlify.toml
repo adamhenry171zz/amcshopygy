@@ -1,8 +1,9 @@
 [build]
-  publish = "site"
+  command = "rm -rf .netlify-build && mkdir -p .netlify-build && unzip -q AMC_Shopping_DEPLOY_READY_v5_2.zip -d .netlify-build"
+  publish = ".netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
 
 [functions]
-  directory = "netlify/functions"
+  directory = ".netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/netlify/functions"
 
 [[redirects]]
   from = "/api/generate-mailbox"
