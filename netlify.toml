@@ -1,5 +1,5 @@
 [build]
-  command = "rm -rf .netlify-build && mkdir -p .netlify-build && unzip -q AMC_Shopping_DEPLOY_READY_v5_2.zip -d .netlify-build"
+  command = "rm -rf .netlify-build && mkdir -p .netlify-build && unzip -q AMC_Shopping_DEPLOY_READY_v5_2.zip -d .netlify-build && python3 deploy-promo/inject.py .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
   publish = ".netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
 
 [functions]
