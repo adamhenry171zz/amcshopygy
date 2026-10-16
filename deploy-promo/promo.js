@@ -6,6 +6,7 @@
   if (!active()) {
     document.querySelectorAll('[data-membership-promo]').forEach(el => el.hidden = true);
     document.querySelectorAll('[data-promo-expiry]').forEach(el => el.textContent = 'This five-day website relaunch offer has ended.');
+    document.querySelectorAll('.promo-plans-section').forEach(el => el.hidden = true);
     document.querySelectorAll('[data-promo-page] .announcement-actions .btn.primary').forEach(a => {
       a.textContent = 'View current membership plans →';
       a.href = 'members.html';
