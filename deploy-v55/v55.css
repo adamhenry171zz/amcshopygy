@@ -1,0 +1,41 @@
+/* v5.5 — Quote payment breakdown + separated Gaming / Streaming */
+.payment-estimator-section{background:linear-gradient(180deg,#f3f8fc,#fff)}
+.payment-estimator{display:grid;grid-template-columns:.72fr 1.28fr;gap:22px;align-items:start}
+.payment-input{padding:2px}.payment-input>p{font-size:9px;line-height:1.7;color:#718198;margin:12px 0 0}
+.money-input{display:flex;align-items:center;border:1px solid #dce5ef;background:#f9fbfd;border-radius:15px;overflow:hidden;min-height:58px}
+.money-input:focus-within{border-color:#55bfe9;box-shadow:0 0 0 3px rgba(15,135,219,.08);background:#fff}
+.money-input span{font-size:12px;font-weight:800;color:#087fc3;padding-left:15px}
+.money-input input{border:0!important;background:transparent!important;box-shadow:none!important;min-height:56px!important;font-size:18px!important;font-weight:700;color:#0b1d3a;padding-left:8px!important}
+.payment-breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.payment-card{padding:18px;border-radius:18px;border:1px solid #dde7ef;background:#f8fafc;min-width:0}
+.payment-card small{display:block;font-size:7px;letter-spacing:.12em;color:#75859a}
+.payment-card strong{display:block;font-size:22px;line-height:1.1;letter-spacing:-.045em;color:#0a1b42;margin:7px 0 4px;overflow-wrap:anywhere}
+.payment-card span{display:block;font-size:7px;color:#8593a5;line-height:1.5}
+.payment-card.due-now{background:linear-gradient(145deg,#e8f8ff,#f3fbff);border-color:#c8eafd}.payment-card.due-now strong{color:#057fca}
+.payment-card.arrival{background:linear-gradient(145deg,#fff4ee,#fffaf7);border-color:#f2d8c9}.payment-card.arrival strong{color:#c25d2c}
+.payment-card.total{background:linear-gradient(145deg,#051143,#08227d);border-color:#071c6a}.payment-card.total small,.payment-card.total span{color:#9fb5d3}.payment-card.total strong{color:#fff}
+.payment-example{grid-column:1/-1;border-radius:14px;padding:13px 15px;background:#edf8ff;border:1px solid #d2ebf8;color:#285b78;font-size:9px;font-weight:600;line-height:1.6}
+.payment-estimator>.notice{grid-column:1/-1}
+.quote-how{background:#f7f9fc}
+.quote-step-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.quote-step-grid article{background:#fff;border:1px solid #e0e8f1;border-radius:21px;padding:23px;min-height:205px;box-shadow:0 8px 26px rgba(3,21,58,.035)}
+.quote-step-grid b{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:#e8f8ff;color:#0787d6;font-size:9px}
+.quote-step-grid h3{font-size:17px;line-height:1.2;letter-spacing:-.035em;margin:35px 0 9px;color:#0b1d3a}
+.quote-step-grid p{font-size:8.8px;line-height:1.7;color:#75859a;margin:0}
+.store-tabs{grid-template-columns:repeat(3,1fr)}
+.shein-summary.expanded{grid-template-columns:repeat(3,1fr)}
+.shein-summary>div span{display:block;font-size:7px;line-height:1.5;color:#8190a3;margin-top:3px}
+.shein-summary .due{background:linear-gradient(145deg,#e9f8ff,#f7fcff);border-color:#cceafb}.shein-summary .due strong{color:#0787d6}
+.shein-summary .arrival{background:linear-gradient(145deg,#fff3ed,#fffaf6);border-color:#f1d5c5}.shein-summary .arrival strong{color:#bd5b2c}
+.service-split-note{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;margin:-4px 0 22px;border-radius:18px;background:linear-gradient(120deg,#eef8ff,#f9fcff);border:1px solid #d4ebf7}
+.service-split-note strong{display:block;font-size:11px;color:#09204f}.service-split-note span{display:block;font-size:8.5px;color:#718198;margin-top:3px}
+.streaming-hero{background:radial-gradient(circle at 82% 10%,rgba(80,216,255,.18),transparent 30%),linear-gradient(145deg,#00010a,#010539 55%,#071f73)}
+
+@media(max-width:980px){
+  .payment-estimator{grid-template-columns:1fr}.payment-breakdown{grid-template-columns:repeat(3,1fr)}
+  .quote-step-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:680px){
+  .payment-breakdown{grid-template-columns:1fr}.quote-step-grid{grid-template-columns:1fr}.quote-step-grid article{min-height:0}
+  .store-tabs{grid-template-columns:1fr 1fr}.shein-summary.expanded{grid-template-columns:1fr}.service-split-note{align-items:flex-start;flex-direction:column}.service-split-note .btn{width:100%;justify-content:center}
+}
