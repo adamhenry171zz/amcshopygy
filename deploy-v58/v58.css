@@ -1,0 +1,17 @@
+/* v5.8 — streaming cleanup, service logos, Crunchyroll pricing */
+.streaming-showcase.streaming-showcase-clean{display:block!important}
+.streaming-showcase-clean .streaming-content{width:100%;max-width:none}
+.streaming-showcase-clean .streaming-plan-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.stream-card-brand{display:flex;align-items:center;margin:0 0 12px}
+.stream-card-logo{width:38px;height:38px;object-fit:contain;display:block}
+.stream-card-logo-stack{display:flex;align-items:center}
+.stream-card-logo-stack img,.stream-card-logo-stack .stream-logo-fallback{width:34px;height:34px;margin-right:-7px;border:3px solid #fff;border-radius:10px;background:#fff;padding:4px;object-fit:contain;box-shadow:0 6px 16px rgba(5,22,61,.10)}
+.stream-logo-fallback{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#06165e,#08aeea);color:#fff;display:inline-grid;place-items:center;font-weight:800;font-size:11px;letter-spacing:.03em;box-shadow:0 8px 20px rgba(4,31,99,.16)}
+.service-logo-rail .stream-logo-fallback,.service-brand .stream-logo-fallback{width:42px;height:42px}
+#streaming-plans .streaming-plan-card{position:relative;overflow:hidden}
+#streaming-plans .streaming-plan-card:after{content:"";position:absolute;inset:auto -20px -30px auto;width:105px;height:105px;border-radius:50%;background:radial-gradient(circle,rgba(52,200,255,.12),transparent 68%);pointer-events:none}
+#streaming-plans .topup-head>div:first-child{min-width:0}
+#streaming-plans .topup-head h3{margin-top:2px}
+.iptv-card .iptv-mark{background:linear-gradient(135deg,#051b68,#00a8e8);color:#fff;font-weight:900;letter-spacing:.04em}
+@media (max-width:980px){.streaming-showcase-clean .streaming-plan-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.streaming-showcase-clean .streaming-plan-grid{grid-template-columns:1fr}.stream-card-logo{width:34px;height:34px}}
