@@ -78,7 +78,7 @@ $('new-record').addEventListener('click',()=>{if(schemas[state.view])openModal(s
 $('record-form').addEventListener('submit',saveRecord);
 $('modal-close').addEventListener('click',closeModal);$('modal-cancel').addEventListener('click',closeModal);$('modal').addEventListener('click',e=>{if(e.target===$('modal'))closeModal()});
 $('menu-toggle').addEventListener('click',()=>document.querySelector('.sidebar').classList.toggle('open'));
-document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>{setView(b.dataset.view);if(b.hasAttribute('data-academy-shortcut')){state.search='Academy Enrollment';render()}}));
 
 async function boot(){try{const r=await authApi('session');if(r.status===503){const detail=document.querySelector('#setup .muted');if(detail&&Array.isArray(r.data.missing)&&r.data.missing.length)detail.textContent='Netlify is not exposing these required runtime settings yet: '+r.data.missing.join(', ')+'. Check Functions/Runtime scope and redeploy.';show('setup');return}if(r.ok&&r.data.authenticated){show('dashboard');$('owner-name').textContent='Signed in as ahdesignai@gmail.com';await loadData();return}show('login')}catch{show('setup')}}
 boot();
