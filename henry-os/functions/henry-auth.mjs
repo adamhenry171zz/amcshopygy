@@ -14,7 +14,11 @@ export default async(req)=>{
   const adminEmail=String(process.env.HENRY_ADMIN_EMAIL||'').trim().toLowerCase();
   const adminPassword=String(process.env.HENRY_ADMIN_PASSWORD||'');
   const sessionSecret=String(process.env.HENRY_SESSION_SECRET||'');
-  if(!adminEmail||!adminPassword||sessionSecret.length<32)return json({error:'Private owner login is not configured yet'},503);
+  const missing=[];
+  if(!adminEmail)missing.push('HENRY_ADMIN_EMAIL');
+  if(!adminPassword)missing.push('HENRY_ADMIN_PASSWORD');
+  if(sessionSecret.length<32)missing.push('HENRY_SESSION_SECRET (must be at least 32 characters)');
+  if(missing.length)return json({error:'Private owner login is not configured yet',missing},503);
   const url=new URL(req.url); const action=url.searchParams.get('action')||'';
   if(action==='session'&&req.method==='GET')return json({authenticated:sessionOk(req,sessionSecret,adminEmail)});
   if(action==='logout'&&req.method==='POST')return json({ok:true},200,{'set-cookie':cookie('',0)});
