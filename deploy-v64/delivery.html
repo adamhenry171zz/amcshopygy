@@ -20,10 +20,10 @@
 </div></header>
 
 <main>
-<section class="delivery-hero"><div class="wrap delivery-hero-grid"><div><div class="eyebrow"><i></i> PRIVATE CUSTOMER DELIVERY PAGE</div><h1>Schedule your<br><span>AMC delivery.</span></h1><p>Send AMC your delivery details in one simple request. If you are at the delivery location, tap <strong>Use My Current Location</strong> and your phone can share the exact point after you approve permission.</p><div class="delivery-policy-row"><span>🚚 Free delivery may apply from 5 lbs+</span><span>🕚 Mon–Sat · 11 AM–5 PM</span><span>✅ AMC confirms every request</span></div></div><aside class="delivery-hero-note"><strong>Before you submit</strong><p>Preferred dates and times are requests, not confirmed appointments. Free-delivery eligibility applies only to qualifying shipments within designated Georgetown delivery areas.</p></aside></div></section>
+<section class="delivery-hero"><div class="wrap delivery-hero-grid"><div><div class="eyebrow"><i></i> PRIVATE CUSTOMER DELIVERY PAGE</div><h1>Schedule your<br><span>AMC delivery.</span></h1><p>Send AMC your delivery details in one simple request. Complete your details, then continue to WhatsApp to send your <strong>Current Location</strong> pin. Please do not share Live Location.</p><div class="delivery-policy-row"><span>🚚 Free delivery may apply from 5 lbs+</span><span>🕚 Mon–Sat · 11 AM–5 PM</span><span>✅ AMC confirms every request</span></div></div><aside class="delivery-hero-note"><strong>Before you submit</strong><p>Preferred dates and times are requests, not confirmed appointments. Free-delivery eligibility applies only to qualifying shipments within designated Georgetown delivery areas.</p></aside></div></section>
 
 <section class="delivery-form-section"><div class="wrap delivery-layout"><form id="amc-delivery-v64-form" class="delivery-card" novalidate>
-<div class="delivery-card-head"><div><div class="kicker">DELIVERY REQUEST</div><h2>Where should we bring it?</h2></div><span class="secure-pill">LOCATION SHARED ONLY WITH PERMISSION</span></div>
+<div class="delivery-card-head"><div><div class="kicker">DELIVERY REQUEST</div><h2>Where should we bring it?</h2></div><span class="secure-pill">LOCATION SHARED IN WHATSAPP</span></div>
 
 <div class="delivery-grid">
 <label class="field"><span>What would you like to do? *</span><select name="kind" required><option value="Request delivery">Request delivery</option><option value="Check delivery cost">Check delivery cost</option></select></label>
@@ -36,24 +36,18 @@
 <label class="field full"><span>Delivery address / area *</span><input name="address" required maxlength="220" autocomplete="street-address" placeholder="Example: Campbellville, Georgetown"></label>
 </div>
 
-<div class="location-panel">
-<div class="location-copy"><div class="location-icon">📍</div><div><strong>Share the exact delivery point</strong><p>If you are currently at the location, this is the easiest option. Your browser will ask permission first.</p></div></div>
-<button type="button" class="btn location-btn" id="use-location">📍 Use My Current Location</button>
-<div id="location-status" class="location-status" role="status" aria-live="polite">No location shared yet.</div>
-<input type="hidden" name="location" id="location-link">
-<div class="location-alt"><button type="button" class="text-link" id="show-map-link">Sending to a different location? Paste a Maps link instead</button><label id="map-link-wrap" class="field full hidden"><span>Google Maps / location share link</span><input id="map-link-manual" type="url" maxlength="500" placeholder="https://maps.google.com/..."><small>Open Google Maps, press and hold to drop a pin, tap Share, then Copy link.</small></label></div>
-</div>
+<div class="location-panel"><div class="location-copy"><div class="location-icon">📍</div><div><strong>Final step: send your Current Location in WhatsApp</strong><p>After submitting, tap Continue to WhatsApp, then tap + (or the attachment icon), choose Location and select <strong>Send Your Current Location</strong>. Do not choose Share Live Location. WhatsApp location sharing is always your choice.</p></div></div></div>
 
 <label class="field full"><span>Nearest landmark / extra directions</span><textarea name="landmark" rows="3" maxlength="350" placeholder="Example: white gate opposite the supermarket"></textarea></label>
-<label class="consent-row"><input name="consent" type="checkbox" required><span>I agree to share these details with AMC Shopping for this delivery quote/request. My location is only included if I choose to share it.</span></label>
+<label class="consent-row"><input name="consent" type="checkbox" required><span>I agree to share these details with AMC Shopping for this delivery quote/request. I will share my Current Location separately in WhatsApp if I choose to.</span></label>
 
-<button type="submit" class="btn primary delivery-submit" id="delivery-submit">Submit delivery request →</button>
+<button type="submit" class="btn primary delivery-submit" id="delivery-submit">Continue to WhatsApp & Share Location →</button>
 <div id="delivery-result" class="delivery-result hidden" role="status" aria-live="polite"></div>
 <p class="form-note">Submitting does not reserve a delivery slot or verify payment. AMC Shopping will review your request and confirm eligibility, any applicable delivery fee, and the final schedule.</p>
 </form>
 
 <aside class="delivery-side">
-<div class="side-card"><div class="kicker">HOW IT WORKS</div><ol><li><b>1</b><span><strong>Enter your details</strong><small>Use your package or mailbox reference if available.</small></span></li><li><b>2</b><span><strong>Share your location</strong><small>One tap if you are at the delivery point, or paste a pin link.</small></span></li><li><b>3</b><span><strong>AMC reviews the request</strong><small>We confirm free-delivery eligibility, cost and availability.</small></span></li><li><b>4</b><span><strong>Delivery is confirmed</strong><small>Your preferred date/time is only final after AMC approves it.</small></span></li></ol></div>
+<div class="side-card"><div class="kicker">HOW IT WORKS</div><ol><li><b>1</b><span><strong>Enter your details</strong><small>Use your package or mailbox reference if available.</small></span></li><li><b>2</b><span><strong>Share your location</strong><small>Send your Current Location pin in WhatsApp (not Live Location).</small></span></li><li><b>3</b><span><strong>AMC reviews the request</strong><small>We confirm free-delivery eligibility, cost and availability.</small></span></li><li><b>4</b><span><strong>Delivery is confirmed</strong><small>Your preferred date/time is only final after AMC approves it.</small></span></li></ol></div>
 <div class="side-card compact"><strong>Free delivery guideline</strong><p>Qualifying shipments weighing <b>5 lbs and above</b> may receive free delivery within designated Georgetown delivery areas. Smaller shipments and other locations receive a location-based quote.</p></div>
 <div class="side-card compact"><strong>After-hours requests</strong><p>Regular delivery hours are Monday–Saturday, 11:00 AM–5:00 PM. After 5 PM and Sunday delivery may carry an additional fee and require special arrangement.</p></div>
 </aside>
