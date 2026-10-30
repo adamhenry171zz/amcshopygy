@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const site=path.resolve(process.argv[2]||'');
+if(!fs.existsSync(site))throw Error('Site directory not found');
+const root=new URL('../henry-os/admin/',import.meta.url);
+const dest=path.join(site,'admin');
+fs.mkdirSync(dest,{recursive:true});
+for(const name of ['index.html','styles.css','app.js'])fs.copyFileSync(new URL(name,root),path.join(dest,name));
+const fnDir=path.resolve(site,'../netlify/functions');
+fs.mkdirSync(fnDir,{recursive:true});
+fs.copyFileSync(new URL('../henry-os/functions/henry-auth.mjs',import.meta.url),path.join(fnDir,'henry-auth.mjs'));
+console.log('Staged HENRY OS login with fail-closed auth and no configured credentials');
