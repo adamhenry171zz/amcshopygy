@@ -2,72 +2,10 @@
   const form = document.querySelector('#amc-delivery-v64-form');
   if (!form) return;
 
-  const locationBtn = document.querySelector('#use-location');
-  const locationStatus = document.querySelector('#location-status');
-  const locationLink = document.querySelector('#location-link');
-  const manualWrap = document.querySelector('#map-link-wrap');
-  const manualInput = document.querySelector('#map-link-manual');
-  const showManual = document.querySelector('#show-map-link');
-  const submitBtn = document.querySelector('#delivery-submit');
-  const result = document.querySelector('#delivery-result');
-  const dateInput = form.elements['date'];
-
-  if (dateInput) dateInput.min = new Date().toISOString().slice(0, 10);
-
-  const setLocationStatus = (message, type = '') => {
-    locationStatus.textContent = message;
-    locationStatus.className = `location-status ${type}`.trim();
-  };
-
-  showManual?.addEventListener('click', () => {
-    manualWrap?.classList.toggle('hidden');
-    if (!manualWrap?.classList.contains('hidden')) manualInput?.focus();
-  });
-
-  manualInput?.addEventListener('input', () => {
-    if (manualInput.value.trim()) {
-      locationLink.value = manualInput.value.trim();
-      setLocationStatus('✓ Location link added manually.', 'success');
-    } else {
-      locationLink.value = '';
-      setLocationStatus('No location shared yet.');
-    }
-  });
-
-  locationBtn?.addEventListener('click', () => {
-    if (!('geolocation' in navigator)) {
-      setLocationStatus('Your browser does not support location sharing. Enter your address and landmark, or paste a Maps link below.', 'error');
-      manualWrap?.classList.remove('hidden');
-      return;
-    }
-
-    locationBtn.disabled = true;
-    locationBtn.textContent = '📍 Waiting for permission…';
-    setLocationStatus('Your browser may ask you to allow location access. AMC only receives the point attached to this request.');
-
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        const { latitude, longitude, accuracy } = position.coords;
-        const mapsUrl = `https://www.google.com/maps?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
-        locationLink.value = mapsUrl;
-        if (manualInput) manualInput.value = '';
-        setLocationStatus(`✓ Location captured successfully${Number.isFinite(accuracy) ? ` (about ${Math.round(accuracy)} m accuracy)` : ''}.`, 'success');
-        locationBtn.textContent = '✓ Current Location Added';
-        locationBtn.disabled = false;
-      },
-      error => {
-        let message = 'Location could not be captured. Enter your address and landmark instead, or paste a Maps link.';
-        if (error.code === 1) message = 'Location permission was not allowed. No problem — enter your address and landmark, or paste a Maps link instead.';
-        if (error.code === 2) message = 'Your device could not determine your location. Enter your address and landmark, or paste a Maps link instead.';
-        if (error.code === 3) message = 'Location request timed out. Try again, or use your address / Maps link instead.';
-        setLocationStatus(message, 'error');
-        manualWrap?.classList.remove('hidden');
-        locationBtn.textContent = '📍 Try My Current Location Again';
-        locationBtn.disabled = false;
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
-    );
-  });
+  const submitBtn = document.querySelector("#delivery-submit");
+  const result = document.querySelector("#delivery-result");
+  const dateInput = form.elements["date"];
+  if (dateInput) { const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000); dateInput.min = local.toISOString().slice(0, 10); }
 
   const showResult = (html, error = false) => {
     result.innerHTML = html;
@@ -93,7 +31,7 @@
       preferredTime: data.get('time'),
       address: data.get('address'),
       landmark: data.get('landmark'),
-      mapLink: locationLink.value || '',
+      mapLink: '',
       consent: data.get('consent') === 'on'
     };
 
@@ -117,17 +55,18 @@
         ['Preferred time', payload.preferredTime],
         ['Address / area', payload.address],
         ['Landmark', payload.landmark],
-        ['Location', payload.mapLink]
+        ['Location', 'Customer will send Current Location in WhatsApp (not Live Location)']
       ].filter(([, value]) => String(value || '').trim());
-      const whatsappText = `Hello AMC Shopping, I submitted a delivery request online.\n\n${fields.map(([key, value]) => `${key}: ${value}`).join('\n')}\n\nI understand the request is subject to AMC confirmation.`;
+      const whatsappText = `Hello AMC Shopping, I submitted a delivery request online.\n\n${fields.map(([key, value]) => `${key}: ${value}`).join('\n')}\n\n📍 FINAL STEP: I will now tap + / Attach → Location → Send Your Current Location (NOT Share Live Location).\n\nI understand the request is subject to AMC confirmation.`;
       const wa = `https://wa.me/5926042826?text=${encodeURIComponent(whatsappText)}`;
-      showResult(`<strong>Request received ✓</strong><br>Your reference is <b>${body.reference}</b>. AMC will review the request before confirming the delivery.<br><a href="${wa}" target="_blank" rel="noopener">Send the same request on WhatsApp →</a>`);
+      showResult(`<strong>Request saved ✓</strong><br>Your reference is <b>${body.reference}</b>.<br><a class="btn primary" href="${wa}" target="_blank" rel="noopener">Continue to WhatsApp &amp; Share Current Location →</a><br><small>In WhatsApp tap + / Attach → Location → <b>Send Your Current Location</b>. Do not share Live Location. Delivery is confirmed only by AMC.</small>`);
+      window.location.assign(wa);
       form.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
       showResult(`<strong>Request not submitted.</strong><br>${String(error.message || error)}<br><a href="https://wa.me/5926042826" target="_blank" rel="noopener">Contact AMC on WhatsApp →</a>`, true);
     } finally {
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit delivery request →';
+      submitBtn.textContent = 'Continue to WhatsApp & Share Location →';
     }
   });
 })();
