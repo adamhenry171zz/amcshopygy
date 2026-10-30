@@ -1,0 +1,4 @@
+import { getStore } from '@netlify/blobs';
+const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
+const clean=v=>String(v??'').trim().slice(0,140);
+export default async(req)=>{if(req.method!=='GET')return json({error:'Method not allowed'},405);const q=clean(new URL(req.url).searchParams.get('tracking'));if(q.length<6)return json({error:'Enter a valid tracking number.'},400);const store=getStore('henry-amc'),{blobs}=await store.list({prefix:'packages/'});for(const b of blobs){const r=await store.get(b.key,{type:'json'}).catch(()=>null);if(r&&String(r.tracking||'').trim().toLowerCase()===q.toLowerCase())return json({found:true,status:r.status||'processing',carrier:r.carrier||'',arrivalDate:r.arrivalDate||'',updatedAt:r.updatedAt||r.createdAt||''})}return json({found:false});};
