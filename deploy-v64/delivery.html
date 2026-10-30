@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="theme-color" content="#010539">
+<title>Schedule Delivery | AMC Shopping</title>
+<meta name="description" content="Private AMC Shopping delivery scheduling page for customers with packages ready for delivery.">
+<link rel="icon" type="image/png" href="/assets/amc-logo.png">
+<link rel="stylesheet" href="/assets/styles.css">
+<link rel="stylesheet" href="/assets/v63.css">
+<link rel="stylesheet" href="/assets/v64-delivery.css">
+</head>
+<body class="delivery-page">
+<div class="topbar"><div class="wrap"><span><strong>AMC DELIVERY</strong> · Customer delivery requests & cost checks</span><span><a href="https://wa.me/5926042826">WhatsApp +592 604-2826</a></span></div></div>
+<header class="site-header delivery-header"><div class="wrap nav">
+<a class="brand" href="/"><img src="/assets/amc-logo.png" alt="AMC Shopping logo"><span class="brand-copy"><b>A.M.C Shopping</b><small>YOUR PACKAGE. OUR PRIORITY. ALWAYS.</small></span></a>
+<div class="nav-actions"><a class="btn ghost" href="/tracking.html">Track package</a><a class="btn primary" href="https://wa.me/5926042826">Need help?</a></div>
+</div></header>
+
+<main>
+<section class="delivery-hero"><div class="wrap delivery-hero-grid"><div><div class="eyebrow"><i></i> PRIVATE CUSTOMER DELIVERY PAGE</div><h1>Schedule your<br><span>AMC delivery.</span></h1><p>Send AMC your delivery details in one simple request. If you are at the delivery location, tap <strong>Use My Current Location</strong> and your phone can share the exact point after you approve permission.</p><div class="delivery-policy-row"><span>🚚 Free delivery may apply from 5 lbs+</span><span>🕚 Mon–Sat · 11 AM–5 PM</span><span>✅ AMC confirms every request</span></div></div><aside class="delivery-hero-note"><strong>Before you submit</strong><p>Preferred dates and times are requests, not confirmed appointments. Free-delivery eligibility applies only to qualifying shipments within designated Georgetown delivery areas.</p></aside></div></section>
+
+<section class="delivery-form-section"><div class="wrap delivery-layout"><form id="amc-delivery-v64-form" class="delivery-card" novalidate>
+<div class="delivery-card-head"><div><div class="kicker">DELIVERY REQUEST</div><h2>Where should we bring it?</h2></div><span class="secure-pill">LOCATION SHARED ONLY WITH PERMISSION</span></div>
+
+<div class="delivery-grid">
+<label class="field"><span>What would you like to do? *</span><select name="kind" required><option value="Request delivery">Request delivery</option><option value="Check delivery cost">Check delivery cost</option></select></label>
+<label class="field"><span>Full name *</span><input name="customer" required maxlength="90" autocomplete="name"></label>
+<label class="field"><span>WhatsApp number *</span><input name="phone" required maxlength="35" autocomplete="tel" inputmode="tel" placeholder="Example: 592 604 2826"></label>
+<label class="field"><span>Package / mailbox reference</span><input name="reference" maxlength="90" placeholder="Optional"></label>
+<label class="field"><span>Estimated weight (lbs)</span><input name="weight" type="number" min="0" step="0.1" placeholder="Optional"></label>
+<label class="field"><span>Preferred date</span><input name="date" type="date"></label>
+<label class="field"><span>Preferred time</span><input name="time" type="time"></label>
+<label class="field full"><span>Delivery address / area *</span><input name="address" required maxlength="220" autocomplete="street-address" placeholder="Example: Campbellville, Georgetown"></label>
+</div>
+
+<div class="location-panel">
+<div class="location-copy"><div class="location-icon">📍</div><div><strong>Share the exact delivery point</strong><p>If you are currently at the location, this is the easiest option. Your browser will ask permission first.</p></div></div>
+<button type="button" class="btn location-btn" id="use-location">📍 Use My Current Location</button>
+<div id="location-status" class="location-status" role="status" aria-live="polite">No location shared yet.</div>
+<input type="hidden" name="location" id="location-link">
+<div class="location-alt"><button type="button" class="text-link" id="show-map-link">Sending to a different location? Paste a Maps link instead</button><label id="map-link-wrap" class="field full hidden"><span>Google Maps / location share link</span><input id="map-link-manual" type="url" maxlength="500" placeholder="https://maps.google.com/..."><small>Open Google Maps, press and hold to drop a pin, tap Share, then Copy link.</small></label></div>
+</div>
+
+<label class="field full"><span>Nearest landmark / extra directions</span><textarea name="landmark" rows="3" maxlength="350" placeholder="Example: white gate opposite the supermarket"></textarea></label>
+<label class="consent-row"><input name="consent" type="checkbox" required><span>I agree to share these details with AMC Shopping for this delivery quote/request. My location is only included if I choose to share it.</span></label>
+
+<button type="submit" class="btn primary delivery-submit" id="delivery-submit">Submit delivery request →</button>
+<div id="delivery-result" class="delivery-result hidden" role="status" aria-live="polite"></div>
+<p class="form-note">Submitting does not reserve a delivery slot or verify payment. AMC Shopping will review your request and confirm eligibility, any applicable delivery fee, and the final schedule.</p>
+</form>
+
+<aside class="delivery-side">
+<div class="side-card"><div class="kicker">HOW IT WORKS</div><ol><li><b>1</b><span><strong>Enter your details</strong><small>Use your package or mailbox reference if available.</small></span></li><li><b>2</b><span><strong>Share your location</strong><small>One tap if you are at the delivery point, or paste a pin link.</small></span></li><li><b>3</b><span><strong>AMC reviews the request</strong><small>We confirm free-delivery eligibility, cost and availability.</small></span></li><li><b>4</b><span><strong>Delivery is confirmed</strong><small>Your preferred date/time is only final after AMC approves it.</small></span></li></ol></div>
+<div class="side-card compact"><strong>Free delivery guideline</strong><p>Qualifying shipments weighing <b>5 lbs and above</b> may receive free delivery within designated Georgetown delivery areas. Smaller shipments and other locations receive a location-based quote.</p></div>
+<div class="side-card compact"><strong>After-hours requests</strong><p>Regular delivery hours are Monday–Saturday, 11:00 AM–5:00 PM. After 5 PM and Sunday delivery may carry an additional fee and require special arrangement.</p></div>
+</aside>
+</div></section>
+</main>
+
+<footer><div class="wrap"><div class="footer-bottom"><span>© <span data-year></span> AMC Shopping.</span><span>Your Package. Our Priority. Always.</span></div></div></footer>
+<script src="/assets/app.js"></script>
+<script src="/assets/v63.js"></script>
+<script src="/assets/v64-delivery.js"></script>
+</body>
+</html>
