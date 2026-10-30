@@ -5,7 +5,7 @@ const TYPES = new Set(['customers','packages','deliveries','invoices','payments'
 const FIELDS = {
   customers:['name','whatsapp','email','mailboxCode','address','status','source','notes'],
   packages:['customer','whatsapp','tracking','carrier','weight','packageCount','status','arrivalDate','amountDue','notes'],
-  deliveries:['requestType','customer','whatsapp','packageRef','weight','address','landmark','mapLink','preferredDate','preferredTime','status','quote','paymentStatus','source','notes'],
+  deliveries:['reference','requestType','customer','whatsapp','packageRef','weight','address','landmark','mapLink','preferredDate','preferredTime','status','quote','paymentStatus','source','notes'],
   invoices:['invoiceNo','customer','whatsapp','amount','balance','status','dueDate','description','notes'],
   payments:['customer','whatsapp','amount','method','reference','status','paymentDate','relatedType','relatedId','notes'],
   streaming:['customer','whatsapp','service','plan','amount','dueDate','status','accountEmail','notes'],
@@ -52,7 +52,9 @@ export default async(req)=>{
     const type=clean(body.type,40);if(!TYPES.has(type))return json({error:'Invalid type'},400);
     const now=new Date().toISOString();const id=clean(body.id,80)||crypto.randomUUID();
     const existing=await store.get(`${type}/${id}`,{type:'json'}).catch(()=>null);
-    const record={id,type,...cleanRecord(type,body.record),createdAt:existing?.createdAt||now,updatedAt:now};
+    const cleaned=cleanRecord(type,body.record);
+    if(type==='deliveries'&&existing?.reference&&!cleaned.reference)cleaned.reference=existing.reference;
+    const record={id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now};
     await store.setJSON(`${type}/${id}`,record);
     return json({item:record});
   }
