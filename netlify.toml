@@ -1,5 +1,5 @@
 [build]
-  command = "rm -rf .netlify-build && mkdir -p .netlify-build && unzip -q AMC_Shopping_DEPLOY_READY_v5_2.zip -d .netlify-build && node deploy-promo/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-course/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v55/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v56/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v57/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v58/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v59/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v60/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v61/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
+  command = "rm -rf .netlify-build && mkdir -p .netlify-build && unzip -q AMC_Shopping_DEPLOY_READY_v5_2.zip -d .netlify-build && node deploy-promo/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-course/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v55/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v56/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v57/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v58/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v59/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v60/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v61/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-henry-os/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
   publish = ".netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
 
 [functions]
@@ -9,6 +9,15 @@
   from = "/api/generate-mailbox"
   to = "/.netlify/functions/generate-mailbox"
   status = 200
+
+[[headers]]
+  for = "/admin/*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
 
 [[headers]]
   for = "/*"
