@@ -1,5 +1,5 @@
 [build]
-  command = "rm -rf .netlify-build && mkdir -p .netlify-build && unzip -q AMC_Shopping_DEPLOY_READY_v5_2.zip -d .netlify-build && node deploy-promo/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-course/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v55/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v56/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v57/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v58/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v59/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v60/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v61/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v62/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v63/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-henry-os/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
+  command = "rm -rf .netlify-build && mkdir -p .netlify-build && unzip -q AMC_Shopping_DEPLOY_READY_v5_2.zip -d .netlify-build && node deploy-promo/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-course/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v55/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v56/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v57/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v58/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v59/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v60/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v61/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v62/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v63/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-v64/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site && node deploy-henry-os/inject.mjs .netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
   publish = ".netlify-build/AMC_Shopping_DEPLOY_READY_v5_2/site"
 
 [functions]
@@ -8,6 +8,11 @@
 [[redirects]]
   from = "/api/generate-mailbox"
   to = "/.netlify/functions/generate-mailbox"
+  status = 200
+
+[[redirects]]
+  from = "/delivery"
+  to = "/delivery.html"
   status = 200
 
 [[headers]]
@@ -21,9 +26,23 @@
     Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 
 [[headers]]
+  for = "/delivery"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(self)"
+
+[[headers]]
+  for = "/delivery.html"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(self)"
+
+[[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "SAMEORIGIN"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Permissions-Policy = "camera=(), microphone=()"
