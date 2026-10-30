@@ -8,5 +8,5 @@ fs.mkdirSync(dest,{recursive:true});
 for(const name of ['index.html','styles.css','app.js'])fs.copyFileSync(new URL(name,root),path.join(dest,name));
 const fnDir=path.resolve(site,'../netlify/functions');
 fs.mkdirSync(fnDir,{recursive:true});
-fs.copyFileSync(new URL('../henry-os/functions/henry-auth.mjs',import.meta.url),path.join(fnDir,'henry-auth.mjs'));
-console.log('HENRY OS owner login staged for /admin');
+for(const name of ['henry-auth.mjs','henry-amc.mjs','henry-delivery-submit.mjs'])fs.copyFileSync(new URL('../henry-os/functions/'+name,import.meta.url),path.join(fnDir,name));
+console.log('HENRY OS AMC command center and owner functions staged for /admin');
