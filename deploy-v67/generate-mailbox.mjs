@@ -5,6 +5,7 @@ const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:
 const clean=(value,max=100)=>String(value??'').trim().replace(/[<>]/g,'').slice(0,max);
 const digits=value=>String(value??'').replace(/\D/g,'');
 const normalizeEmail=value=>clean(value,150).toLowerCase();
+const normalizeName=value=>clean(value,80).toLowerCase().replace(/\s+/g,' ');
 const emailKey=value=>value?crypto.createHash('sha256').update(value).digest('hex').slice(0,32):'';
 const codeCandidate=()=>`AMC${Math.floor(10000+Math.random()*90000)}`;
 
@@ -17,18 +18,20 @@ function canonicalPhone(value){
   return d;
 }
 
+const sameName=(record,firstName,lastName)=>normalizeName(record?.firstName)===normalizeName(firstName)&&normalizeName(record?.lastName)===normalizeName(lastName);
+
 async function readMailbox(store,code){
   if(!code)return null;
   return store.get(`mailboxes/${code}`,{type:'json'}).catch(()=>null);
 }
 
-async function findLegacyMailbox(store,phoneKey,email){
+async function findLegacyMailbox(store,phoneKey,email,firstName,lastName){
   const {blobs}=await store.list({prefix:'mailboxes/'});
   for(const blob of blobs){
     const record=await store.get(blob.key,{type:'json'}).catch(()=>null);
     if(!record)continue;
     const samePhone=phoneKey&&canonicalPhone(record.whatsapp)===phoneKey;
-    const sameEmail=email&&normalizeEmail(record.email)===email;
+    const sameEmail=email&&normalizeEmail(record.email)===email&&sameName(record,firstName,lastName);
     if(samePhone||sameEmail)return record;
   }
   return null;
@@ -40,7 +43,7 @@ async function saveAliases(store,record,phoneKey,email){
     await store.setJSON(`identity/phone/${phoneKey}`,payload).catch(()=>{});
     await store.setJSON(`contacts/${phoneKey}`,payload).catch(()=>{});
   }
-  if(email)await store.setJSON(`identity/email/${emailKey(email)}`,payload).catch(()=>{});
+  if(email)await store.setJSON(`identity/email/${emailKey(email)}`,payload,{onlyIfNew:true}).catch(()=>{});
 }
 
 function result(record,existing){
@@ -67,8 +70,9 @@ export default async req=>{
 
   const store=getStore('amc-mailboxes');
   const phoneAlias=await store.get(`identity/phone/${phoneKey}`,{type:'json'}).catch(()=>null) || await store.get(`contacts/${phoneKey}`,{type:'json'}).catch(()=>null);
-  const emailAlias=email?await store.get(`identity/email/${emailKey(email)}`,{type:'json'}).catch(()=>null):null;
-  let existingAlias=phoneAlias||emailAlias;
+  const rawEmailAlias=email?await store.get(`identity/email/${emailKey(email)}`,{type:'json'}).catch(()=>null):null;
+  const emailAlias=rawEmailAlias&&sameName(rawEmailAlias,firstName,lastName)?rawEmailAlias:null;
+  const existingAlias=phoneAlias||emailAlias;
 
   if(existingAlias?.code){
     const record=await readMailbox(store,existingAlias.code)||existingAlias;
@@ -76,7 +80,7 @@ export default async req=>{
     return json(result(record,true));
   }
 
-  const legacy=await findLegacyMailbox(store,phoneKey,email);
+  const legacy=await findLegacyMailbox(store,phoneKey,email,firstName,lastName);
   if(legacy?.code){
     await saveAliases(store,legacy,phoneKey,email);
     return json(result(legacy,true));
@@ -100,7 +104,7 @@ export default async req=>{
       const emailClaim=await store.setJSON(`identity/email/${emailKey(email)}`,record,{onlyIfNew:true});
       if(!emailClaim.modified){
         const claimed=await store.get(`identity/email/${emailKey(email)}`,{type:'json'}).catch(()=>null);
-        if(claimed?.code&&claimed.code!==code){
+        if(claimed?.code&&claimed.code!==code&&sameName(claimed,firstName,lastName)){
           await store.delete(`identity/phone/${phoneKey}`).catch(()=>{});
           const existingRecord=await readMailbox(store,claimed.code)||claimed;
           await saveAliases(store,existingRecord,phoneKey,email);
@@ -116,7 +120,6 @@ export default async req=>{
     }
 
     await store.delete(`identity/phone/${phoneKey}`).catch(()=>{});
-    if(email)await store.delete(`identity/email/${emailKey(email)}`).catch(()=>{});
   }
 
   return json({error:'AMC could not issue a mailbox code right now. Please try again or WhatsApp us.'},503);
