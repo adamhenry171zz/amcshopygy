@@ -18,8 +18,8 @@ async function reconcileInvoicePayments(store,data=null){
     if(!total)continue;
 
     const status=String(invoice.status||'').toLowerCase();
-    let balance=Math.max(0,num(invoice.balance));
-    if(status==='paid')balance=0;
+    const hasBalance=String(invoice.balance??'').trim()!=='';
+    let balance=status==='paid'?0:(hasBalance?Math.max(0,num(invoice.balance)):total);
     if(balance>total)balance=total;
     const expectedPaid=status==='cancelled'?0:Math.max(0,total-balance);
 
