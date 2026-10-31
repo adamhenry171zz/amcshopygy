@@ -59,6 +59,15 @@ const OCT30_INVOICES = [
   }
 ];
 
+const OCT30_CUSTOMERS = [
+  {name:'Daviana Dass',mailboxCode:'AMC21095',notes:'Regular AMC customer imported from shipping invoice INV0299 dated 2026-10-30. INV0299 was paid in full via MMG.'},
+  {name:'Leah Casimero',mailboxCode:'AMC203',notes:'AMC Members Club customer imported from Members Club shipping invoice MC0036 dated 2026-10-30.'},
+  {name:'Orlistyne Paul',mailboxCode:'AMC39',notes:'Regular AMC customer imported from shipping invoice INV0301 dated 2026-10-30.'},
+  {name:'Raymond Marques',mailboxCode:'AMC113',notes:'Regular AMC customer imported from shipping invoice INV0300 dated 2026-10-30.'},
+  {name:'Ruth Britton',mailboxCode:'AMC251',notes:'Regular AMC customer imported from shipping invoice INV0302 dated 2026-10-30.'},
+  {name:'Shawnna Althea Richards',mailboxCode:'',notes:'Regular AMC customer imported from shipping invoice INV0303 dated 2026-10-30. Customer code was not provided on the invoice.'}
+];
+
 async function applyOct30InvoiceMigration(store){
   const markerKey='migrations/2026-10-30-invoices-0299-0303-mc0036-v1';
   const already=await store.get(markerKey,{type:'json'}).catch(()=>null);
@@ -89,6 +98,40 @@ async function applyOct30InvoiceMigration(store){
   await store.setJSON(markerKey,{done:true,completedAt:now,invoices:OCT30_INVOICES.map(x=>x.invoiceNo),payment:'INV0299 via MMG'});
 }
 
+async function applyOct30CustomerMigration(store){
+  const markerKey='migrations/2026-10-30-invoice-customers-v1';
+  const already=await store.get(markerKey,{type:'json'}).catch(()=>null);
+  if(already?.done)return;
+  const now=new Date().toISOString();
+  const customers=await readType(store,'customers');
+  for(const source of OCT30_CUSTOMERS){
+    const existing=customers.find(x=>
+      (source.mailboxCode&&String(x.mailboxCode||'').toUpperCase()===source.mailboxCode.toUpperCase())||
+      String(x.name||'').trim().toLowerCase()===source.name.toLowerCase()
+    );
+    if(existing){
+      const noteParts=[String(existing.notes||'').trim(),source.notes].filter(Boolean);
+      const record={
+        ...existing,
+        name:source.name,
+        mailboxCode:existing.mailboxCode||source.mailboxCode,
+        status:existing.status||'active',
+        source:existing.source||'other',
+        notes:noteParts.join(' '),
+        updatedAt:now
+      };
+      await store.setJSON(`customers/${existing.id}`,record);
+    }else{
+      const slug=source.mailboxCode?source.mailboxCode.toLowerCase():source.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+      const id=`import-customer-${slug}`;
+      await store.setJSON(`customers/${id}`,{
+        id,type:'customers',name:source.name,whatsapp:'',email:'',mailboxCode:source.mailboxCode,address:'',status:'active',source:'other',notes:source.notes,createdAt:now,updatedAt:now
+      });
+    }
+  }
+  await store.setJSON(markerKey,{done:true,completedAt:now,customers:OCT30_CUSTOMERS.map(x=>x.name)});
+}
+
 export default async(req)=>{
   const adminEmail=clean(process.env.HENRY_ADMIN_EMAIL,180).toLowerCase();
   const sessionSecret=String(process.env.HENRY_SESSION_SECRET||'');
@@ -99,6 +142,7 @@ export default async(req)=>{
 
   if(action==='bootstrap'&&req.method==='GET'){
     await applyOct30InvoiceMigration(store);
+    await applyOct30CustomerMigration(store);
     const data={};
     await Promise.all([...TYPES].map(async type=>{data[type]=await readType(store,type)}));
     data.mailboxes=await readMailboxes();
