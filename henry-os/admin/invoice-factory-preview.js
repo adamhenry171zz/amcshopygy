@@ -3,6 +3,7 @@ const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=v=>`GYD $${(Number(v)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const today=()=>new Date().toISOString().slice(0,10);
 const round2=v=>Math.round((Number(v)||0)*100)/100;
+const round4=v=>Math.round((Number(v)||0)*10000)/10000;
 const num=v=>Number(String(v??'').replace(/,/g,''))||0;
 const isMember=v=>/member/i.test(String(v||''));
 const presets={
@@ -15,7 +16,7 @@ const presets={
 const state={customers:[],selected:0,authenticated:false,savedResults:[],lastValidation:null};
 
 function standardCharge(weight){
-  const bill=Math.max(1,Number(weight)||0);
+  const bill=Math.max(1,round4(weight));
   if(bill<=2)return {rate:0,total:2800,label:'GYD $2,800 flat 1–2 lb special',billWeight:bill};
   let rate=1500,label='GYD $1,500/lb · 1–10 lbs';
   if(bill>10&&bill<=25){rate=1300;label='GYD $1,300/lb · 11–25 lbs'}
@@ -25,7 +26,7 @@ function standardCharge(weight){
   return {rate,total:round2(bill*rate),label,billWeight:bill};
 }
 function calcCustomer(c){
-  const weight=round2((c.packages||[]).reduce((s,p)=>s+num(p.weightLb),0));
+  const weight=round4((c.packages||[]).reduce((s,p)=>s+num(p.weightLb),0));
   const adjustment=round2(num(c.adjustment));
   const standard=standardCharge(weight);
   if(isMember(c.customerType)){
@@ -35,14 +36,14 @@ function calcCustomer(c){
   return {weight,billWeight:standard.billWeight,shipping:standard.total,adjustment,total:round2(standard.total+adjustment),member:false,rateLabel:standard.label,regular:round2(standard.total+adjustment),savings:0};
 }
 function weightToLb(value){
-  if(typeof value==='number')return round2(value);
+  if(typeof value==='number')return round4(value);
   const s=String(value??'').trim().toLowerCase();if(!s)return 0;
   const lb=(s.match(/([\d.]+)\s*(?:lb|lbs|pound|pounds)/)||[])[1];
   const oz=(s.match(/([\d.]+)\s*(?:oz|ounce|ounces)/)||[])[1];
-  if(lb||oz)return round2((Number(lb)||0)+(Number(oz)||0)/16);
-  const kg=(s.match(/([\d.]+)\s*(?:kg|kilogram|kilograms)/)||[])[1];if(kg)return round2(Number(kg)*2.2046226218);
-  const g=(s.match(/([\d.]+)\s*(?:g|gram|grams)\b/)||[])[1];if(g)return round2(Number(g)/453.59237);
-  const n=Number(s.replace(/,/g,''));return Number.isFinite(n)?round2(n):0;
+  if(lb||oz)return round4((Number(lb)||0)+(Number(oz)||0)/16);
+  const kg=(s.match(/([\d.]+)\s*(?:kg|kilogram|kilograms)/)||[])[1];if(kg)return round4(Number(kg)*2.2046226218);
+  const g=(s.match(/([\d.]+)\s*(?:g|gram|grams)\b/)||[])[1];if(g)return round4(Number(g)/453.59237);
+  const n=Number(s.replace(/,/g,''));return Number.isFinite(n)?round4(n):0;
 }
 function normalizePackage(p={}){
   const sourceWeight=p.sourceWeight??p.source_weight??p.originalWeight??p.original_weight??p.weightLabel??p.weight_label??p.weight??'';
@@ -97,12 +98,12 @@ function validateBatch(){
     totalDue+=calcCustomer(c).total;
     if(c.adjustment&&!c.notes)warnings.push(`${c.name} has a manual adjustment but no internal note explaining it.`);
   });
-  const result={errors,warnings,customers:state.customers.length,packages,totalWeight:round2(totalWeight),totalDue:round2(totalDue)};state.lastValidation=result;return result;
+  const result={errors,warnings,customers:state.customers.length,packages,totalWeight:round4(totalWeight),totalDue:round2(totalDue)};state.lastValidation=result;return result;
 }
 function renderValidation(){
   if(!state.customers.length){$('validationSummary').innerHTML='';return}
   const v=validateBatch();
-  $('validationSummary').innerHTML=`<div class="validationBox ${v.errors.length?'bad':'good'}"><small>VALIDATION</small><strong>${v.errors.length?v.errors.length+' error'+(v.errors.length===1?'':'s'):'Ready'}</strong></div><div class="validationBox"><small>CUSTOMERS</small><strong>${v.customers}</strong></div><div class="validationBox"><small>PACKAGES / WEIGHT</small><strong>${v.packages} · ${v.totalWeight.toFixed(4)} lb</strong></div><div class="validationBox"><small>BATCH TOTAL</small><strong>${money(v.totalDue)}</strong></div>${v.errors.length?`<div class="validationBox bad" style="grid-column:1/-1"><small>FIX BEFORE SAVING</small><strong>${v.errors.map(esc).join('<br>')}</strong></div>`:''}${v.warnings.length?`<div class="validationBox" style="grid-column:1/-1"><small>CHECK</small><strong>${v.warnings.map(esc).join('<br>')}</strong></div>`:''}`;
+  $('validationSummary').innerHTML=`<div class="validationBox ${v.errors.length?'bad':'good'}"><small>VALIDATION</small><strong>${v.errors.length?v.errors.length+' error'+(v.errors.length===1?'':'s'):'Ready'}</strong></div><div class="validationBox"><small>CUSTOMERS</small><strong>${v.customers}</strong></div><div class="validationBox"><small>PACKAGES / WEIGHT</small><strong>${v.packages} · ${v.totalWeight.toFixed(4)} lb</strong></div><div class="validationBox"><small>BATCH TOTAL</small><strong>${money(v.totalDue)}</strong></div>${v.errors.length?`<div class="validationBox bad validationWide"><small>FIX BEFORE SAVING</small><strong>${v.errors.map(esc).join('<br>')}</strong></div>`:''}${v.warnings.length?`<div class="validationBox validationWide"><small>CHECK</small><strong>${v.warnings.map(esc).join('<br>')}</strong></div>`:''}`;
   $('commitBtn').disabled=Boolean(v.errors.length)||!state.authenticated;
 }
 function renderCustomerList(){
@@ -112,22 +113,20 @@ function renderCustomerList(){
 function loadEditor(){
   const c=state.customers[state.selected];if(!c)return;
   $('editTitle').textContent=c.name||`Customer ${state.selected+1}`;$('customerName').value=c.name;$('customerWhatsapp').value=c.whatsapp;$('customerMailbox').value=c.mailboxCode;$('customerType').value=c.customerType;$('customerAdjustment').value=c.adjustment||0;$('customerNotes').value=c.notes||'';
-  $('packageEditor').innerHTML=c.packages.map((p,i)=>`<div class="packageRow" data-package-row="${i}"><label>Tracking<input data-package-field="tracking" value="${esc(p.tracking)}"></label><label>Carrier<input data-package-field="carrier" value="${esc(p.carrier)}"></label><label>Source weight<input data-package-field="sourceWeight" value="${esc(p.sourceWeight)}"></label><label>Weight lb<input data-package-field="weightLb" type="number" min="0" step="0.0001" value="${num(p.weightLb)}"></label><label>Ref<input data-package-field="ref" value="${esc(p.ref)}"></label><button class="removePackage" data-remove-package="${i}" type="button" aria-label="Remove package">×</button></div>`).join('');
+  $('packageEditor').innerHTML=c.packages.map((p,i)=>`<div class="packageRow" data-package-row="${i}"><label>Tracking<input data-package-field="tracking" value="${esc(p.tracking)}"></label><label>Carrier<input data-package-field="carrier" value="${esc(p.carrier)}"></label><label>Source weight<input data-package-field="sourceWeight" value="${esc(p.sourceWeight)}"></label><label>Weight lb<input data-package-field="weightLb" type="number" min="0" step="0.0001" value="${round4(p.weightLb)}"></label><label>Ref<input data-package-field="ref" value="${esc(p.ref)}"></label><button class="removePackage" data-remove-package="${i}" type="button" aria-label="Remove package">×</button></div>`).join('');
 }
 function syncCustomerFields(){
   const c=state.customers[state.selected];if(!c)return;
   c.name=$('customerName').value.trim();c.whatsapp=$('customerWhatsapp').value.trim();c.mailboxCode=$('customerMailbox').value.trim();c.customerType=$('customerType').value;c.adjustment=round2(num($('customerAdjustment').value));c.notes=$('customerNotes').value.trim();
   renderCustomerList();renderValidation();renderPreview();
 }
-function selectCustomer(i){
-  if(i<0||i>=state.customers.length)return;state.selected=i;renderCustomerList();loadEditor();renderValidation();renderPreview();
-}
+function selectCustomer(i){if(i<0||i>=state.customers.length)return;state.selected=i;renderCustomerList();loadEditor();renderValidation();renderPreview()}
 function promoData(){return {title:$('promoTitle').value||'AMC Promotion',text:$('promoText').value||'',cta:$('promoCta').value||'amcshopping.com'}}
 function applyPreset(){const p=presets[$('promoPreset').value]||presets.custom;$('promoTitle').value=p.title;$('promoText').value=p.text;$('promoCta').value=p.cta;renderPreview()}
 function savePromo(){const d={preset:$('promoPreset').value,...promoData()};localStorage.setItem('amcInvoicePromo',JSON.stringify(d));const b=$('savePromoBtn'),old=b.textContent;b.textContent='Saved';setTimeout(()=>b.textContent=old,1000);renderPreview()}
 function loadPromo(){try{const d=JSON.parse(localStorage.getItem('amcInvoicePromo')||'null');if(d){$('promoPreset').value=d.preset||'custom';$('promoTitle').value=d.title||'';$('promoText').value=d.text||'';$('promoCta').value=d.cta||'';return}}catch{}$('promoPreset').value='members';applyPreset()}
 function invoiceNoFor(index){return state.savedResults[index]?.invoiceNo||'PENDING'}
-function packageRows(packages,start=0){return packages.map((p,i)=>`<div class="tr"><div>${start+i+1}</div><div>${esc(p.tracking)}</div><div>${esc(p.sourceWeight||`${num(p.weightLb).toFixed(4)} lb`)}</div><div>${num(p.weightLb).toFixed(4)}</div><div>${esc(p.ref||p.carrier||'—')}</div></div>`).join('')}
+function packageRows(packages,start=0){return packages.map((p,i)=>`<div class="tr"><div>${start+i+1}</div><div>${esc(p.tracking)}</div><div>${esc(p.sourceWeight||`${round4(p.weightLb).toFixed(4)} lb`)}</div><div>${round4(p.weightLb).toFixed(4)}</div><div>${esc(p.ref||p.carrier||'—')}</div></div>`).join('')}
 function headerHtml(title,invoiceNo,date,type){return `<header class="header"><div class="brand"><div class="logo" aria-label="AMC Online Shopping logo"></div><div><h2>A.M.C SHOPPING</h2><h3>${esc(title)}</h3><p>Your Package. Our Priority. Always.</p></div></div><div class="meta"><div><span>Invoice #</span><b>${esc(invoiceNo)}</b></div><div><span>Date</span><b>${esc(date)}</b></div><div><span>Type</span><b>${esc(type)}</b></div></div></header>`}
 function promoSlotHtml(){const p=promoData();return `<div class="promoSlot"><div><h4>${esc(p.title)}</h4><p>${esc(p.text)}</p></div><div class="promoCta">${esc(p.cta)}</div></div>`}
 function continuationPage(c,invoiceNo,date,chunk,start){return `<section class="page"><div class="sheet">${headerHtml('Package Continuation',invoiceNo,date,isMember(c.customerType)?'AMC Members Club':'Normal AMC')}<div class="content"><div class="note"><b>${esc(c.name)}</b> · continuation of package list for ${esc(invoiceNo)}.</div><div class="table invoiceDataTable"><div class="tr head"><div>#</div><div>FULL TRACKING NUMBER</div><div>SOURCE WT.</div><div>WEIGHT (LB)</div><div>REF</div></div>${packageRows(chunk,start)}</div></div><div class="footer">© 2026 amcshopping. All rights reserved. | Shipping Invoice Continuation</div></div></section>`}
@@ -139,28 +138,23 @@ function invoicePages(c,index){
   let offset=7;for(let i=0;i<rest.length;i+=14){const chunk=rest.slice(i,i+14);pages+=continuationPage(c,invoiceNo,date,chunk,offset);offset+=chunk.length}
   pages+=member?memberSummaryPage(c,calc,invoiceNo,date):normalPromoPage(c,calc);return pages;
 }
-function renderPreview(){
-  if(!state.customers.length){$('invoicePreview').innerHTML='<div class="previewEmpty">Import a batch to preview invoices.</div>';return}
-  const i=Math.min(state.selected,state.customers.length-1);$('previewCount').textContent=`${i+1} / ${state.customers.length}`;$('invoicePreview').innerHTML=invoicePages(state.customers[i],i);
-}
+function renderPreview(){if(!state.customers.length){$('invoicePreview').innerHTML='<div class="previewEmpty">Import a batch to preview invoices.</div>';return}const i=Math.min(state.selected,state.customers.length-1);$('previewCount').textContent=`${i+1} / ${state.customers.length}`;$('invoicePreview').innerHTML=invoicePages(state.customers[i],i)}
 function renderAll(){renderCustomerList();loadEditor();renderValidation();renderPreview()}
-async function checkSession(){
-  const el=$('sessionState');try{const r=await fetch('/.netlify/functions/henry-auth?action=session',{credentials:'same-origin',cache:'no-store'}),d=await r.json();state.authenticated=Boolean(d.authenticated);if(state.authenticated){el.classList.add('online');el.classList.remove('offline');el.innerHTML='<span></span>HENRY OS connected'}else{el.classList.add('offline');el.innerHTML='<span></span>Sign in to HENRY OS before saving'}}catch{state.authenticated=false;el.classList.add('offline');el.innerHTML='<span></span>HENRY OS unavailable'}renderValidation()}
+async function checkSession(){const el=$('sessionState');try{const r=await fetch('/.netlify/functions/henry-auth?action=session',{credentials:'same-origin',cache:'no-store'}),d=await r.json();state.authenticated=Boolean(d.authenticated);if(state.authenticated){el.classList.add('online');el.classList.remove('offline');el.innerHTML='<span></span>HENRY OS connected'}else{el.classList.add('offline');el.innerHTML='<span></span>Sign in to HENRY OS before saving'}}catch{state.authenticated=false;el.classList.add('offline');el.innerHTML='<span></span>HENRY OS unavailable'}renderValidation()}
 function importBatch(){
-  try{const payload=extractJson($('importBox').value),customers=normalizePayload(payload);if(!customers.length)throw new Error('No customers were found.');state.customers=customers;state.selected=0;state.savedResults=[];if(payload&&typeof payload==='object'&&!Array.isArray(payload)){if(payload.batchId&&!$('batchId').value)$('batchId').value=String(payload.batchId);if(payload.invoiceDate)$('invoiceDate').value=String(payload.invoiceDate).slice(0,10)}if(!$('batchId').value)$('batchId').value=`shipment-${$('invoiceDate').value||today()}-a`;$('reviewArea').classList.remove('hidden');$('importStatus').className='statusLine good';$('importStatus').textContent=`Imported ${customers.length} customer${customers.length===1?'':'s'}. Review the data below before saving.`;renderAll();$('reviewArea').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){$('importStatus').className='statusLine bad';$('importStatus').textContent=e.message}}
+  try{const payload=extractJson($('importBox').value),customers=normalizePayload(payload);if(!customers.length)throw new Error('No customers were found.');state.customers=customers;state.selected=0;state.savedResults=[];if(payload&&typeof payload==='object'&&!Array.isArray(payload)){if(payload.batchId)$('batchId').value=String(payload.batchId);if(payload.invoiceDate)$('invoiceDate').value=String(payload.invoiceDate).slice(0,10)}if(!$('batchId').value)$('batchId').value=`shipment-${$('invoiceDate').value||today()}-a`;$('reviewArea').classList.remove('hidden');$('importStatus').className='statusLine good';$('importStatus').textContent=`Imported ${customers.length} customer${customers.length===1?'':'s'}. Review the data below before saving.`;renderAll();$('reviewArea').scrollIntoView({behavior:'smooth',block:'start'})}catch(e){$('importStatus').className='statusLine bad';$('importStatus').textContent=e.message}}
 async function commitBatch(){
   const v=validateBatch();renderValidation();if(v.errors.length){$('commitStatus').className='statusLine bad';$('commitStatus').textContent='Fix the validation errors before saving.';return}if(!state.authenticated){$('commitStatus').className='statusLine bad';$('commitStatus').innerHTML='Your HENRY OS session is not active. <a href="/admin/">Sign in first</a>, then return here.';return}
   const btn=$('commitBtn');btn.disabled=true;const old=btn.textContent;btn.textContent='Saving batch…';$('commitStatus').className='statusLine';$('commitStatus').textContent='Validating duplicate tracking numbers and allocating invoice numbers on the server…';
-  try{const body={batchId:$('batchId').value.trim(),invoiceDate:$('invoiceDate').value||today(),customers:state.customers};const r=await fetch('/.netlify/functions/henry-invoice-batch',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let data={};try{data=await r.json()}catch{}if(r.status===401){state.authenticated=false;throw new Error('Your HENRY OS session expired. Sign in again before saving.')}if(!r.ok)throw new Error(data.error||'Could not save the invoice batch.');state.savedResults=Array.isArray(data.results)?data.results:[];renderPreview();renderCustomerList();const rows=state.savedResults.map(x=>`<div class="savedInvoice"><span>${esc(x.invoiceNo)} · ${esc(x.customer)}</span><b>${money(x.amount)}</b></div>`).join('');$('commitStatus').className='statusLine good';$('commitStatus').innerHTML=`<div class="savedBanner"><strong>${data.reused?'Batch already existed — no duplicates created.':'Batch saved successfully to HENRY OS.'}</strong>${rows}<div style="margin-top:8px"><a href="/admin/">Open HENRY OS dashboard →</a></div></div>`}catch(e){$('commitStatus').className='statusLine bad';$('commitStatus').textContent=e.message}finally{btn.textContent=old;renderValidation()}}
-function preparePrint(all){
-  if(!state.customers.length)return;const html=all?state.customers.map((c,i)=>invoicePages(c,i)).join(''):invoicePages(state.customers[state.selected],state.selected);$('printArea').innerHTML=html;setTimeout(()=>window.print(),80)}
+  try{const body={batchId:$('batchId').value.trim(),invoiceDate:$('invoiceDate').value||today(),customers:state.customers};const r=await fetch('/.netlify/functions/henry-invoice-batch',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});let data={};try{data=await r.json()}catch{}if(r.status===401){state.authenticated=false;throw new Error('Your HENRY OS session expired. Sign in again before saving.')}if(!r.ok)throw new Error(data.error||'Could not save the invoice batch.');state.savedResults=Array.isArray(data.results)?data.results:[];renderPreview();renderCustomerList();const rows=state.savedResults.map(x=>`<div class="savedInvoice"><span>${esc(x.invoiceNo)} · ${esc(x.customer)}</span><b>${money(x.amount)}</b></div>`).join('');$('commitStatus').className='statusLine good';$('commitStatus').innerHTML=`<div class="savedBanner"><strong>${data.reused?'Batch already existed — no duplicates created.':'Batch saved successfully to HENRY OS.'}</strong>${rows}<div class="savedLink"><a href="/admin/">Open HENRY OS dashboard →</a></div></div>`}catch(e){$('commitStatus').className='statusLine bad';$('commitStatus').textContent=e.message}finally{btn.textContent=old;renderValidation()}}
+function preparePrint(all){if(!state.customers.length)return;const html=all?state.customers.map((c,i)=>invoicePages(c,i)).join(''):invoicePages(state.customers[state.selected],state.selected);$('printArea').innerHTML=html;setTimeout(()=>window.print(),80)}
 function bind(){
   $('invoiceDate').value=today();
   $('exampleBtn').addEventListener('click',()=>{const e=examplePayload();$('importBox').value=JSON.stringify(e,null,2);$('batchId').value=e.batchId;$('invoiceDate').value=e.invoiceDate;$('importStatus').textContent='Example loaded. Replace it with your real shipment block when ready.'});
   $('importBtn').addEventListener('click',importBatch);$('clearBtn').addEventListener('click',()=>{$('importBox').value='';$('importStatus').textContent=''});
   $('customerList').addEventListener('click',e=>{const b=e.target.closest('[data-customer-index]');if(b)selectCustomer(Number(b.dataset.customerIndex))});
   for(const id of ['customerName','customerWhatsapp','customerMailbox','customerType','customerAdjustment','customerNotes'])$(id).addEventListener('input',syncCustomerFields);
-  $('packageEditor').addEventListener('input',e=>{const row=e.target.closest('[data-package-row]');if(!row||!e.target.dataset.packageField)return;const c=state.customers[state.selected],p=c.packages[Number(row.dataset.packageRow)],field=e.target.dataset.packageField;if(field==='weightLb')p[field]=round2(num(e.target.value));else p[field]=e.target.value;renderCustomerList();renderValidation();renderPreview()});
+  $('packageEditor').addEventListener('input',e=>{const row=e.target.closest('[data-package-row]');if(!row||!e.target.dataset.packageField)return;const c=state.customers[state.selected],p=c.packages[Number(row.dataset.packageRow)],field=e.target.dataset.packageField;if(field==='weightLb')p[field]=round4(num(e.target.value));else p[field]=e.target.value;renderCustomerList();renderValidation();renderPreview()});
   $('packageEditor').addEventListener('click',e=>{const b=e.target.closest('[data-remove-package]');if(!b)return;const c=state.customers[state.selected];c.packages.splice(Number(b.dataset.removePackage),1);loadEditor();renderCustomerList();renderValidation();renderPreview()});
   $('addPackageBtn').addEventListener('click',()=>{state.customers[state.selected].packages.push(normalizePackage({status:'ready'}));loadEditor();renderCustomerList();renderValidation();renderPreview()});
   $('addCustomerBtn').addEventListener('click',()=>{state.customers.push(normalizeCustomer({name:'New Customer',customerType:'regular',packages:[{}]}));selectCustomer(state.customers.length-1)});
