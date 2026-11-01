@@ -4,107 +4,84 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive">
-<title>HENRY OS · Invoice Factory Template Preview</title>
+<meta name="theme-color" content="#071426">
+<title>HENRY OS · Invoice Factory</title>
 <link rel="stylesheet" href="/admin/invoice-factory-preview.css">
 <script src="/admin/invoice-factory-preview.js" defer></script>
 </head>
 <body>
-<div class="toolbar">
-  <div class="toolbarTop">
-    <h1>HENRY OS · Invoice Factory Template Preview</h1>
-    <div class="tabs">
-      <button id="normalBtn" class="on" type="button">Normal Invoice</button>
-      <button id="memberBtn" type="button">Members Club</button>
+<header class="factoryTop noPrint">
+  <div class="factoryBrand">
+    <a class="backLink" href="/admin/">← HENRY OS</a>
+    <div><span class="eyebrow">AMC BILLING AUTOMATION</span><h1>Invoice Factory</h1><p>Paste shipment data, review every customer, then generate and save the batch to HENRY OS.</p></div>
+  </div>
+  <div class="sessionState" id="sessionState"><span></span>Checking HENRY OS</div>
+</header>
+
+<main class="factoryShell noPrint">
+  <section class="workCard importCard">
+    <div class="sectionHead">
+      <div><span class="step">STEP 1</span><h2>Import shipment batch</h2><p>Paste the structured block from your shipment-extraction chat. Nothing is saved to HENRY OS at this stage.</p></div>
+      <button id="exampleBtn" class="ghostBtn" type="button">Load example</button>
     </div>
-  </div>
-  <div class="controls">
-    <select id="promoPreset" aria-label="Promotion preset">
-      <option value="members">Members Club</option>
-      <option value="course">AMC Courses</option>
-      <option value="streaming">Streaming Services</option>
-      <option value="mailbox">AMC Mailbox</option>
-      <option value="custom">Custom</option>
-    </select>
-    <input id="promoTitle" placeholder="Promotion title" aria-label="Promotion title">
-    <input id="promoText" placeholder="Promotion message" aria-label="Promotion message">
-    <input id="promoCta" placeholder="CTA / link text" aria-label="Promotion link text">
-    <button id="savePromoBtn" type="button">Save Promo</button>
-  </div>
-  <div class="hint">The invoice structure stays locked. Only the AMC promotion slot is intentionally editable.</div>
-</div>
+    <div class="batchMeta">
+      <label>Batch ID<input id="batchId" type="text" placeholder="e.g. shipment-2026-11-01-a"></label>
+      <label>Invoice date<input id="invoiceDate" type="date"></label>
+    </div>
+    <label class="pasteLabel">AMC_INVOICE_FACTORY_V1 data<textarea id="importBox" spellcheck="false" placeholder='Paste JSON here, then select “Import & Review”.'></textarea></label>
+    <div class="actionRow"><button id="importBtn" class="primaryBtn" type="button">Import & Review →</button><button id="clearBtn" class="outlineBtn" type="button">Clear</button></div>
+    <div id="importStatus" class="statusLine" role="status" aria-live="polite"></div>
+  </section>
 
-<main class="stage">
-<div id="normalView">
-<section class="page"><div class="sheet">
-<header class="header">
-  <div class="brand"><div class="logo">AMC</div><div><h2>A.M.C SHOPPING</h2><h3>Shipping Invoice</h3><p>Your Package. Our Priority. Always.</p></div></div>
-  <div class="meta"><div><span>Invoice #</span><b>SAMPLE-INV</b></div><div><span>Date</span><b>2026-11-01</b></div><div><span>Type</span><b>Normal AMC</b></div></div>
-</header>
-<div class="content">
-  <div class="summary">
-    <div class="card"><h4>CUSTOMER</h4><div class="row"><span>Name</span><b>Sample Customer</b></div><div class="row"><span>Mailbox</span><b>AMC999</b></div><div class="row"><span>Customer Type</span><b>Regular</b></div></div>
-    <div class="card"><h4>SHIPMENT SUMMARY</h4><div class="row"><span>Packages</span><b>1</b></div><div class="row"><span>Combined Weight</span><b>0.9000 lb</b></div><div class="row"><span>Rate Tier</span><b>1–2 lb flat special</b></div><div class="row"><span>Package Fee</span><b>NONE</b></div></div>
-    <div class="card total"><h4>TOTAL DUE</h4><strong>GYD $2,800.00</strong><small>AMC 1–2 lb flat shipping special</small></div>
-  </div>
-  <div class="table">
-    <div class="tr head"><div>#</div><div>FULL TRACKING NUMBER</div><div>SOURCE WT.</div><div>WEIGHT (LB)</div><div>REF</div></div>
-    <div class="tr"><div>1</div><div>TRACKING-SAMPLE-001</div><div>0.90 lb</div><div>0.9</div><div>TBA</div></div>
-  </div>
-  <div class="note"><b>BILLING NOTE:</b> Combined weight 0.9000 lb qualifies for the GYD $2,800 flat special. No package fee.</div>
-  <div class="two">
-    <div class="panel"><h4>HOW TO PAY</h4><div class="inside"><div class="row"><span>MMG Merchant</span><b>AMCSHOPPING / m742288</b></div><div class="row"><span>Name</span><b>Adam Henry</b></div><div class="row"><span>Number</span><b>+592-604-2826</b></div><div class="tiny">Send payment confirmation after payment.</div></div></div>
-    <div class="panel"><h4>CALCULATION CHECK</h4><div class="inside"><div class="row"><span>Combined Weight</span><b>0.9000 lb</b></div><div class="row"><span>Shipping Charge</span><b>GYD $2,800.00</b></div><div class="row"><span>Package Fees</span><b>GYD $0.00</b></div><div class="grand"><span>GRAND TOTAL DUE</span><span>GYD $2,800.00</span></div></div></div>
-  </div>
-  <div class="tiny">Storage: GYD $500/day after 7 days. Payment must be cleared before release.</div>
-</div>
-<div class="footer">© 2026 amcshopping. All rights reserved. | Shipping Invoice</div>
-</div></section>
+  <section id="reviewArea" class="reviewArea hidden">
+    <div class="reviewGrid">
+      <aside class="customerRail workCard">
+        <div class="railHead"><span class="step">STEP 2</span><h2>Review customers</h2><p id="batchSummary">0 customers</p></div>
+        <div id="customerList" class="customerList"></div>
+        <button id="addCustomerBtn" class="outlineBtn wide" type="button">+ Add customer</button>
+      </aside>
 
-<section class="page promoPage"><div class="sheet">
-<header class="header"><div class="brand"><div class="logo">AMC</div><div><h2>SAVE MORE WITH AMC</h2><p>Every normal invoice keeps a dedicated AMC promotion page.</p></div></div></header>
-<div class="content">
-  <div class="promoHero"><span class="badge">AMC PROMOTION</span><h2>AMC Members Club</h2><p>Unlimited packages, waived package fees, priority processing and predictable shipping.</p></div>
-  <div class="promoStats"><div class="card"><h4>NORMAL TOTAL</h4><strong>GYD $2,800.00</strong><small>Current shipment total</small></div><div class="card"><h4>MEMBER ESTIMATE</h4><strong>GYD $810.00</strong><small>Illustrative member comparison</small></div><div class="card"><h4>POTENTIAL SAVINGS</h4><strong class="green">GYD $1,990.00</strong><small>Estimated shipping difference</small></div></div>
-  <div class="plans"><div class="plan"><h5>Starter</h5><b>20 lbs</b><small>Unlimited packages · fees waived</small></div><div class="plan"><h5>Small Business</h5><b>50 lbs</b><small>Priority processing</small></div><div class="plan"><h5>Business Pro</h5><b>100 lbs</b><small>For higher-volume customers</small></div><div class="plan"><h5>Enterprise</h5><b>300 lbs</b><small>Highest-volume tier</small></div></div>
-</div>
-<div class="promoSlot"><div><h4 class="promoTitle">Save More With AMC Members Club</h4><p class="promoText">Lower shipping costs, waived package fees and member benefits on eligible shipments.</p></div><div class="promoCta">amcshopping.com/members</div></div>
-<div class="footer">© 2026 amcshopping. All rights reserved. | AMC Promotion</div>
-</div></section>
-</div>
+      <section class="workCard editorCard">
+        <div class="sectionHead compact"><div><span class="step">EDITABLE</span><h2 id="editTitle">Customer</h2><p>Correct weights, tracking details, customer type or adjustments before generating.</p></div><button id="removeCustomerBtn" class="dangerBtn" type="button">Remove customer</button></div>
+        <div class="customerFields">
+          <label>Customer name<input id="customerName" type="text"></label>
+          <label>WhatsApp<input id="customerWhatsapp" type="text"></label>
+          <label>Mailbox code<input id="customerMailbox" type="text"></label>
+          <label>Customer type<select id="customerType"><option value="regular">Regular AMC</option><option value="member">AMC Members Club</option></select></label>
+          <label>Manual adjustment (GYD)<input id="customerAdjustment" type="number" step="0.01" value="0"></label>
+          <label class="full">Internal note<textarea id="customerNotes" rows="2"></textarea></label>
+        </div>
+        <div class="packageHeader"><div><h3>Packages</h3><p>Weights are billed from the combined shipment weight for this customer.</p></div><button id="addPackageBtn" class="ghostBtn" type="button">+ Package</button></div>
+        <div id="packageEditor" class="packageEditor"></div>
+      </section>
+    </div>
 
-<div id="memberView" class="hide">
-<section class="page"><div class="sheet">
-<header class="header">
-  <div class="brand"><div class="logo">AMC</div><div><h2>A.M.C SHOPPING</h2><h3>Members Club Shipping Invoice</h3><p>Your Package. Our Priority. Always.</p></div></div>
-  <div class="meta"><div><span>Invoice #</span><b>SAMPLE-MC</b></div><div><span>Date</span><b>2026-11-01</b></div><div><span>Type</span><b>AMC Members Club</b></div></div>
-</header>
-<div class="content">
-  <div class="summary">
-    <div class="card"><h4>CUSTOMER</h4><div class="row"><span>Name</span><b>Sample Member</b></div><div class="row"><span>Mailbox</span><b>AMC203</b></div><div class="row"><span>Customer Type</span><b>AMC Member</b></div></div>
-    <div class="card"><h4>MEMBERS CLUB SUMMARY</h4><div class="row"><span>Packages</span><b>10</b></div><div class="row"><span>Combined Weight</span><b>16.2250 lb</b></div><div class="row"><span>Member Pricing</span><b>APPLIED</b></div><div class="row"><span>Package Fees</span><b>WAIVED</b></div></div>
-    <div class="card total"><h4>TOTAL DUE</h4><strong>GYD $15,413.75</strong><small>Members Club pricing applied</small></div>
-  </div>
-  <div class="table">
-    <div class="tr head"><div>#</div><div>FULL TRACKING NUMBER</div><div>SOURCE WT.</div><div>WEIGHT (LB)</div><div>REF</div></div>
-    <div class="tr"><div>1</div><div>MEMBER-SAMPLE-001</div><div>1.976 oz</div><div>0.1235</div><div>GFUS</div></div>
-    <div class="tr"><div>2</div><div>MEMBER-SAMPLE-002</div><div>7.352 oz</div><div>0.4595</div><div>GFUS</div></div>
-    <div class="tr"><div>3</div><div>MEMBER-SAMPLE-003</div><div>3.512 lb</div><div>3.512</div><div>GFUS</div></div>
-  </div>
-  <div class="note"><b>MEMBER BILLING:</b> Combined shipment weight billed under Members Club terms. Package fees waived.</div>
-</div>
-<div class="footer">© 2026 amcshopping. All rights reserved. | Members Club Shipping Invoice</div>
-</div></section>
+    <section class="workCard validateCard">
+      <div class="sectionHead compact"><div><span class="step">STEP 3</span><h2>Validate & calculate</h2><p>Invoice totals are recalculated from the current AMC shipping rates before anything can be committed.</p></div><button id="validateBtn" class="outlineBtn" type="button">Run validation</button></div>
+      <div id="validationSummary" class="validationSummary"></div>
+    </section>
 
-<section class="page memberPage2"><div class="sheet">
-<header class="header"><div class="brand"><div class="logo">AMC</div><div><h2>AMC MEMBERS CLUB</h2><h3>Payment Summary</h3><p>Member pricing and waived package fees applied to this shipment.</p></div></div></header>
-<div class="content">
-  <div class="memberSummary"><div class="card"><h4>MEMBER TOTAL</h4><strong>GYD $15,413.75</strong><small>16.2250 lb combined shipment</small></div><div class="card"><h4>REGULAR CUSTOMER EQUIVALENT</h4><strong>GYD $21,092.50</strong><small>Using current normal-customer tier</small></div><div class="card"><h4>MEMBER SAVINGS</h4><strong class="green">GYD $5,678.75</strong><small>Savings on this shipment</small></div></div>
-  <div class="two"><div class="panel"><h4>HOW TO PAY</h4><div class="inside"><div class="row"><span>MMG Merchant</span><b>AMCSHOPPING / m742288</b></div><div class="row"><span>Name</span><b>Adam Henry</b></div><div class="row"><span>Number</span><b>+592-604-2826</b></div></div></div><div class="panel"><h4>MEMBERS CLUB BENEFITS</h4><div class="inside"><p>• Unlimited packages</p><p>• Package fees waived</p><p>• Priority processing / faster clearance</p><div class="grand"><span>TOTAL DUE</span><span>GYD $15,413.75</span></div></div></div></div>
-</div>
-<div class="promoSlot"><div><h4 class="promoTitle">Save More With AMC Members Club</h4><p class="promoText">Lower shipping costs, waived package fees and member benefits on eligible shipments.</p></div><div class="promoCta">amcshopping.com/members</div></div>
-<div class="footer">© 2026 amcshopping. All rights reserved. | Members Club Shipping Invoice</div>
-</div></section>
-</div>
+    <section class="workCard previewControls">
+      <div class="sectionHead compact"><div><span class="step">STEP 4</span><h2>Locked invoice preview</h2><p>The invoice design is locked. Only customer/shipment data and the AMC promotion change.</p></div><div class="previewNav"><button id="prevCustomerBtn" class="ghostBtn" type="button">←</button><span id="previewCount">1 / 1</span><button id="nextCustomerBtn" class="ghostBtn" type="button">→</button></div></div>
+      <div class="promoControls">
+        <select id="promoPreset" aria-label="Promotion preset"><option value="members">Members Club</option><option value="course">AMC Courses</option><option value="streaming">Streaming Services</option><option value="mailbox">AMC Mailbox</option><option value="custom">Custom</option></select>
+        <input id="promoTitle" placeholder="Promotion title">
+        <input id="promoText" placeholder="Promotion message">
+        <input id="promoCta" placeholder="CTA / link text">
+        <button id="savePromoBtn" class="ghostBtn" type="button">Save Promo</button>
+      </div>
+    </section>
+
+    <section id="invoicePreview" class="invoicePreview"></section>
+
+    <section class="commitBar workCard">
+      <div><span class="step">STEP 5</span><h2>Generate & pass to HENRY OS</h2><p>Saving creates the customers, packages and outstanding invoices inside HENRY OS. Reusing the same Batch ID will not duplicate the batch.</p></div>
+      <div class="commitActions"><button id="printSelectedBtn" class="outlineBtn" type="button">Print selected / Save PDF</button><button id="printAllBtn" class="outlineBtn" type="button">Print whole batch / Save PDF</button><button id="commitBtn" class="primaryBtn" type="button">Generate & Save to HENRY OS →</button></div>
+      <div id="commitStatus" class="statusLine" role="status" aria-live="polite"></div>
+    </section>
+  </section>
 </main>
+
+<div id="printArea" class="printArea"></div>
 </body>
 </html>
