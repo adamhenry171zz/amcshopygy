@@ -10,13 +10,14 @@ const authenticated=(req,secret,email)=>{const token=parseCookies(req.headers.ge
 const clean=(v,max=1200)=>String(v??'').trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').slice(0,max);
 const num=v=>Number(String(v??'').replace(/,/g,''))||0;
 const round2=v=>Math.round((Number(v)||0)*100)/100;
+const round4=v=>Math.round((Number(v)||0)*10000)/10000;
 const safeId=v=>clean(v,140).toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120);
 const hash=v=>crypto.createHash('sha256').update(String(v)).digest('hex');
 const readType=async(store,type)=>{const {blobs}=await store.list({prefix:`${type}/`});const rows=await Promise.all(blobs.map(async b=>{try{return await store.get(b.key,{type:'json'})}catch{return null}}));return rows.filter(Boolean)};
 const isMember=v=>/member/i.test(String(v||''));
 
 function standardCharge(weight){
-  const bill=Math.max(1,Number(weight)||0);
+  const bill=Math.max(1,round4(weight));
   if(bill<=2)return {rate:0,total:2800,label:'GYD $2,800 flat 1–2 lb special',billWeight:bill};
   let rate=1500,label='GYD $1,500/lb · 1–10 lbs';
   if(bill>10&&bill<=25){rate=1300;label='GYD $1,300/lb · 11–25 lbs'}
@@ -26,7 +27,7 @@ function standardCharge(weight){
   return {rate,total:round2(bill*rate),label,billWeight:bill};
 }
 function calculateCustomer(c){
-  const weight=round2((Array.isArray(c.packages)?c.packages:[]).reduce((s,p)=>s+num(p.weightLb),0));
+  const weight=round4((Array.isArray(c.packages)?c.packages:[]).reduce((s,p)=>s+num(p.weightLb),0));
   const adjustment=round2(num(c.adjustment));
   const standard=standardCharge(weight);
   if(isMember(c.customerType)){
@@ -71,7 +72,7 @@ export default async req=>{
   const rawBatchId=clean(body.batchId,140)||`shipment-${new Date().toISOString().replace(/[:.]/g,'-')}`;
   const batchKey=safeId(rawBatchId);if(!batchKey)return json({error:'Invalid batch ID'},400);
   const invoiceDate=/^\d{4}-\d{2}-\d{2}$/.test(clean(body.invoiceDate,20))?clean(body.invoiceDate,20):new Date().toISOString().slice(0,10);
-  const canonical={batchId:batchKey,invoiceDate,customers:customers.map(c=>({name:clean(c.name,200),whatsapp:clean(c.whatsapp,80),mailboxCode:clean(c.mailboxCode,80),customerType:clean(c.customerType,40),notes:clean(c.notes,1800),adjustment:round2(num(c.adjustment)),packages:c.packages.map(p=>({tracking:clean(p.tracking,220),carrier:clean(p.carrier,120),sourceWeight:clean(p.sourceWeight,120),weightLb:round2(num(p.weightLb)),ref:clean(p.ref,120),status:clean(p.status,40)}))}))};
+  const canonical={batchId:batchKey,invoiceDate,customers:customers.map(c=>({name:clean(c.name,200),whatsapp:clean(c.whatsapp,80),mailboxCode:clean(c.mailboxCode,80),customerType:clean(c.customerType,40),notes:clean(c.notes,1800),adjustment:round2(num(c.adjustment)),packages:c.packages.map(p=>({tracking:clean(p.tracking,220),carrier:clean(p.carrier,120),sourceWeight:clean(p.sourceWeight,120),weightLb:round4(num(p.weightLb)),ref:clean(p.ref,120),status:clean(p.status,40)}))}))};
   const inputHash=hash(JSON.stringify(canonical));
   const store=getStore('henry-amc');
   const markerKey=`invoice-batches/${batchKey}`;
@@ -113,7 +114,7 @@ export default async req=>{
 
     for(let pIndex=0;pIndex<c.packages.length;pIndex++){
       const p=c.packages[pIndex];const packageId=item.packageIds[pIndex];
-      const packageRecord={id:packageId,type:'packages',customer:c.name,whatsapp:c.whatsapp,tracking:p.tracking,carrier:p.carrier||p.ref||'',weight:num(p.weightLb).toFixed(4),packageCount:'1',status:p.status||'ready',arrivalDate:invoiceDate,amountDue:'',notes:`Invoice ${item.invoiceNo}. Invoice Factory batch ${batchKey}.${p.sourceWeight?` Source weight: ${p.sourceWeight}.`:''}${p.ref?` Ref: ${p.ref}.`:''}`.slice(0,4000),createdAt:now,updatedAt:now};
+      const packageRecord={id:packageId,type:'packages',customer:c.name,whatsapp:c.whatsapp,tracking:p.tracking,carrier:p.carrier||p.ref||'',weight:round4(p.weightLb).toFixed(4),packageCount:'1',status:p.status||'ready',arrivalDate:invoiceDate,amountDue:'',notes:`Invoice ${item.invoiceNo}. Invoice Factory batch ${batchKey}.${p.sourceWeight?` Source weight: ${p.sourceWeight}.`:''}${p.ref?` Ref: ${p.ref}.`:''}`.slice(0,4000),createdAt:now,updatedAt:now};
       await store.setJSON(`packages/${packageId}`,packageRecord);
     }
     results.push({invoiceNo:item.invoiceNo,invoiceId:item.invoiceId,customer:c.name,customerId:item.customerId,customerType:calc.member?'member':'regular',amount:calc.total.toFixed(2),weight:calc.weight.toFixed(4),standardEquivalent:calc.standardEquivalent.toFixed(2),savings:calc.member?round2(calc.standardEquivalent-calc.total).toFixed(2):'0.00',packageCount:c.packages.length,packageIds:item.packageIds});
