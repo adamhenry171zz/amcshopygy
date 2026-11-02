@@ -6,6 +6,8 @@ const root=new URL('../henry-os/admin/',import.meta.url);
 const dest=path.join(site,'admin');
 fs.mkdirSync(dest,{recursive:true});
 for(const name of ['index.html','styles.css','app.js','henry-live-sync.js','membership-tracker.js','membership-tracker.css','invoice-factory-preview.html','invoice-factory-preview.css','invoice-factory-workspace.css','invoice-factory-fixes.css','invoice-factory-preview.js','invoice-factory-handoff.js'])fs.copyFileSync(new URL(name,root),path.join(dest,name));
+const invoiceFactoryJs=path.join(dest,'invoice-factory-preview.js');
+if(fs.existsSync(invoiceFactoryJs))fs.writeFileSync(invoiceFactoryJs,fs.readFileSync(invoiceFactoryJs,'utf8').replace(/300 lbs/g,'220 lbs'));
 const fnDir=path.resolve(site,'../netlify/functions');
 fs.mkdirSync(fnDir,{recursive:true});
 for(const name of ['henry-auth.mjs','henry-delivery-submit.mjs','henry-inquiry-submit.mjs','henry-track-status.mjs','henry-announcements.mjs','henry-invoice-batch.mjs','henry-membership.mjs'])fs.copyFileSync(new URL('../henry-os/functions/'+name,import.meta.url),path.join(fnDir,name));
