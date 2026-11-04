@@ -23,7 +23,7 @@ export function parseCSV(source) {
   }
   if (quoted) throw new Error("Unclosed quoted field in CSV");
   if (field || row.length) { row.push(field); rows.push(row); }
-  return rows.filter(r => r.some(x => String(x).trim()));
+  return rows; // Preserve original blank rows so audit row numbers match Google Sheets.
 }
 
 const normHeader = s => String(s || "").trim().replace(/\s+/g, " ").toUpperCase();
