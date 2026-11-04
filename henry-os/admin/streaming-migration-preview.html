@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#071426">
+  <title>HENRY OS — Netflix migration preview</title>
+  <link rel="stylesheet" href="/admin/styles.css">
+  <link rel="stylesheet" href="/admin/streaming-migration-preview.css">
+</head>
+<body>
+  <main class="migration-wrap">
+    <header class="migration-header">
+      <div><p class="eyebrow">HENRY OS / AMC SHOPPING</p><h1>Netflix subscription migration</h1><p>Owner-only, review-first migration from N/ACCOUNTS (Sheet1) to HENRY OS Streaming.</p></div>
+      <a class="outline migration-back" href="/admin/">← Return to command center</a>
+    </header>
+    <section class="card migration-panel" aria-labelledby="rules-title">
+      <h2 id="rules-title">Migration safety rules</h2>
+      <p>The October–November 2026 customer-renewal records qualify as active. Later future renewal dates also qualify, including advance-paid subscriptions. The snapshot reference is <strong>November 4, 2026</strong>.</p>
+      <p><strong>Important:</strong> Column DATE is the customer's renewal date. ACCOUNT PAYMENT DATE is Netflix's provider-side renewal and is <em>not</em> a customer payment obligation. We do not create historical payment transactions from these dates.</p>
+      <p>This tool never sends the Netflix Password, Gmail Password, PIN, payment-history notes, or unrelated spreadsheet columns to HENRY OS. Only approved customer, plan, amount, and renewal information is saved to the private Streaming store. It does not change the Google Sheet.</p>
+    </section>
+    <section class="card migration-panel" aria-labelledby="file-title">
+      <h2 id="file-title">1. Preview your current Netflix records</h2>
+      <p>In Google Sheets, open <strong>N/ACCOUNTS → Sheet1</strong>, choose <strong>File → Download → Comma Separated Values (.csv)</strong> for the current sheet, and choose that file below.</p>
+      <label class="migration-label" for="picker">Netflix Sheet1 CSV export</label>
+      <input type="file" id="picker" accept=".csv,text/csv" disabled>
+      <p id="notice" class="status" role="status" aria-live="polite">Checking your HENRY OS session…</p>
+      <div class="migration-counts" aria-live="polite">
+        <div><b id="ready-count">0</b><span>Ready for import</span></div>
+        <div><b id="review-count">0</b><span>Need manual review</span></div>
+        <div><b id="existing-count">0</b><span>Already exist / potential duplicate</span></div>
+        <div><b id="ignored-count">0</b><span>ID-only or placeholder rows</span></div>
+      </div>
+    </section>
+    <section class="card migration-panel" aria-labelledby="ready-title">
+      <h2 id="ready-title">2. Qualified Netflix subscriptions</h2>
+      <p>These remain active. Future due dates are preserved; dates that have passed are not automatically extended.</p>
+      <div class="migration-table-wrap"><table><thead><tr><th>Sheet row</th><th>Customer</th><th>Reason</th></tr></thead><tbody id="ready-rows"></tbody></table></div>
+    </section>
+    <section class="card migration-panel" aria-labelledby="review-title">
+      <h2 id="review-title">3. Records requiring attention</h2>
+      <p>Nothing here will be automatically imported. Customer entries are preserved in the source spreadsheet for manual review.</p>
+      <div class="migration-table-wrap"><table><thead><tr><th>Sheet row</th><th>Customer</th><th>Reason</th></tr></thead><tbody id="review-rows"></tbody></table></div>
+    </section>
+    <section class="card migration-panel" aria-labelledby="commit-title">
+      <h2 id="commit-title">4. Import into private HENRY OS</h2>
+      <p>This step writes only to the HENRY OS Streaming module. It does not update website subscription prices, create customer charges, generate receipts, or activate other streaming services. Stable subscription IDs help avoid duplicates on retries.</p>
+      <label class="migration-check"><input type="checkbox" id="approved" disabled> I have reviewed the qualifying records and understand that an active subscription does not itself prove a transaction was recorded as paid.</label>
+      <div><button type="button" class="primary" id="commit" disabled>Import reviewed Netflix subscriptions</button></div>
+    </section>
+  </main>
+  <script type="module" src="/admin/streaming-migration-preview.js"></script>
+</body>
+</html>
