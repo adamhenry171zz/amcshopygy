@@ -1,0 +1,24 @@
+/* AMC temporary shipment delay notice | 12–13 November 2026 */
+.amc-shipment-banner{background:linear-gradient(110deg,#062848,#0d4979);color:#f5fbff;border-bottom:3px solid #f1ba38;padding:15px 0}
+.amc-shipment-banner .wrap{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.amc-shipment-banner small{display:block;color:#fed779;font-size:11px;font-weight:900;letter-spacing:.11em;margin-bottom:4px}
+.amc-shipment-banner strong{display:block;font-size:17px;line-height:1.35}
+.amc-shipment-banner p{margin:5px 0 0;color:#d2e5f5;font-size:13px;line-height:1.5}
+.amc-shipment-banner a{display:inline-block;flex:none;border:1px solid #b8d7ed;border-radius:9px;color:white;text-decoration:none;padding:10px 15px;font-size:13px;font-weight:800}
+.amc-shipment-banner a:focus-visible{outline:3px solid #ffda7d;outline-offset:3px}
+.amc-shipment-announcement{padding:48px 0 56px;background:linear-gradient(180deg,#e9f3fb 0,#fff 100%);color:#16344f}
+.amc-shipment-announcement .amc-delay-panel{max-width:1060px;margin:0 auto;background:#fff;border:1px solid #c8e1f3;border-radius:22px;overflow:hidden;box-shadow:0 16px 38px #0c356319}
+.amc-delay-title{background:#123b65;color:white;padding:28px 34px;border-bottom:5px solid #f1ba38}
+.amc-delay-title .eyebrow{font-size:11px;font-weight:900;letter-spacing:.13em;color:#ffdc8b}
+.amc-delay-title h1{font-size:clamp(28px,4vw,40px);line-height:1.12;margin:9px 0 8px}
+.amc-delay-title p{margin:0;color:#d6e8f7;line-height:1.55}
+.amc-delay-body{padding:28px 34px 32px}
+.amc-delay-body p{font-size:15px;line-height:1.7;color:#34536d}
+.amc-delay-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin:23px 0}
+.amc-delay-date{padding:20px;border:1px solid #b7d6eb;background:#f3f9ff;border-radius:14px}
+.amc-delay-date small{display:block;color:#517da5;text-transform:uppercase;letter-spacing:.1em;font-size:11px;font-weight:900}
+.amc-delay-date strong{display:block;font-size:22px;color:#123b65;margin:7px 0}
+.amc-delay-date p{margin:0;font-size:14px;line-height:1.5}
+.amc-delay-clarification{padding:14px 17px;border-left:4px solid #f1ba38;background:#fff9ec;border-radius:5px;font-weight:700}
+.amc-delay-signoff{margin-top:22px;font-weight:800;color:#113a60}
+@media(max-width:700px){.amc-shipment-banner .wrap{display:block}.amc-shipment-banner a{margin-top:11px}.amc-shipment-announcement{padding:20px 10px 40px}.amc-delay-title,.amc-delay-body{padding:24px 19px}.amc-delay-grid{grid-template-columns:1fr}.amc-shipment-banner strong{font-size:15px}}
