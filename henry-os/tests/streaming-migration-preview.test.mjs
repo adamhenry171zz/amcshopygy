@@ -61,6 +61,8 @@ test('qualify Oct/Nov and future prepaid, do not use provider date as customer p
   const expiry=v.ready.find(x=>x.customer==='Future expiry only');
   assert.equal(expiry.record.dueDate,'');
   assert.equal(v.ready.find(x=>x.customer==='October customer').record.status,'active');
+  assert.equal(v.ready.find(x=>x.customer==='October customer').record.dueDate,'');
+  assert.match(v.ready.find(x=>x.customer==='October customer').record.notes,/2026-10-05/);
   assert.equal(v.ready.find(x=>x.customer==='December, prepaid').record.dueDate,'2026-12-15');
   assert.ok(v.review.some(x=>x.customer==='Provider due only'));
 });
