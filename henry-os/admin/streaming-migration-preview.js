@@ -104,17 +104,17 @@ export function prepareMigration(csv, existing = []) {
     const notes = [
       "Imported from " + SHEET + " row " + rowNumber + " (migration snapshot " + SNAPSHOT_DATE + ").",
       isFutureRenewal ? "Future customer renewal date is treated as prepaid; no past payment transaction was created." : "",
-      renewal && renewal <= SNAPSHOT_DATE ? "Active by owner rule; stored renewal date has passed and needs owner verification; do not invent a new date." : "",
+      renewal && renewal <= SNAPSHOT_DATE ? "Active by owner rule. Original customer renewal date: " + renewal + ". Date is held out of forecasts until next renewal is verified." : "",
       futureExpiry && (!renewal || renewal <= SNAPSHOT_DATE)
         ? "Future expiry preserved for reference; customer payment due date requires verification." : "",
       accountDue ? "Netflix provider-side account payment date: " + accountDue + " (not customer payment due)." : ""
     ].filter(Boolean).join(" ");
     summary.ready.push({
-      ...item, reason:renewal && renewal <= SNAPSHOT_DATE ? "Active; renewal date needs verification" :
+      ...item, reason:renewal && renewal <= SNAPSHOT_DATE ? "Active; old due date held from financial forecast pending verification" :
         !renewal ? "Active; verify next customer billing date" : "Active; future renewal preserved",
       record:{
         customer:name, whatsapp, service:"Netflix", plan:val("ACCOUNT TYPE"), amount,
-        dueDate:renewal || "", status:"active", accountEmail:email, notes
+        dueDate:renewal > SNAPSHOT_DATE ? renewal : "", status:"active", accountEmail:email, notes
       },
       id
     });
