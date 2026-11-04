@@ -19,3 +19,37 @@ fs.copyFileSync(new URL('../henry-os/public/henry-tracking.js',import.meta.url),
 fs.copyFileSync(new URL('../henry-os/public/henry-announcements.js',import.meta.url),path.join(assets,'henry-announcements.js'));
 for(const name of fs.readdirSync(site).filter(n=>n.endsWith('.html'))){const p=path.join(site,name);let html=fs.readFileSync(p,'utf8');if(html.includes('data-netlify="true"')&&!html.includes('assets/henry-public.js'))html=html.replace(/<\/body>/i,'<script src="/assets/henry-public.js"></script></body>');if(name==='tracking.html'){html=html.replace(/<section\s+id="henry-amc-track"[\s\S]*?<\/section>\s*/gi,'');html=html.replace(/<script\s+src="\/assets\/henry-tracking\.js"><\/script>\s*/gi,'')}if(name==='announcement.html'&&!html.includes('id="henry-live-announcements"')){html=html.replace(/<\/main>/i,'<section id="henry-live-announcements" style="padding:20px 0 50px"></section></main>');html=html.replace(/<\/body>/i,'<script src="/assets/henry-announcements.js"></script></body>')}if(name==='members.html'){html=html.replace(/<h3>300 lbs<\/h3>/g,'<h3>220 lbs</h3>').replace(/Up to 300 lbs monthly allowance/g,'Up to 220 lbs monthly allowance')}fs.writeFileSync(p,html)}
 console.log('HENRY OS AMC command center, Invoice Factory, Members Club monthly usage tracking, 220 lb Enterprise plan, live dashboard sync, inquiries, internal tracking and announcements staged');
+
+
+
+// Prominent, dated public notice for the mechanically delayed November shipment.
+// Keep this separate from routine schedule text: November 12 is ARRIVAL, not invoice delivery.
+const delayStyle=path.join(assets,'shipment-delay-2026.css');
+fs.copyFileSync(new URL('../henry-os/public/shipment-delay-2026.css',import.meta.url),delayStyle);
+const delayCssLink='<link rel="stylesheet" href="/assets/shipment-delay-2026.css">';
+const delayBanner=String.raw\`<section class="amc-shipment-banner" id="amc-shipment-delay-banner-2026" aria-label="Important shipment delay"><div class="wrap"><div><small>IMPORTANT SHIPMENT UPDATE · FLIGHT DELAY</small><strong>Revised arrival: Thursday, November 12, 2026</strong><p>Mechanical issues delayed the scheduled flight. Sorting, processing and customer invoicing are scheduled for Friday, November 13.</p></div><a href="/announcement.html">Read full update</a></div></section>\`;
+const delayAnnouncement=String.raw\`<section class="amc-shipment-announcement" id="amc-shipment-update-nov-2026" aria-labelledby="amc-delay-title"><div class="wrap"><article class="amc-delay-panel"><div class="amc-delay-title"><div class="eyebrow">✈ IMPORTANT SHIPMENT UPDATE</div><h1 id="amc-delay-title">Flight Delay — Revised Arrival Schedule</h1><p>A.M.C Shopping · Shipment update issued November 4, 2026</p></div><div class="amc-delay-body"><p>Dear Valued Customers,</p><p>We would like to inform you that our incoming shipment has experienced an unexpected delay due to <strong>mechanical issues affecting the scheduled flight</strong>.</p><p>Please see the revised schedule below:</p><div class="amc-delay-grid"><div class="amc-delay-date"><small>Expected shipment arrival in Guyana</small><strong>Thursday, November 12</strong><p>Revised flight arrival date, subject to airline operations and clearance.</p></div><div class="amc-delay-date"><small>Shipment processing and invoicing</small><strong>Friday, November 13</strong><p>Sorting, processing and customer invoices are scheduled for this day.</p></div></div><p class="amc-delay-clarification">November 13 is the processing and invoicing date, not a guaranteed customer delivery date. We will share delivery arrangements once processing is complete.</p><p>We sincerely apologize for the inconvenience and appreciate your patience and understanding. We remain committed to transparency and keeping you informed every step of the way.</p><p class="amc-delay-signoff">Your Package. Our Priority. Always.<br>A.M.C Shopping Management</p></div></article></div></section>\`;
+const addDelayStyle=html=>html.includes('shipment-delay-2026.css')?html:html.replace(/<\/head>/i,delayCssLink+'\n</head>');
+const injectAtMain=(html,fragment)=>html.replace(/<main\b[^>]*>/i,m=>m+'\n'+fragment);
+const publicIndex=path.join(site,'index.html');
+const announcementPath=path.join(site,'announcement.html');
+if(!fs.existsSync(announcementPath)&&fs.existsSync(publicIndex)){
+  // Reuse the deployed site's header, navigation, footer and asset links.
+  let base=fs.readFileSync(publicIndex,'utf8');
+  base=base.replace(/<main\b[^>]*>[\s\S]*?<\/main>/i,'<main></main>');
+  base=base.replace(/<title>[\s\S]*?<\/title>/i,'<title>Flight Delay &amp; Shipment Update | AMC Shopping</title>');
+  base=base.replace(/<meta name="description" content="[^"]*"\s*\/?>/i,'<meta name="description" content="AMC Shopping incoming flight delay: expected arrival November 12, 2026, and shipment processing and invoicing November 13.">');
+  base=base.replace(/<\/main>/i,'<section id="henry-live-announcements" style="padding:20px 0 50px"></section></main>');
+  if(!base.includes('/assets/henry-announcements.js'))base=base.replace(/<\/body>/i,'<script src="/assets/henry-announcements.js"></script></body>');
+  fs.writeFileSync(announcementPath,base);
+}
+for(const name of ['index.html','tracking.html','announcement.html']){
+  const target=path.join(site,name);
+  if(!fs.existsSync(target))continue;
+  let html=addDelayStyle(fs.readFileSync(target,'utf8'));
+  const fragment=name==='announcement.html'?delayAnnouncement:delayBanner;
+  const marker=name==='announcement.html'?'amc-shipment-update-nov-2026':'amc-shipment-delay-banner-2026';
+  if(!html.includes(marker))html=injectAtMain(html,fragment);
+  fs.writeFileSync(target,html);
+}
+console.log('November 12 flight-delay announcement published to AMC website and homepage/tracking banners staged');
