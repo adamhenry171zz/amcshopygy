@@ -188,6 +188,9 @@ export default async (req,context)=>{
     const receivedDate=safeDate(body.receivedDate);
     if(receivedDate>asOf)throw new Error('A cash payment cannot be recorded with a future receipt date.');
     const paymentMethod=method(body.method),reference=validateReference(body.reference);
+    const canonical=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(canonical(reference).length<4||['CASH','NONE','UNKNOWN','NORECEIPT','NOREF','NA','MMG','BANK'].includes(canonical(reference)))
+      throw new Error('Enter an actual unique MMG, bank or cash receipt reference. A generic label will not count as a verified collection.');
     const notes=clean(body.notes,1000),historical=body.historical===true;
     if(historical&&notes.length<8)throw new Error('For a historical payment, note the evidence you checked and why the payment is historical.');
     const months=Number(body.months||1);
@@ -209,13 +212,13 @@ export default async (req,context)=>{
     if(toCents(amountGyd)!==toCents(agreedFee)*months)
       throw new Error('Amount does not match the recorded membership fee × months. Do not treat a mixed or partial payment as a full membership renewal.');
     const current=await read(store,'receipts');
-    if(duplicateRef(current,paymentMethod,reference)){
-      const prior=current.find(x=>x.method.toLowerCase()===paymentMethod.toLowerCase()&&normalRef(x.reference)===normalRef(reference));
+    if(current.some(x=>canonical(x.reference)===canonical(reference))){
+      const prior=current.find(x=>canonical(x.reference)===canonical(reference));
       return json({error:prior?.status==='pending'?'A pending receipt with this reference already exists. Verify that existing payment instead of recording it again.':'This payment reference is already in Finance. It will not be recorded twice.'},409);
     }
     // Never re-record a verified or pending reference from the older HENRY OS register.
     const old=await load(getStore('henry-amc'),'payments/');
-    if(old.some(p=>clean(p.method,40).toLowerCase()===paymentMethod.toLowerCase()&&normalRef(p.reference)===normalRef(reference)))
+    if(old.some(p=>canonical(p.reference)===canonical(reference)))
       return json({error:'This receipt reference exists in the older Payments register. Check that existing entry instead of adding another collection.'},409);
     const item={id:id(),relatedType:'membership',customer:clean(member.customer,160),amountGyd,
       receivedDate,method:paymentMethod,reference,membershipId,legacyMembershipId,months,agreedFee,
