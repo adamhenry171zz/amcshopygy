@@ -131,7 +131,18 @@ async function reconcileInvoicePayments(store,data=null){
 
 const jsonResponse=(body,source)=>new Response(JSON.stringify(body),{status:source.status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 
-export default async req=>{
+export default async (req, context)=>{
+  // Netlify Blobs getStore() is site-wide: a Deploy Preview shares production data.
+  // Fail closed for migration IDs unless Netlify confirms the production context.
+  const incomingUrl=new URL(req.url);
+  if(incomingUrl.searchParams.get('action')==='save'&&req.method==='POST'){
+    let incoming=null;try{incoming=await req.clone().json()}catch{}
+    if(incoming?.type==='streaming'&&/^netflix-[a-z0-9_-]{8,60}$/i.test(String(incoming.id||''))&&context?.deploy?.context!=='production'){
+      return new Response(JSON.stringify({error:'Netflix bulk import is disabled outside production. Preview CSV safely, then import on the approved production site.'}),{
+        status:403,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}
+      });
+    }
+  }
   const copy=req.clone();
   const response=await core(req);
   if(!response.ok)return response;
