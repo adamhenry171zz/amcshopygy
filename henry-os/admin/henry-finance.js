@@ -64,7 +64,7 @@ function renderSuppliers(){
     '<label>Internal notes<textarea name="notes" placeholder="No login credentials here"></textarea></label><button class="btn wide" type="submit">Add supplier account</button></form></section>'+
     '<section class="card"><h3>Recurring billing schedule</h3><p class="sub">Upcoming expected charges are calculated automatically; no bill or expense is created until you confirm an actual charge.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Account</th><th>Estimated cost</th><th>Next scheduled dates</th><th>Status</th></tr></thead><tbody>'+
-    (accounts.length?accounts.map(s=>'<tr><td><strong>'+esc(s.accountLabel)+'</strong><small>'+esc(s.name)+' · '+esc(s.service)+' · '+esc(s.recurrence.replaceAll('_',' '))+' · '+(s.linkedSubscriptionIds?.length||0)+' linked subscription(s)</small></td><td>'+esc(s.estimate.originalAmount)+' '+esc(s.estimate.currency)+'<small>'+money(s.estimate.gydAmount)+' estimate</small></td><td>'+((s.nextExpectedBillDates||[]).slice(0,3).map(formatDate).join(' · ')||'No upcoming dates')+'</td><td>'+pill(s.status)+'<div class="action-inline" style="margin-top:8px"><button type="button" class="outline" data-pause="'+esc(s.id)+'" data-status="'+(s.status==='active'?'paused':'active')+'">'+(s.status==='active'?'Pause':'Resume')+'</button></div></td></tr>').join(''):'<tr><td colspan="4" class="empty">No supplier accounts entered yet.</td></tr>')+
+    (accounts.length?accounts.map(s=>'<tr><td><strong>'+esc(s.accountLabel)+'</strong><small>'+esc(s.name)+' · '+esc(s.service)+' · '+esc(s.recurrence.replaceAll('_',' '))+' · '+(s.linkedSubscriptionIds?.length||0)+' linked subscription(s)</small></td><td>'+esc(s.estimate.originalAmount)+' '+esc(s.estimate.currency)+'<small>'+money(s.estimate.gydAmount)+' estimate</small></td><td>'+((s.nextExpectedBillDates||[]).slice(0,3).map(formatDate).join(' · ')||'No upcoming dates')+'</td><td>'+pill(s.status)+'<div class="action-inline" style="margin-top:8px"><button type="button" class="outline" data-pause="'+esc(s.id)+'" data-status="'+(s.status==='active'?'paused':'active')+'">'+(s.status==='active'?'Pause':'Resume')+'</button><button type="button" class="outline" data-edit-supplier="'+esc(s.id)+'">Edit schedule</button></div></td></tr>').join(''):'<tr><td colspan="4" class="empty">No supplier accounts entered yet.</td></tr>')+
     '</tbody></table></div></section></div>'+
     '<div class="two-col"><section class="card"><h3>Confirm an actual supplier bill</h3><p class="sub">A scheduled estimate becomes an unpaid supplier obligation only when you confirm the charge.</p>'+
     '<form class="form" data-form="bill"><label>Supplier account<select id="supplier-bill-select" name="supplierId" required>'+supplierOptions+'</select></label>'+
@@ -173,6 +173,18 @@ function wireForms(){
     if(preview||state.working)return;
     if(!confirm('Change the supplier scheduling status? Existing bills will remain unchanged.'))return;
     try{await api('pause_supplier','POST',{id:b.dataset.pause,status:b.dataset.status});await reload();showMessage('Supplier scheduling updated.')}catch(e){showMessage(e.message,true)}
+  });
+  document.querySelectorAll('[data-edit-supplier]').forEach(b=>b.onclick=async()=>{
+    if(preview||state.working)return;
+    const old=state.data.suppliers.find(s=>s.id===b.dataset.editSupplier);if(!old)return;
+    const estimatedAmount=prompt('Future estimated charge for '+old.accountLabel+' ('+old.estimate.currency+'): ',old.estimate.originalAmount);
+    if(estimatedAmount===null)return;
+    const exchangeRate=old.estimate.currency==='USD'?prompt('Expected GYD per USD exchange rate (for future estimates only):',old.estimate.exchangeRate):'1';
+    if(exchangeRate===null)return;
+    const firstDueDate=prompt('Expected billing schedule anchor (YYYY-MM-DD):',old.firstDueDate);
+    if(firstDueDate===null)return;
+    if(!confirm('Update future estimates for '+old.accountLabel+'? Confirmed historical bills will not change.'))return;
+    try{await api('update_supplier_schedule','POST',{id:old.id,estimatedAmount,exchangeRate,firstDueDate,recurrence:old.recurrence});await reload();showMessage('Supplier forecast updated; actual prior bills are unchanged.')}catch(e){showMessage(e.message,true)}
   });
   document.querySelectorAll('[data-member-fee]').forEach(b=>b.onclick=async()=>{
     if(preview||state.working)return;
