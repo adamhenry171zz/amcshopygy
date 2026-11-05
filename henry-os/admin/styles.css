@@ -4,3 +4,10 @@
 #monthly-collected-kpi{border-color:#379fc8;background:linear-gradient(130deg,#123954,#0d2539)}
 #monthly-collected-kpi strong{color:#78dcff;font-weight:850}
 #monthly-collected-kpi .sub{line-height:1.45}
+
+/* Temporary simplified member collection card — one financial headline only. */
+.member-collected-line{display:flex;justify-content:space-between;gap:12px;padding:13px 2px;border-bottom:1px solid #29445e;font-size:13px;color:#c4dcee}
+.member-collected-line strong{color:#f1faff;white-space:nowrap;font-weight:800}
+.member-collected-line.member-collected-total{border-bottom:0;border-top:1px solid #416684;margin-top:7px;color:#e8f7ff;font-weight:850}
+.member-collected-line.member-collected-total strong{color:#55d8ff}
+@media(max-width:550px){.member-collected-line{gap:8px;flex-wrap:wrap}.member-collected-line strong{margin-left:auto}}
