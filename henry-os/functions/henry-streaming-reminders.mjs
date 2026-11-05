@@ -28,7 +28,7 @@ const classify=(dueDate,today)=>{
   const days=Math.round((Date.parse(dueDate+'T12:00:00Z')-Date.parse(today+'T12:00:00Z'))/86400000);
   return days<0?'past_date':days===0?'due_today':days<=7?'due_soon':'upcoming';
 };
-const stageFor=category=>category==='past_date'?'follow_up':category==='due_today'?'due_today':category==='due_soon'?'upcoming':'';
+const stageFor=category=>category==='past_date'?'follow_up':category==='due_today'?'due_today':['due_soon','upcoming'].includes(category)?'upcoming':'';
 const safeId=value=>/^[A-Za-z0-9_-]{1,100}$/.test(String(value||''));
 const readAll=async(store,prefix)=>{
   const {blobs}=await store.list({prefix});
@@ -84,6 +84,7 @@ export default async (req,context)=>{
     if(stageFor(classify(dueDate,today))!==stage)return json({error:'Reminder stage has changed. Refresh and review the current due date.'},409);
     const message=clean(body.message,2300);
     if(message.length<10)return json({error:'Provide the message sent to the customer.'},400);
+    // One deterministic record per subscription, renewal date and reminder stage; no duplicate mark-as-sent.
     const key='logs/'+subscriptionId+'/'+dueDate+'/'+stage;
     const existing=await store.get(key,{type:'json'}).catch(()=>null);
     if(existing)return json({error:'This reminder stage was already recorded as sent. It was not duplicated.'},409);
