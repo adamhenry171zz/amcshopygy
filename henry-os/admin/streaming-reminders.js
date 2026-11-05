@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel=v=>v?new Date(v+'T12:00:00').toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):'Not set';
-const money=v=>v!==''&&v!==null&&v!==undefined&&Number.isFinite(Number(v))?'GYD $'+Number(v).toLocaleString('en-US',{maximumFractionDigits:2}):'';
+const money=v=>v!==''&&v!==null&&v!==undefined&&Number.isFinite(Number(String(v).replace(/,/g,'')))&&Number(String(v).replace(/,/g,''))>0?'GYD $'+Number(String(v).replace(/,/g,'')).toLocaleString('en-US',{maximumFractionDigits:2}):'';
 const state={data:null,selectedId:'',service:'Netflix',includeUpdate:false,confirmedConsent:false};
 const labels={due_today:'Due today',due_soon:'Within 7 days',past_date:'Verify past date',needs_date:'Renewal date missing',upcoming:'Upcoming',inactive:'Paused / cancelled'};
 let lastDraft='';
@@ -95,7 +95,13 @@ function renderCompose(){
 function fillSettings(){
  const form=$('settings-form');for(const key of ['friendlyTemplate','dayTemplate','followupTemplate','recommendedUpdate'])form.elements[key].value=state.data.settings[key]||'';
 }
-function render(){if(!state.data)return;renderStats();renderList();renderCompose();fillSettings()}
+function render(){
+ if(!state.data)return;
+ const current=$('service-filter').value;
+ const services=[...new Set(state.data.subscriptions.map(x=>String(x.service||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+ $('service-filter').innerHTML='<option value="Netflix">Netflix</option><option value="*">All services</option>'+services.filter(x=>x.toLowerCase()!=='netflix').map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join('');
+ $('service-filter').value=services.some(x=>x.toLowerCase()===current.toLowerCase())||['Netflix','*'].includes(current)?current:'Netflix';
+ renderStats();renderList();renderCompose();fillSettings()}
 async function reload(){
  $('loading').classList.remove('hidden');
  try{
