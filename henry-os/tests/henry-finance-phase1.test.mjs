@@ -55,5 +55,5 @@ test('phase1 API preserves all legacy collections and gates preview writes',asyn
   assert.ok(server.includes("if(old.status!=='pending')"));
   assert.ok(server.includes("A receipt with this payment method and reference already exists."));
   assert.ok(build.includes("'henry-finance.mjs'"));
-  assert.ok(original.includes('href="/admin/henry-finance.html"'));
+  assert.ok(!original.includes('href="/admin/henry-finance.html"'));
 });

@@ -77,9 +77,9 @@ test('owner-only verification remains required with duplicate and fee safeguards
 });
 
 test('versioned assets prevent old member and catalog scripts from persisting in cache',()=>{
- assert.ok(index.includes('app.js?v=20261105d'));
- assert.ok(index.includes('membership-tracker.js?v=20261105d'));
- assert.ok(index.includes('henry-finance-report.js?v=20261105d'));
+ assert.ok(index.includes('app.js?v=20261105g'));
+ assert.ok(index.includes('membership-tracker.js?v=20261105g'));
+ assert.ok(index.includes('henry-finance-report.js?v=20261105g'));
  assert.ok(finance.includes('legacyMembershipId'));
 });
 

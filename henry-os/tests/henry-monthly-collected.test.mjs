@@ -98,9 +98,9 @@ test('front-end displays a unified monthly KPI, visible finance detail and cache
  assert.ok(admin.includes('TOTAL COLLECTED THIS MONTH'));
  assert.ok(finance.includes('Total Verified Collected This Month'));
  assert.ok(finance.includes('monthlyCollected(d)'));
- assert.ok(mainPage.includes('app.js?v=20261105e'));
- assert.ok(mainPage.includes('henry-finance-report.js?v=20261105e'));
- assert.ok(financePage.includes('henry-finance.js?v=20261105e'));
+ assert.ok(mainPage.includes('app.js?v=20261105g'));
+ assert.ok(mainPage.includes('henry-finance-report.js?v=20261105g'));
+ assert.ok(financePage.includes('henry-finance.js?v=20261105f'));
  assert.ok(api.includes("legacyPayments:oldPayments.map"));
 });
 
