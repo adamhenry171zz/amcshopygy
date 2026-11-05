@@ -54,7 +54,7 @@ test('amount formatting and bad-value protection',()=>{
   assert.equal(parseAmount(''), '');
 });
 test('qualify Oct/Nov and future prepaid, do not use provider date as customer payment date',()=>{
-  const v=prepareMigration(dataset);
+  const v=prepareMigration(dataset, [], '2026-11-05');
   assert.deepEqual({ready:v.ready.length,review:v.review.length,ignored:v.ignored.length},
     {ready:4,review:4,ignored:1});
   assert.deepEqual(v.ready.map(x=>x.row),[2,4,7,8]);
@@ -67,7 +67,7 @@ test('qualify Oct/Nov and future prepaid, do not use provider date as customer p
   assert.ok(v.review.some(x=>x.customer==='Provider due only'));
 });
 test('no passwords, PINs, or payment records in payload',()=>{
-  const v=prepareMigration(dataset);
+  const v=prepareMigration(dataset, [], '2026-11-05');
   for(const x of v.ready){
     const packed=JSON.stringify(x.record);
     assert.ok(!packed.includes('UNSAFE_SECRET'));
@@ -77,7 +77,7 @@ test('no passwords, PINs, or payment records in payload',()=>{
   }
 });
 test('idempotent: skip an already imported subscription without overwriting it',()=>{
-  const v=prepareMigration(dataset,[{id:'netflix-aaaaaaaa',customer:'October customer',service:'Netflix'}]);
+  const v=prepareMigration(dataset,[{id:'netflix-aaaaaaaa',customer:'October customer',service:'Netflix'}],'2026-11-05');
   assert.equal(v.ready.length,3);
   assert.equal(v.existing.length,1);
 });
