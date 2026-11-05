@@ -136,7 +136,7 @@ function renderSuppliers(){
 function renderMemberships(){
   const d=state.data;const members=d.memberships,old=d.legacyMembers;
   const summary=globalThis.HenryFinanceReport.summarize(d);
-  return '<div class="section-title"><div><h2>Membership Billing</h2><p>Monthly fee defaults to GYD $950 but can differ by member. No automatic membership debt.</p></div></div>'+
+  return '<div class="section-title"><div><h2>Membership Billing</h2><p>New billing profiles default to GYD $950. Existing shipping Members Club profiles retain their own plan fee, and can now have payments verified directly. No automatic membership debt.</p></div></div>'+
     '<div class="finance-stat-grid" style="margin-bottom:18px">'+
     '<article class="finance-stat"><small>Member fees today</small><strong>'+money(summary.memberReceivedToday)+'</strong><p>Verified cash collected today</p></article>'+
     '<article class="finance-stat"><small>Member fees this month</small><strong>'+money(summary.memberReceivedMonth)+'</strong><p>New verified collections</p></article>'+
@@ -144,7 +144,7 @@ function renderMemberships(){
     '<article class="finance-stat"><small>Legacy member profiles</small><strong>'+old.length+'</strong><p>Payment evidence still requires review</p></article>'+
     '</div>'+
     '<div class="notice"><strong>Legacy Members Club remains unchanged:</strong> Existing shipping allowance plans may have their own pricing and status. The billing records here do not change shipping discounts or reprice legacy plans. Reconcile member coverage and opening positions before linking those benefits.</div>'+
-    '<div class="two-col"><section class="card"><h3>Add a membership billing profile</h3><p class="sub">Creating a profile does not activate membership. Only an owner-verified membership payment creates paid coverage.</p>'+
+    '<div class="two-col"><section class="card"><h3>Add a membership billing profile</h3><p class="sub">Creating a profile does not activate membership. Only an owner-verified payment creates coverage in the new Finance membership tracker. The existing shipping usage tracker remains independent.</p>'+
     '<form class="form" data-form="member"><label>Member name<input name="customer" required maxlength="160"></label><div class="grid-fields"><label>WhatsApp<input name="whatsapp" maxlength="40"></label><label>Mailbox code<input name="mailboxCode" maxlength="60" placeholder="AMC203"></label></div>'+
     '<label>Monthly fee (GYD)<input name="monthlyFee" type="number" min=".01" step=".01" value="950" required></label><label>Internal notes<textarea name="notes" placeholder="Historical membership details can be reviewed later"></textarea></label>'+
     '<button class="btn wide" type="submit">Create membership profile</button></form></section>'+
@@ -185,6 +185,7 @@ function renderReceipts(){
 function changeReceiptFields(){
   const type=$('receipt-type')?.value; if(!type)return;
   $('receipt-member-row')?.classList.toggle('hidden',type!=='membership');
+  if($('receipt-member'))$('receipt-member').required=type==='membership';
   $('receipt-stream-row')?.classList.toggle('hidden',type!=='streaming');
   $('receipt-months-row')?.classList.toggle('hidden',type!=='membership');
   $('receipt-historical-rate')?.classList.toggle('hidden',type!=='membership'||!$('receipt-historical')?.checked);
