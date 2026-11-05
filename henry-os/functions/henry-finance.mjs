@@ -92,6 +92,23 @@ export default async (req,context)=>{
     return json({item:supplierResponse(item,asOf)},201);
   });
 
+  if(action==='update_supplier_schedule')return withError(async()=>{
+    const supplierId=clean(body.id,100);
+    if(!validLinkId(supplierId))throw new Error('Choose a supplier account.');
+    const old=await store.get('finance/suppliers/'+supplierId,{type:'json'}).catch(()=>null);
+    if(!old)throw new Error('Supplier account not found.');
+    const firstDueDate=safeDate(body.firstDueDate),recurrence=clean(body.recurrence,20);
+    if(!['monthly','one_time'].includes(recurrence))throw new Error('Invalid billing recurrence.');
+    const estimate=conversion(old.estimate.currency,body.estimatedAmount,body.exchangeRate||old.estimate.exchangeRate);
+    const history=[...(old.scheduleHistory||[]),{
+      estimate:old.estimate,firstDueDate:old.firstDueDate,recurrence:old.recurrence,
+      changedBy:adminEmail,changedAt:now
+    }];
+    const item={...old,estimate,firstDueDate,recurrence,scheduleHistory:history,updatedAt:now};
+    await store.setJSON('finance/suppliers/'+supplierId,item);
+    return json({item:supplierResponse(item,asOf)});
+  });
+
   if(action==='pause_supplier')return withError(async()=>{
     const ref=clean(body.id,100),status=clean(body.status,20);
     if(!validLinkId(ref)||!['active','paused'].includes(status))throw new Error('Invalid account or status.');
