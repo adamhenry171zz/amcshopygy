@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { getStore } from '@netlify/blobs';
 
-const TYPES = new Set(['customers','packages','deliveries','invoices','payments','streaming','inquiries','tasks','announcements','expenses']);
+const TYPES = new Set(['customers','packages','deliveries','invoices','payments','streaming','streaming_services','inquiries','tasks','announcements','expenses']);
 const FIELDS = {
   customers:['name','whatsapp','email','mailboxCode','address','status','source','notes'],
   packages:['customer','whatsapp','tracking','carrier','weight','packageCount','status','arrivalDate','amountDue','notes'],
@@ -9,6 +9,7 @@ const FIELDS = {
   invoices:['invoiceNo','customer','whatsapp','amount','balance','status','dueDate','description','notes'],
   payments:['customer','whatsapp','amount','method','reference','status','paymentDate','relatedType','relatedId','notes'],
   streaming:['customer','whatsapp','service','plan','amount','dueDate','status','accountEmail','notes'],
+  streaming_services:['name','status','notes'],
   inquiries:['customer','whatsapp','email','subject','channel','status','message','followUpDate','notes'],
   tasks:['title','dueDate','priority','status','module','customer','notes'],
   announcements:['title','body','status','publishDate','notes'],
@@ -132,7 +133,7 @@ async function applyOct30CustomerMigration(store){
   await store.setJSON(markerKey,{done:true,completedAt:now,customers:OCT30_CUSTOMERS.map(x=>x.name)});
 }
 
-export default async(req)=>{
+export default async(req,context)=>{
   const adminEmail=clean(process.env.HENRY_ADMIN_EMAIL,180).toLowerCase();
   const sessionSecret=String(process.env.HENRY_SESSION_SECRET||'');
   if(!adminEmail||sessionSecret.length<32)return json({error:'Henry OS is not configured'},503);
@@ -141,8 +142,10 @@ export default async(req)=>{
   const store=getStore('henry-amc');
 
   if(action==='bootstrap'&&req.method==='GET'){
-    await applyOct30InvoiceMigration(store);
-    await applyOct30CustomerMigration(store);
+    if(context?.deploy?.context==='production'){
+      await applyOct30InvoiceMigration(store);
+      await applyOct30CustomerMigration(store);
+    }
     const data={};
     await Promise.all([...TYPES].map(async type=>{data[type]=await readType(store,type)}));
     data.mailboxes=await readMailboxes();
@@ -161,6 +164,20 @@ export default async(req)=>{
     const now=new Date().toISOString();const id=clean(body.id,80)||crypto.randomUUID();
     const existing=await store.get(`${type}/${id}`,{type:'json'}).catch(()=>null);
     const cleaned=cleanRecord(type,body.record);
+    if(type==='streaming'&&(!cleaned.service||cleaned.service.length>80))
+      return json({error:'Enter a service name of up to 80 characters'},400);
+    if(type==='streaming_services'){
+      if(!cleaned.name||cleaned.name.length>80)return json({error:'Enter a service name of up to 80 characters'},400);
+      if(!['planned','offered','paused'].includes(cleaned.status))return json({error:'Invalid availability status'},400);
+      const catalog=await readType(store,'streaming_services');
+      if(catalog.some(v=>v.id!==id&&String(v.name||'').trim().toLowerCase()===cleaned.name.toLowerCase()))
+        return json({error:'This service is already in your catalog'},409);
+      if(existing?.name&&existing.name.trim().toLowerCase()!==cleaned.name.toLowerCase()){
+        const subscriptions=await readType(store,'streaming');
+        if(subscriptions.some(v=>String(v.service||'').trim().toLowerCase()===existing.name.trim().toLowerCase()))
+          return json({error:'This service already has customer subscriptions. Pause it instead of renaming it.'},409);
+      }
+    }
     if(type==='deliveries'&&existing?.reference&&!cleaned.reference)cleaned.reference=existing.reference;
     const record={id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now};
     await store.setJSON(`${type}/${id}`,record);
@@ -170,6 +187,14 @@ export default async(req)=>{
   if(action==='delete'&&req.method==='POST'){
     let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
     const type=clean(body.type,40),id=clean(body.id,80);if(!TYPES.has(type)||!id)return json({error:'Invalid request'},400);
+    if(type==='streaming_services'){
+      const target=await store.get(`${type}/${id}`,{type:'json'}).catch(()=>null);
+      if(target?.name){
+        const subscriptions=await readType(store,'streaming');
+        if(subscriptions.some(v=>String(v.service||'').trim().toLowerCase()===target.name.trim().toLowerCase()))
+          return json({error:'Cannot delete a service with customers. Set its availability to paused.'},409);
+      }
+    }
     await store.delete(`${type}/${id}`);return json({ok:true});
   }
 

@@ -131,9 +131,16 @@ async function reconcileInvoicePayments(store,data=null){
 
 const jsonResponse=(body,source)=>new Response(JSON.stringify(body),{status:source.status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 
-export default async req=>{
+export default async (req, context)=>{
+  // getStore() is shared across deploys. Read previews, but never mutate live data.
+  const actionRequested=new URL(req.url).searchParams.get('action')||'bootstrap';
+  if(['save','delete'].includes(actionRequested)&&context?.deploy?.context!=='production'){
+    return new Response(JSON.stringify({error:'HENRY OS is read-only outside production to protect real customer records.'}),{
+      status:403,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}
+    });
+  }
   const copy=req.clone();
-  const response=await core(req);
+  const response=await core(req,context);
   if(!response.ok)return response;
   const url=new URL(copy.url);
   const action=url.searchParams.get('action')||'bootstrap';
@@ -147,13 +154,15 @@ export default async req=>{
 
   if(action==='bootstrap'&&copy.method==='GET'){
     let data;try{data=await response.json()}catch{return response}
-    await applyOct15PaidMigration(store);
-    data.invoices=await readType(store,'invoices');
-    data.payments=await readType(store,'payments');
-    data.customers=await readType(store,'customers');
-    const reconciled=await reconcileInvoicePayments(store,data);
-    data.invoices=reconciled.invoices;
-    data.payments=reconciled.payments;
+    if(context?.deploy?.context==='production'){
+      await applyOct15PaidMigration(store);
+      data.invoices=await readType(store,'invoices');
+      data.payments=await readType(store,'payments');
+      data.customers=await readType(store,'customers');
+      const reconciled=await reconcileInvoicePayments(store,data);
+      data.invoices=reconciled.invoices;
+      data.payments=reconciled.payments;
+    }
     data.generatedAt=new Date().toISOString();
     return jsonResponse(data,response);
   }
