@@ -27,7 +27,7 @@
     const month=today.slice(0,7);
     const normalizeRef=v=>String(v??'').toUpperCase().replace(/[^A-Z0-9]/g,'');
     const records=[
-      ...(data.legacyPayments||[]).filter(p=>['verified','paid'].includes(String(p.status||'').toLowerCase())).map(p=>({
+      ...(data.legacyPayments||[]).filter(p=>String(p.status||'').toLowerCase()==='verified').map(p=>({
         source:'legacy',amount:p.amount,date:String(p.paymentDate||'').slice(0,10),reference:p.reference,
         historical:true
       })),
@@ -43,9 +43,11 @@
       // safely be deduplicated, so withhold it for manual review.
       const reference=normalizeRef(record.reference);
       const amount=number(record.amount),cents=Math.round(amount*100);
-      if(!isDate(record.date)||!Number.isSafeInteger(cents)||cents<=0){excludedInvalid++;continue}
-      if(reference.length<4||['CASH','NONE','UNKNOWN','NORECEIPT','NOREf','NA','MMG','BANK'].includes(reference)){
-        excludedNoReference++;continue;
+      if(!isDate(record.date)){excludedInvalid++;continue}
+      if(!Number.isSafeInteger(cents)||cents<=0){if(record.date.slice(0,7)===month&&record.date<=today)excludedInvalid++;continue}
+      if(reference.length<4||['CASH','NONE','UNKNOWN','NORECEIPT','NOREF','NA','MMG','BANK'].includes(reference)){
+        if(record.date.slice(0,7)===month&&record.date<=today)excludedNoReference++;
+        continue;
       }
       if(!groups.has(reference))groups.set(reference,[]);
       groups.get(reference).push({...record,amountCents:cents,reference});
@@ -56,7 +58,12 @@
       const amounts=new Set(group.map(r=>r.amountCents));
       const dates=new Set(group.map(r=>r.date));
       // Never choose an arbitrary amount/date if two registers disagree.
-      if(amounts.size!==1||dates.size!==1){conflictingReferences++;conflictingRecords+=group.length;continue}
+      if(amounts.size!==1||dates.size!==1){
+        if(group.some(r=>r.date.slice(0,7)===month&&r.date<=today)){
+          conflictingReferences++;conflictingRecords+=group.length;
+        }
+        continue;
+      }
       const entry=group[0];
       if(entry.date.slice(0,7)!==month)continue;
       if(entry.date>today){excludedFuture++;continue}
