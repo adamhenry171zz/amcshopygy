@@ -48,13 +48,13 @@ function renderDashboard(){
  return `<div class="kpi-grid"><div class="kpi" id="monthly-collected-kpi"><small>TOTAL COLLECTED THIS MONTH</small><strong>Checking…</strong><div class="sub">Reconciling both verified payment registers</div></div><div class="kpi"><small>OUTSTANDING BALANCES</small><strong>${money(outstanding)}</strong><div class="sub">Open invoices</div></div><div class="kpi"><small>EXPECTED TODAY</small><strong>${money(expectedToday)}</strong><div class="sub">Invoices + streaming due</div></div><div class="kpi"><small>EXPECTED THIS MONTH</small><strong>${money(expectedMonth)}</strong><div class="sub">Scheduled receivables</div></div></div>
  <div class="finance-strip"><div class="finance-box"><span>ACTIVE DELIVERIES</span><strong>${activeDeliveries}</strong></div><div class="finance-box"><span>PACKAGES TO CLEAR / DELIVER</span><strong>${readyPackages}</strong></div><div class="finance-box"><span>MAILBOX CUSTOMERS</span><strong>${list('mailboxes').length}</strong></div></div>
  <div class="grid-2"><section class="card"><div class="card-head"><div><h2>Today's owner briefing</h2><p>Items requiring your attention today.</p></div><button class="outline" data-go="tasks">View tasks</button></div><div class="briefing">${briefing.length?briefing.slice(0,9).map(x=>`<div class="brief-item"><div class="brief-icon">${x[0]}</div><div><strong>${esc(x[1])}</strong><p>${esc(x[2])}</p></div></div>`).join(''):'<div class="empty"><strong>No urgent items for today.</strong>Your briefing will populate from deliveries, invoices, subscriptions and tasks.</div>'}</div></section>
- <section class="card" id="finance-snapshot"><div class="card-head"><div><h2>Finance &amp; Collections</h2><p>Loading verified member receipts and scheduled Netflix income...</p></div></div></section>
- <section class="card"><div class="card-head"><div><h2>Quick actions</h2><p>Log common AMC work fast.</p></div></div><div class="quick-grid"><button class="quick" data-new="packages"><b>+ Package</b><small>Track a shipment</small></button><button class="quick" data-new="deliveries"><b>+ Delivery</b><small>Schedule customer drop-off</small></button><button class="quick" data-new="payments"><b>+ Payment</b><small>Record collection</small></button><button class="quick" data-new="streaming"><b>+ Subscription</b><small>Track account due date</small></button><a class="quick" href="/admin/streaming-reminders.html?v=20261105f" style="text-decoration:none"><b>Renewal Reminders</b><small>WhatsApp drafts &amp; due dates</small></a><a class="quick" href="/admin/henry-finance.html?v=20261105f" style="text-decoration:none"><b>Collections Overview</b><small>Verified cash &amp; member fees</small></a><button class="quick" data-new="invoices"><b>+ Invoice</b><small>Track receivable</small></button><button class="quick" data-new="tasks"><b>+ Task</b><small>Add reminder</small></button></div></section></div>
+ <section class="card" id="member-collection-breakdown"><div class="card-head"><div><h2>Members Club collected</h2><p>November member payments — one clear breakdown.</p></div></div><p class="muted">Checking recorded collections…</p></section>
+ <section class="card"><div class="card-head"><div><h2>Quick actions</h2><p>Log common AMC work fast.</p></div></div><div class="quick-grid"><button class="quick" data-new="packages"><b>+ Package</b><small>Track a shipment</small></button><button class="quick" data-new="deliveries"><b>+ Delivery</b><small>Schedule customer drop-off</small></button><button class="quick" data-new="payments"><b>+ Payment</b><small>Record collection</small></button><button class="quick" data-new="streaming"><b>+ Subscription</b><small>Track account due date</small></button><a class="quick" href="/admin/streaming-reminders.html?v=20261105f" style="text-decoration:none"><b>Renewal Reminders</b><small>WhatsApp drafts &amp; due dates</small></a><button class="quick" data-new="invoices"><b>+ Invoice</b><small>Track receivable</small></button><button class="quick" data-new="tasks"><b>+ Task</b><small>Add reminder</small></button></div></section></div>
  <section class="card"><div class="card-head"><div><h2>Recent activity</h2><p>Most recently updated AMC records.</p></div></div>${recent.length?`<div class="briefing">${recent.map(r=>`<div class="brief-item"><div class="brief-icon">${esc(({deliveries:'➜',packages:'◇',payments:'◈',invoices:'▤',streaming:'▶',tasks:'✓'})[r.type]||'•')}</div><div><strong>${esc(r.customer||r.title||r.invoiceNo||r.tracking||r.type)}</strong><p>${esc(String(r.type||'').replaceAll('_',' '))} · ${dateLabel(r.updatedAt||r.createdAt)}</p></div></div>`).join('')}</div>`:'<div class="empty">No activity yet.</div>'}</section>`;
 }
 
 function displayValue(type,key,v){if(['amount','balance','amountDue','quote'].includes(key))return `<span class="money">${money(v)}</span>`;if(['dueDate','arrivalDate','paymentDate','followUpDate','preferredDate','publishDate','date'].includes(key))return dateLabel(v);if(key==='status'||key==='paymentStatus'||key==='priority')return badge(v);if(type==='streaming_services'&&key==='subscriberCount')return String(list('streaming').filter(s=>String(s.service||'').trim().toLowerCase()===String(v||'').trim().toLowerCase()).length);if(key==='mapLink'&&v)return `<a class="link" href="${esc(v)}" target="_blank" rel="noopener">Open map</a>`;return esc(v||'—')}
-function renderTable(type){const s=schemas[type],all=list(type),q=state.search.toLowerCase(),items=q?all.filter(r=>JSON.stringify(r).toLowerCase().includes(q)):all;const rows=items.map(r=>`<tr>${s.columns.map(([k])=>`<td>${displayValue(type,k,k==='subscriberCount'?r.name:r[k])}</td>`).join('')}<td><div class="row-actions">${r.whatsapp?`<button class="table-btn" data-whatsapp="${esc(r.id)}">WhatsApp</button>`:''}<button class="table-btn" data-edit="${esc(r.id)}">Edit</button><button class="table-btn danger" data-delete="${esc(r.id)}">Delete</button></div></td></tr>`).join('');const related=type==='streaming'?'RENEWAL REMINDERS: open /admin/streaming-reminders.html to choose specific due dates or a range.':type==='payments'?'New verified collections and membership fees are under Finance Phase 1.':' ';return `<div class="notice">${esc(related)}</div><div class="toolbar"><div class="search-wrap"><input id="table-search" class="searchbox" placeholder="Search ${esc(s.title.toLowerCase())}…" value="${esc(state.search)}"><span class="cell-muted">${items.length} record${items.length===1?'':'s'}</span></div></div><section class="card table-card"><div class="table-scroll"><table class="data-table"><thead><tr>${s.columns.map(c=>`<th>${esc(c[1])}</th>`).join('')}<th>Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="${s.columns.length+1}"><div class="empty"><strong>No ${esc(s.title.toLowerCase())} yet.</strong>Use “New record” to add the first one.</div></td></tr>`}</tbody></table></div></section>`}
+function renderTable(type){const s=schemas[type],all=list(type),q=state.search.toLowerCase(),items=q?all.filter(r=>JSON.stringify(r).toLowerCase().includes(q)):all;const rows=items.map(r=>`<tr>${s.columns.map(([k])=>`<td>${displayValue(type,k,k==='subscriberCount'?r.name:r[k])}</td>`).join('')}<td><div class="row-actions">${r.whatsapp?`<button class="table-btn" data-whatsapp="${esc(r.id)}">WhatsApp</button>`:''}<button class="table-btn" data-edit="${esc(r.id)}">Edit</button><button class="table-btn danger" data-delete="${esc(r.id)}">Delete</button></div></td></tr>`).join('');const related=type==='streaming'?'RENEWAL REMINDERS: open /admin/streaming-reminders.html to choose specific due dates or a range.':type==='payments'?'Verified collections are summarized on the Overview. Review actual payment references here; do not duplicate entries.':' ';return `<div class="notice">${esc(related)}</div><div class="toolbar"><div class="search-wrap"><input id="table-search" class="searchbox" placeholder="Search ${esc(s.title.toLowerCase())}…" value="${esc(state.search)}"><span class="cell-muted">${items.length} record${items.length===1?'':'s'}</span></div></div><section class="card table-card"><div class="table-scroll"><table class="data-table"><thead><tr>${s.columns.map(c=>`<th>${esc(c[1])}</th>`).join('')}<th>Actions</th></tr></thead><tbody>${rows||`<tr><td colspan="${s.columns.length+1}"><div class="empty"><strong>No ${esc(s.title.toLowerCase())} yet.</strong>Use “New record” to add the first one.</div></td></tr>`}</tbody></table></div></section>`}
 function renderServiceCatalog(){
  const catalog=list('streaming_services'),subscriptions=list('streaming');
  const activeServiceNames=new Map();
@@ -99,46 +99,43 @@ function renderMailboxes(){const all=list('mailboxes'),q=state.search.toLowerCas
 function renderBackup(){const counts=Object.keys(schemas).map(k=>`<div class="finance-box"><span>${esc(schemas[k].title.toUpperCase())}</span><strong>${list(k).length}</strong></div>`).join('');return `<div class="notice"><strong>Backup Center.</strong> Henry OS stores AMC operational records in site-wide Netlify Blobs. Use this page to download a JSON snapshot to your device for an extra offline copy. The export contains customer information, so keep it private.</div><div class="finance-strip">${counts}</div><section class="card"><div class="card-head"><div><h2>Export AMC data</h2><p>Downloads the current dashboard data plus mailbox registry as JSON.</p></div></div><div class="backup-actions"><button id="download-backup" class="primary">Download JSON backup</button><button id="refresh-backup" class="outline">Refresh before export</button></div></section>`}
 
 async function fillFinanceSnapshot(){
- const target=$('finance-snapshot');
+ const target=$('member-collection-breakdown');
  if(!target||state.view!=='dashboard')return;
+ const main=$('monthly-collected-kpi');
  try{
   const response=await fetch('/.netlify/functions/henry-finance?action=bootstrap',{
    credentials:'same-origin',cache:'no-store'
   });
-  if(!response.ok)throw new Error('Finance records are temporarily unavailable.');
+  if(!response.ok)throw Error('Collections could not be verified.');
   const finance=await response.json();
   if(!target.isConnected||state.view!=='dashboard')return;
-  if(!globalThis.HenryFinanceReport)throw new Error('Financial report script unavailable');
-  const report=globalThis.HenryFinanceReport.summarize(finance);
-  const monthly=globalThis.HenryFinanceReport.monthlyCollected(finance);
-  const mainMetric=$('monthly-collected-kpi');
-  if(mainMetric){
-    mainMetric.innerHTML='<small>TOTAL VERIFIED COLLECTED THIS MONTH</small>'+
-      '<strong>'+money(monthly.total)+'</strong>'+
-      '<div class="sub">GYD · '+esc(monthly.month)+' · '+monthly.distinctTransactions+
-      ' distinct receipt(s) across both payment registers</div>'+
-      (monthly.needsReview?'<div class="sub">⚠ '+monthly.needsReview+
-      ' records need reconciliation and are excluded.</div>':'');
+  if(!globalThis.HenryFinanceReport?.monthlyCollected)throw Error('Collections report unavailable.');
+  const month=globalThis.HenryFinanceReport.monthlyCollected(finance);
+  if(main){
+   main.innerHTML='<small>TOTAL COLLECTED THIS MONTH</small>'+
+     '<strong>'+money(month.total)+'</strong>'+
+     '<div class="sub">Verified recorded receipts · '+esc(month.month)+' · duplicates excluded</div>'+
+     (month.needsReview?'<div class="sub">'+month.needsReview+' other record(s) need review and are not included.</div>':'');
   }
-  target.innerHTML='<div class="card-head"><div><h2>Finance &amp; Collections</h2><p>Verified Phase 1 cash and scheduled streaming renewals — separate from the legacy register above.</p></div>'+
-   '<a href="/admin/henry-finance.html?v=20261105f" class="link">Full Collections Overview →</a></div>'+
-   '<div class="kpi-grid">'+[
-     ['TOTAL COLLECTED THIS MONTH',money(monthly.total),'Verified receipts across both stores'],
-     ['NEW FINANCE THIS MONTH',money(report.receivedMonth),'Phase 1 verified, excludes historical'],
-     ['MEMBER FEES THIS MONTH',money(report.memberReceivedMonth),'Verified Phase 1 membership payments'],
-     ['STREAMING DUE TODAY',money(report.expectedToday),'Expected only — NOT collected']
-   ].map(([name,value,note])=>'<div class="kpi"><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong><div class="sub">'+esc(note)+'</div></div>').join('')+'</div>'+
-   '<p class="muted"><strong>Monthly total breakdown:</strong> '+money(monthly.legacyOnly)+
-   ' legacy-only + '+money(monthly.financeOnly)+' Finance-only + '+money(monthly.duplicatesAcrossRegisters)+
-   ' found in both registers (counted once).'+
-   (monthly.needsReview?' <strong>'+monthly.needsReview+' record(s) need review and are NOT included.</strong>':'')+
-   ' These are recorded verified receipts, not income or profit. Missing/unrecorded MMG deposits cannot be included.</p>';
+  // This is the owner's one-time, confirmed November 2026 member breakdown,
+  // not two new receipts or a recurring rule. Do not add 30k to cash again.
+  if(month.month==='2026-11'&&month.total===30000){
+   target.innerHTML='<div class="card-head"><div><h2>Members Club — November</h2>'+
+     '<p>Breakdown of the GYD $30,000 already included above. Not additional collections.</p></div></div>'+
+     '<div class="member-collected-line"><span>Leah Casimero</span><strong>GYD $15,000.00</strong></div>'+
+     '<div class="member-collected-line"><span>Vishaal Boodhram</span><strong>GYD $15,000.00</strong></div>'+
+     '<div class="member-collected-line member-collected-total"><span>Total</span><strong>GYD $30,000.00</strong></div>'+
+     '<p class="muted">Owner-confirmed member breakdown; underlying payment records are preserved for reconciliation.</p>';
+  }else{
+   target.innerHTML='<div class="card-head"><div><h2>Members Club collections</h2>'+
+    '<p>Previous November member breakdown is not carried into other periods. '+
+    'Only the verified month-to-date total above is shown until a simpler financial layout is finalized.</p></div></div>';
+  }
  }catch(error){
-  const mainMetric=$('monthly-collected-kpi');
-  if(mainMetric)mainMetric.innerHTML='<small>TOTAL COLLECTED THIS MONTH</small><strong>Unavailable</strong>'+
-   '<div class="sub">Cannot reconcile payment registers. No total is shown to avoid misleading figures.</div>';
-  if(target.isConnected&&state.view==='dashboard')target.innerHTML='<div class="card-head"><div><h2>Finance &amp; Collections</h2><p>'+esc(error.message||'Could not load collections')+'</p></div>'+
-    '<a href="/admin/henry-finance.html?v=20261105f" class="link">Open Collections Overview →</a></div>';
+  if(main)main.innerHTML='<small>TOTAL COLLECTED THIS MONTH</small><strong>Unavailable</strong>'+
+    '<div class="sub">The payment registers could not be reconciled. No guessed total displayed.</div>';
+  if(target.isConnected&&state.view==='dashboard')target.innerHTML=
+    '<div class="card-head"><div><h2>Member collections</h2><p>'+esc(error.message||'Cannot load collections')+'</p></div></div>';
  }
 }
 
