@@ -5,7 +5,7 @@ const text=v=>String(v??'').trim();
 const today=()=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(v=>v.type===k)?.value).join('-')};
 const pill=s=>'<span class="chip '+esc(s)+'">'+esc(String(s||'—').replaceAll('_',' '))+'</span>';
 const preview=/^(deploy-preview-\d+--|agent-)/.test(location.hostname)||location.hostname.includes('netlify.app')&&!location.hostname.startsWith('preeminent-blancmange-');
-const state={data:null,tab:'summary',working:false};
+const state={data:null,tab:'summary',working:false,deepLinkApplied:false};
 const opts=(items,value='id',label='name',placeholder='Select…')=>'<option value="">'+esc(placeholder)+'</option>'+items.map(o=>'<option value="'+esc(o[value])+'">'+esc(o[label]||'Unnamed')+'</option>').join('');
 const formatDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
 const showMessage=(s,error=false)=>{const node=$('flash');node.textContent=s;node.className='flash'+(error?' error':'');setTimeout(()=>{if(node.textContent===s)node.classList.add('hidden')},5000)};
@@ -27,6 +27,25 @@ async function reload(){
     if(!status.authenticated){$('login-notice').classList.remove('hidden');$('finance-app').classList.add('hidden');return;}
     $('login-notice').classList.add('hidden');
     state.data=await api('bootstrap');$('finance-app').classList.remove('hidden');$('refresh').disabled=false;
+    if(!state.deepLinkApplied){
+      state.deepLinkApplied=true;
+      const member=new URLSearchParams(location.search).get('member')||'';
+      const valid=member.startsWith('legacy:')
+        ?state.data.legacyMembers.some(x=>'legacy:'+x.id===member)
+        :state.data.memberships.some(x=>x.id===member);
+      if(valid){
+        state.tab='receipts';
+        render();
+        const chooser=$('receipt-member');
+        if(chooser){
+          $('receipt-type').value='membership';
+          changeReceiptFields();
+          chooser.value=member;
+          updateMembershipAmount();
+        }
+        return;
+      }
+    }
     render();
   }catch(e){showMessage(e.message,true)}finally{$('loading').classList.add('hidden')}
 }
