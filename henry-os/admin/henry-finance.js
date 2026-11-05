@@ -52,11 +52,12 @@ async function reload(){
 function render(){
   const d=state.data;if(!d)return;
   const report=globalThis.HenryFinanceReport.summarize(d);
+  const monthly=globalThis.HenryFinanceReport.monthlyCollected(d);
   const paidBills=d.bills.reduce((n,b)=>n+Number(b.paidGyd),0);
   const billsDue=d.bills.reduce((n,b)=>n+Number(b.balanceGyd),0);
   const upcoming=d.suppliers.filter(s=>s.status==='active'&&s.nextExpectedBillDates?.length).length;
   $('metrics').innerHTML=[
-    ['Expected Streaming Today',money(report.expectedToday),'Scheduled renewals — NOT payments received'],
+    ['Total Collected This Month',money(monthly.total),'Verified recorded receipts in both registers; duplicates removed'],
     ['Verified Cash Collected Today',money(report.receivedToday),'Phase 1 receipts only, excludes historical'],
     ['Membership Collected This Month',money(report.memberReceivedMonth),'Verified new membership fee payments'],
     ['Supplier Bills Outstanding',money(billsDue),'Confirmed charges — not forecast expenses']
@@ -71,6 +72,7 @@ function render(){
 }
 function renderSummary(){
   const d=state.data,r=globalThis.HenryFinanceReport.summarize(d),entries=d.receipts||[],streaming=d.streaming||[];
+  const monthly=globalThis.HenryFinanceReport.monthlyCollected(d);
   const verifiedMembership=entries.filter(x=>x.relatedType==='membership'&&x.status==='verified');
   const pending=entries.filter(x=>x.status==='pending');
   const expectedToday=streaming.filter(x=>x.dueDate===d.asOf&&!['paused','cancelled','inactive'].includes(String(x.status||'').toLowerCase()));
@@ -79,7 +81,18 @@ function renderSummary(){
   const stat=(name,value,note)=>'<article class="finance-stat"><small>'+esc(name)+'</small><strong>'+money(value)+'</strong><p>'+esc(note)+'</p></article>';
   const memberRows=verifiedMembership.slice().sort((a,b)=>String(b.receivedDate).localeCompare(String(a.receivedDate)));
   return '<div class="section-title"><div><h2>Financial Collections Overview</h2><p>As of '+esc(formatDate(r.today))+' · Week: '+esc(formatDate(r.weekStart))+' – '+esc(formatDate(r.weekEnd))+' (Guyana time)</p></div></div>'+
-    '<div class="notice"><strong>Two separate truths:</strong> A Netflix due date shows a scheduled collection opportunity, not confirmed money owed or received. New cash totals below count only owner-verified Phase 1 receipts. Historical fees and the old HENRY OS register remain separate until reconciled. These are cash figures, <em>not</em> earned revenue or profit.</div>'+
+    '<div class="notice"><strong>Accounting distinction:</strong> The calendar-month total combines recorded, verified receipts from both HENRY OS payment registers after duplicate-reference checks. It can include verified pre-launch receipts dated this month. The separate Phase 1 cash figures exclude historical receipts. Neither due dates nor active memberships establish actual collection. This is cash received, not earned revenue or profit.</div>'+
+    '<section class="card" style="margin-bottom:22px"><h3>Total Verified Collected This Month</h3>'+
+      '<div class="finance-hero-total">'+money(monthly.total)+'</div>'+
+      '<p class="sub">GYD · '+esc(monthly.month)+' · '+monthly.distinctTransactions+' distinct verified payment(s) recorded between the 1st and today.</p>'+
+      '<div class="finance-month-sources">'+
+      '<div><small>Legacy-only receipts</small><strong>'+money(monthly.legacyOnly)+'</strong></div>'+
+      '<div><small>Finance-only receipts</small><strong>'+money(monthly.financeOnly)+'</strong></div>'+
+      '<div><small>Found in both registers — counted once</small><strong>'+money(monthly.duplicatesAcrossRegisters)+'</strong></div>'+
+      '</div>'+
+      (monthly.needsReview?'<p class="finance-alert">⚠ '+monthly.needsReview+' verified record(s) need review because of missing references, invalid data, or conflicting entries. They are excluded rather than guessed.</p>':'')+
+      (monthly.duplicateRecords?'<p class="subnote">'+monthly.duplicateRecords+' duplicate payment record(s) were detected and not counted twice.</p>':'')+
+      '<p class="subnote">Only payments recorded in HENRY OS are included. Unentered MMG or bank deposits will not appear automatically. Opening balances are not new receipts.</p></section>'+
     '<div class="section-title"><div><h2>Expected streaming renewals</h2><p>Estimated GYD based on the existing Streaming amount and next renewal date.</p></div></div>'+
     '<div class="finance-stat-grid">'+
       stat('Due today',r.expectedToday,r.expectedSubscriptionsToday+' subscription(s) with a scheduled due date today')+
@@ -87,7 +100,7 @@ function renderSummary(){
       stat('This calendar week',r.expectedCalendarWeek,'Monday–Sunday')+
       stat('This month',r.expectedMonth,'Scheduled due dates during '+r.month)+
     '</div>'+
-    '<p class="subnote">'+(r.missingStreamingAmounts||0)+' active streaming record(s) have a due date but no valid amount; '+(r.missingStreamingDates||0)+' have no valid due date. They are excluded from forecast totals. <a href="/admin/streaming-reminders.html?v=20261105d">Open exact-date reminder filters →</a></p>'+
+    '<p class="subnote">'+(r.missingStreamingAmounts||0)+' active streaming record(s) have a due date but no valid amount; '+(r.missingStreamingDates||0)+' have no valid due date. They are excluded from forecast totals. <a href="/admin/streaming-reminders.html?v=20261105e">Open exact-date reminder filters →</a></p>'+
     '<div class="notice"><strong>Missing Members Club collections?</strong> Open <button type="button" class="outline" data-open-tab="memberships">Membership Billing</button>, find the existing member, and select <strong>Record fee</strong>. Check your MMG or bank history and verify each payment. Do not invent payment references or duplicate profiles.</div>'+ 
     '<div class="section-title"><div><h2>Money actually received — verified</h2><p>GYD received from new verified payment records, grouped by original receipt date.</p></div></div>'+
     '<div class="finance-stat-grid">'+

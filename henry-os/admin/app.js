@@ -35,7 +35,6 @@ function num(v){return Number(String(v??'').replace(/,/g,''))||0}
 function pendingInvoice(r){return !['paid','cancelled'].includes(String(r.status||''))}
 function renderDashboard(){
  const now=today(),mk=now.slice(0,7),payments=list('payments'),invoices=list('invoices'),streaming=list('streaming'),deliveries=list('deliveries'),packages=list('packages'),tasks=list('tasks');
- const collected=payments.filter(p=>p.status==='verified'&&monthKey(p.paymentDate)===mk).reduce((s,p)=>s+num(p.amount),0);
  const outstanding=invoices.filter(pendingInvoice).reduce((s,i)=>s+num(i.balance||i.amount),0);
  const expectedToday=invoices.filter(i=>pendingInvoice(i)&&i.dueDate===now).reduce((s,i)=>s+num(i.balance||i.amount),0)+streaming.filter(s=>!['cancelled','paused'].includes(s.status)&&s.dueDate===now).reduce((a,s)=>a+num(s.amount),0);
  const expectedMonth=invoices.filter(i=>pendingInvoice(i)&&monthKey(i.dueDate)===mk).reduce((s,i)=>s+num(i.balance||i.amount),0)+streaming.filter(s=>!['cancelled','paused'].includes(s.status)&&monthKey(s.dueDate)===mk).reduce((a,s)=>a+num(s.amount),0);
@@ -46,11 +45,11 @@ function renderDashboard(){
  streaming.filter(s=>s.dueDate===now&&!['cancelled','paused'].includes(s.status)).forEach(s=>briefing.push(['▶',`${s.customer||'Customer'} · ${s.service||'Streaming'}`,`Due today · ${money(s.amount)}`]));
  invoices.filter(i=>pendingInvoice(i)&&i.dueDate&&i.dueDate<=now).slice(0,5).forEach(i=>briefing.push(['▤',`${i.invoiceNo||'Invoice'} · ${i.customer||'Customer'}`,`${i.dueDate<now?'Overdue':'Due today'} · ${money(i.balance||i.amount)}`]));
  const recent=[...deliveries,...packages,...payments,...invoices,...streaming,...tasks].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||''))).slice(0,7);
- return `<div class="kpi-grid"><div class="kpi"><small>LEGACY VERIFIED THIS MONTH</small><strong>${money(collected)}</strong><div class="sub">Old HENRY OS payment register only</div></div><div class="kpi"><small>OUTSTANDING BALANCES</small><strong>${money(outstanding)}</strong><div class="sub">Open invoices</div></div><div class="kpi"><small>EXPECTED TODAY</small><strong>${money(expectedToday)}</strong><div class="sub">Invoices + streaming due</div></div><div class="kpi"><small>EXPECTED THIS MONTH</small><strong>${money(expectedMonth)}</strong><div class="sub">Scheduled receivables</div></div></div>
+ return `<div class="kpi-grid"><div class="kpi" id="monthly-collected-kpi"><small>TOTAL COLLECTED THIS MONTH</small><strong>Checking…</strong><div class="sub">Reconciling both verified payment registers</div></div><div class="kpi"><small>OUTSTANDING BALANCES</small><strong>${money(outstanding)}</strong><div class="sub">Open invoices</div></div><div class="kpi"><small>EXPECTED TODAY</small><strong>${money(expectedToday)}</strong><div class="sub">Invoices + streaming due</div></div><div class="kpi"><small>EXPECTED THIS MONTH</small><strong>${money(expectedMonth)}</strong><div class="sub">Scheduled receivables</div></div></div>
  <div class="finance-strip"><div class="finance-box"><span>ACTIVE DELIVERIES</span><strong>${activeDeliveries}</strong></div><div class="finance-box"><span>PACKAGES TO CLEAR / DELIVER</span><strong>${readyPackages}</strong></div><div class="finance-box"><span>MAILBOX CUSTOMERS</span><strong>${list('mailboxes').length}</strong></div></div>
  <div class="grid-2"><section class="card"><div class="card-head"><div><h2>Today's owner briefing</h2><p>Items requiring your attention today.</p></div><button class="outline" data-go="tasks">View tasks</button></div><div class="briefing">${briefing.length?briefing.slice(0,9).map(x=>`<div class="brief-item"><div class="brief-icon">${x[0]}</div><div><strong>${esc(x[1])}</strong><p>${esc(x[2])}</p></div></div>`).join(''):'<div class="empty"><strong>No urgent items for today.</strong>Your briefing will populate from deliveries, invoices, subscriptions and tasks.</div>'}</div></section>
  <section class="card" id="finance-snapshot"><div class="card-head"><div><h2>Finance &amp; Collections</h2><p>Loading verified member receipts and scheduled Netflix income...</p></div></div></section>
- <section class="card"><div class="card-head"><div><h2>Quick actions</h2><p>Log common AMC work fast.</p></div></div><div class="quick-grid"><button class="quick" data-new="packages"><b>+ Package</b><small>Track a shipment</small></button><button class="quick" data-new="deliveries"><b>+ Delivery</b><small>Schedule customer drop-off</small></button><button class="quick" data-new="payments"><b>+ Payment</b><small>Record collection</small></button><button class="quick" data-new="streaming"><b>+ Subscription</b><small>Track account due date</small></button><a class="quick" href="/admin/streaming-reminders.html?v=20261105d" style="text-decoration:none"><b>Renewal Reminders</b><small>WhatsApp drafts &amp; due dates</small></a><a class="quick" href="/admin/henry-finance.html?v=20261105d" style="text-decoration:none"><b>Collections Overview</b><small>Verified cash &amp; member fees</small></a><button class="quick" data-new="invoices"><b>+ Invoice</b><small>Track receivable</small></button><button class="quick" data-new="tasks"><b>+ Task</b><small>Add reminder</small></button></div></section></div>
+ <section class="card"><div class="card-head"><div><h2>Quick actions</h2><p>Log common AMC work fast.</p></div></div><div class="quick-grid"><button class="quick" data-new="packages"><b>+ Package</b><small>Track a shipment</small></button><button class="quick" data-new="deliveries"><b>+ Delivery</b><small>Schedule customer drop-off</small></button><button class="quick" data-new="payments"><b>+ Payment</b><small>Record collection</small></button><button class="quick" data-new="streaming"><b>+ Subscription</b><small>Track account due date</small></button><a class="quick" href="/admin/streaming-reminders.html?v=20261105e" style="text-decoration:none"><b>Renewal Reminders</b><small>WhatsApp drafts &amp; due dates</small></a><a class="quick" href="/admin/henry-finance.html?v=20261105e" style="text-decoration:none"><b>Collections Overview</b><small>Verified cash &amp; member fees</small></a><button class="quick" data-new="invoices"><b>+ Invoice</b><small>Track receivable</small></button><button class="quick" data-new="tasks"><b>+ Task</b><small>Add reminder</small></button></div></section></div>
  <section class="card"><div class="card-head"><div><h2>Recent activity</h2><p>Most recently updated AMC records.</p></div></div>${recent.length?`<div class="briefing">${recent.map(r=>`<div class="brief-item"><div class="brief-icon">${esc(({deliveries:'➜',packages:'◇',payments:'◈',invoices:'▤',streaming:'▶',tasks:'✓'})[r.type]||'•')}</div><div><strong>${esc(r.customer||r.title||r.invoiceNo||r.tracking||r.type)}</strong><p>${esc(String(r.type||'').replaceAll('_',' '))} · ${dateLabel(r.updatedAt||r.createdAt)}</p></div></div>`).join('')}</div>`:'<div class="empty">No activity yet.</div>'}</section>`;
 }
 
@@ -111,18 +110,35 @@ async function fillFinanceSnapshot(){
   if(!target.isConnected||state.view!=='dashboard')return;
   if(!globalThis.HenryFinanceReport)throw new Error('Financial report script unavailable');
   const report=globalThis.HenryFinanceReport.summarize(finance);
+  const monthly=globalThis.HenryFinanceReport.monthlyCollected(finance);
+  const mainMetric=$('monthly-collected-kpi');
+  if(mainMetric){
+    mainMetric.innerHTML='<small>TOTAL VERIFIED COLLECTED THIS MONTH</small>'+
+      '<strong>'+money(monthly.total)+'</strong>'+
+      '<div class="sub">GYD · '+esc(monthly.month)+' · '+monthly.distinctTransactions+
+      ' distinct receipt(s) across both payment registers</div>'+
+      (monthly.needsReview?'<div class="sub">⚠ '+monthly.needsReview+
+      ' records need reconciliation and are excluded.</div>':'');
+  }
   target.innerHTML='<div class="card-head"><div><h2>Finance &amp; Collections</h2><p>Verified Phase 1 cash and scheduled streaming renewals — separate from the legacy register above.</p></div>'+
-   '<a href="/admin/henry-finance.html?v=20261105d" class="link">Full Collections Overview →</a></div>'+
+   '<a href="/admin/henry-finance.html?v=20261105e" class="link">Full Collections Overview →</a></div>'+
    '<div class="kpi-grid">'+[
-     ['STREAMING DUE TODAY',money(report.expectedToday),'Expected, not received'],
-     ['VERIFIED CASH TODAY',money(report.receivedToday),'Phase 1 recorded receipts'],
-     ['MEMBER FEES THIS MONTH',money(report.memberReceivedMonth),'Verified collections only'],
-     ['VERIFIED CASH THIS MONTH',money(report.receivedMonth),'Excludes historical receipts']
+     ['TOTAL COLLECTED THIS MONTH',money(monthly.total),'Verified receipts across both stores'],
+     ['NEW FINANCE THIS MONTH',money(report.receivedMonth),'Phase 1 verified, excludes historical'],
+     ['MEMBER FEES THIS MONTH',money(report.memberReceivedMonth),'Verified Phase 1 membership payments'],
+     ['STREAMING DUE TODAY',money(report.expectedToday),'Expected only — NOT collected']
    ].map(([name,value,note])=>'<div class="kpi"><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong><div class="sub">'+esc(note)+'</div></div>').join('')+'</div>'+
-   '<p class="muted">Older membership fees and legacy payments are visible separately for reconciliation, not automatically added to the new cash totals.</p>';
+   '<p class="muted"><strong>Monthly total breakdown:</strong> '+money(monthly.legacyOnly)+
+   ' legacy-only + '+money(monthly.financeOnly)+' Finance-only + '+money(monthly.duplicatesAcrossRegisters)+
+   ' found in both registers (counted once).'+
+   (monthly.needsReview?' <strong>'+monthly.needsReview+' record(s) need review and are NOT included.</strong>':'')+
+   ' These are recorded verified receipts, not income or profit. Missing/unrecorded MMG deposits cannot be included.</p>';
  }catch(error){
+  const mainMetric=$('monthly-collected-kpi');
+  if(mainMetric)mainMetric.innerHTML='<small>TOTAL COLLECTED THIS MONTH</small><strong>Unavailable</strong>'+
+   '<div class="sub">Cannot reconcile payment registers. No total is shown to avoid misleading figures.</div>';
   if(target.isConnected&&state.view==='dashboard')target.innerHTML='<div class="card-head"><div><h2>Finance &amp; Collections</h2><p>'+esc(error.message||'Could not load collections')+'</p></div>'+
-    '<a href="/admin/henry-finance.html?v=20261105d" class="link">Open Collections Overview →</a></div>';
+    '<a href="/admin/henry-finance.html?v=20261105e" class="link">Open Collections Overview →</a></div>';
  }
 }
 

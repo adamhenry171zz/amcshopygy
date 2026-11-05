@@ -57,7 +57,7 @@ export default async (req,context)=>{
     const legacyMembership=getStore('henry-memberships'),legacyAMC=getStore('henry-amc');
     const [suppliers,memberships,receipts,bills,oldMembers,oldSubscriptions,oldPayments]=await Promise.all([
       read(store,'suppliers'),read(store,'memberships'),read(store,'receipts'),read(store,'bills'),
-      load(legacyMembership,'members/').catch(()=>[]),load(legacyAMC,'streaming/').catch(()=>[]),load(legacyAMC,'payments/').catch(()=>[])
+      load(legacyMembership,'members/').catch(()=>[]),load(legacyAMC,'streaming/').catch(()=>[]),load(legacyAMC,'payments/')
     ]);
     return json({asOf,
       suppliers:suppliers.map(s=>supplierResponse(s,asOf)),

@@ -16,3 +16,13 @@
 .finance-stat-grid+.subnote{margin-top:-10px;margin-bottom:22px}
 @media(max-width:960px){.finance-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-breakdown{grid-template-columns:1fr}}
 @media(max-width:560px){.finance-stat{padding:12px}.finance-stat strong{font-size:19px}.finance-stat-grid{gap:8px}.finance-detail{gap:8px;flex-wrap:wrap}.finance-detail strong{margin-left:auto}}
+
+
+/* Calendar-month receipts are operational cash, not recognized revenue. */
+.finance-hero-total{font-size:clamp(30px,4vw,44px);font-weight:850;color:#6ed8ff;letter-spacing:-.045em;line-height:1.15;margin:13px 0 7px}
+.finance-month-sources{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:15px 0}
+.finance-month-sources>div{border:1px solid #305775;border-radius:10px;padding:14px;background:#0b1e31;min-width:0}
+.finance-month-sources small{display:block;color:#a7c5dc;font-size:11px;line-height:1.4;margin-bottom:9px}
+.finance-month-sources strong{font-size:clamp(16px,1.7vw,21px);color:#ebf7ff;overflow-wrap:anywhere}
+.finance-alert{margin:13px 0;padding:12px 14px;border-radius:9px;border:1px solid #ad8552;color:#ffda9b;background:#493721;font-size:12px;line-height:1.55}
+@media(max-width:650px){.finance-month-sources{grid-template-columns:1fr}}
