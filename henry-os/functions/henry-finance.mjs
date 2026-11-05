@@ -180,6 +180,54 @@ export default async (req,context)=>{
     return json({item:calculateMembership(item,await read(store,'receipts'),asOf)});
   });
 
+  // Owner-only shortcut: recording a real, checked membership payment must not require
+  // visiting another tab to verify the SAME payment. No payment is assumed from a plan fee.
+  if(action==='record_verified_member_payment')return withError(async()=>{
+    if(body.confirmedReceived!==true)throw new Error('Confirm you checked the actual MMG, bank, or cash receipt before recording cash.');
+    const selection=clean(body.membershipId,110);
+    const receivedDate=safeDate(body.receivedDate);
+    if(receivedDate>asOf)throw new Error('A cash payment cannot be recorded with a future receipt date.');
+    const paymentMethod=method(body.method),reference=validateReference(body.reference);
+    const canonical=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(canonical(reference).length<4||['CASH','NONE','UNKNOWN','NORECEIPT','NOREF','NA','MMG','BANK'].includes(canonical(reference)))
+      throw new Error('Enter an actual unique MMG, bank or cash receipt reference. A generic label will not count as a verified collection.');
+    const notes=clean(body.notes,1000),historical=body.historical===true;
+    if(historical&&notes.length<8)throw new Error('For a historical payment, note the evidence you checked and why the payment is historical.');
+    const months=Number(body.months||1);
+    if(!Number.isInteger(months)||months<1||months>24)throw new Error('Membership coverage must be 1 to 24 whole months.');
+    let member=null,membershipId='',legacyMembershipId='';
+    if(selection.startsWith('legacy:')){
+      legacyMembershipId=selection.slice(7);
+      if(!validLinkId(legacyMembershipId))throw new Error('Choose an existing member.');
+      member=await getStore('henry-memberships').get('members/'+legacyMembershipId,{type:'json'}).catch(()=>null);
+    }else{
+      membershipId=selection;
+      if(!validLinkId(membershipId))throw new Error('Choose a member.');
+      member=await store.get('finance/memberships/'+membershipId,{type:'json'}).catch(()=>null);
+    }
+    if(!member)throw new Error('Membership record not found. Refresh and try again.');
+    const agreedFee=historical&&body.historicalMonthlyFee
+      ?positiveMoney(body.historicalMonthlyFee):positiveMoney(member.monthlyFee);
+    const amountGyd=positiveMoney(body.amountGyd);
+    if(toCents(amountGyd)!==toCents(agreedFee)*months)
+      throw new Error('Amount does not match the recorded membership fee × months. Do not treat a mixed or partial payment as a full membership renewal.');
+    const current=await read(store,'receipts');
+    if(current.some(x=>canonical(x.reference)===canonical(reference))){
+      const prior=current.find(x=>canonical(x.reference)===canonical(reference));
+      return json({error:prior?.status==='pending'?'A pending receipt with this reference already exists. Verify that existing payment instead of recording it again.':'This payment reference is already in Finance. It will not be recorded twice.'},409);
+    }
+    // Never re-record a verified or pending reference from the older HENRY OS register.
+    const old=await load(getStore('henry-amc'),'payments/');
+    if(old.some(p=>canonical(p.reference)===canonical(reference)))
+      return json({error:'This receipt reference exists in the older Payments register. Check that existing entry instead of adding another collection.'},409);
+    const item={id:id(),relatedType:'membership',customer:clean(member.customer,160),amountGyd,
+      receivedDate,method:paymentMethod,reference,membershipId,legacyMembershipId,months,agreedFee,
+      historical,status:'verified',notes,source:'owner_confirmed_member_payment',
+      confirmedBy:adminEmail,decidedBy:adminEmail,decidedAt:now,verifiedAt:now,createdAt:now,updatedAt:now};
+    await store.setJSON('finance/receipts/'+item.id,item);
+    return json({item},201);
+  });
+
   if(action==='add_receipt')return withError(async()=>{
     const relatedType=clean(body.relatedType,30),paymentMethod=method(body.method),reference=validateReference(body.reference);
     if(!['membership','streaming','unallocated'].includes(relatedType))throw new Error('Invalid payment category.');

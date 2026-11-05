@@ -5,7 +5,7 @@ const text=v=>String(v??'').trim();
 const today=()=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(v=>v.type===k)?.value).join('-')};
 const pill=s=>'<span class="chip '+esc(s)+'">'+esc(String(s||'—').replaceAll('_',' '))+'</span>';
 const preview=/^(deploy-preview-\d+--|agent-)/.test(location.hostname)||location.hostname.includes('netlify.app')&&!location.hostname.startsWith('preeminent-blancmange-');
-const state={data:null,tab:'summary',working:false,deepLinkApplied:false};
+const state={data:null,tab:'summary',working:false,deepLinkApplied:false,quickMemberId:''};
 const opts=(items,value='id',label='name',placeholder='Select…')=>'<option value="">'+esc(placeholder)+'</option>'+items.map(o=>'<option value="'+esc(o[value])+'">'+esc(o[label]||'Unnamed')+'</option>').join('');
 const formatDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
 const showMessage=(s,error=false)=>{const node=$('flash');node.textContent=s;node.className='flash'+(error?' error':'');setTimeout(()=>{if(node.textContent===s)node.classList.add('hidden')},5000)};
@@ -34,15 +34,10 @@ async function reload(){
         ?state.data.legacyMembers.some(x=>'legacy:'+x.id===member)
         :state.data.memberships.some(x=>x.id===member);
       if(valid){
-        state.tab='receipts';
+        state.tab='memberships';
+        state.quickMemberId=member;
         render();
-        const chooser=$('receipt-member');
-        if(chooser){
-          $('receipt-type').value='membership';
-          changeReceiptFields();
-          chooser.value=member;
-          updateMembershipAmount();
-        }
+        document.getElementById('member-quick-pay')?.scrollIntoView({behavior:'smooth',block:'start'});
         return;
       }
     }
@@ -165,9 +160,41 @@ function renderSuppliers(){
     (bills.length?bills.map(b=>'<tr><td>'+esc(b.supplier)+'<small>'+esc(b.accountLabel)+'</small></td><td>'+formatDate(b.dueDate)+'</td><td>'+esc(b.actual.originalAmount)+' '+esc(b.actual.currency)+'<small>'+money(b.actualGyd)+'</small></td><td>'+money(b.paidGyd)+'</td><td>'+money(b.balanceGyd)+'</td><td>'+pill(b.status)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No confirmed supplier bills yet.</td></tr>')+
     '</tbody></table></div></section>';
 }
+function renderQuickMemberForm(){
+  if(!state.quickMemberId)return '';
+  const id=state.quickMemberId;
+  const member=id.startsWith('legacy:')?
+    state.data.legacyMembers.find(m=>'legacy:'+m.id===id):
+    state.data.memberships.find(m=>m.id===id);
+  if(!member)return '';
+  const fee=Number(member.monthlyFee)||0;
+  const pending=state.data.receipts.filter(r=>r.status==='pending'&&(
+    id.startsWith('legacy:')?r.legacyMembershipId===id.slice(7):r.membershipId===id));
+  return '<section class="card member-quick-pay" id="member-quick-pay">'+
+    '<div class="section-title"><div><h3>Record payment received: '+esc(member.customer)+'</h3>'+
+    '<p>Recorded fee: '+money(fee)+'/month · A monthly fee is not proof of money received.</p></div>'+
+    '<button type="button" class="outline" data-close-quick-member>Close</button></div>'+
+    (pending.length?'<div class="notice"><strong>'+pending.length+' existing pending payment(s).</strong> If you already recorded the receipt, verify it here instead of entering it again.'+
+      pending.map(r=>'<p>'+money(r.amountGyd)+' · '+esc(r.method)+' · '+esc(r.reference)+' · '+formatDate(r.receivedDate)+
+        ' <button type="button" class="btn secondary" data-quick-verify="'+esc(r.id)+'">Verify existing payment</button></p>').join('')+'</div>':'')+
+    '<form class="form" data-form="quickmember">'+
+    '<input type="hidden" name="membershipId" value="'+esc(id)+'">'+
+    '<div class="grid-fields"><label>Money received (GYD)<input name="amountGyd" id="quick-member-amount" type="number" step=".01" min=".01" value="'+fee.toFixed(2)+'" readonly required></label>'+
+    '<label>Months covered<input name="months" id="quick-member-months" type="number" min="1" max="24" value="1" required></label></div>'+
+    '<div class="grid-fields"><label>Actual payment date<input name="receivedDate" type="date" max="'+esc(state.data.asOf)+'" value="'+esc(state.data.asOf)+'" required></label>'+
+    '<label>Payment method<select name="method"><option>MMG</option><option>Bank transfer</option><option>Cash</option><option>Other</option></select></label></div>'+
+    '<label>Actual MMG/bank reference or cash receipt ID<input name="reference" type="text" maxlength="120" minlength="3" required placeholder="Unique payment reference"></label>'+
+    '<label class="member-check"><input type="checkbox" name="historical" id="quick-member-historical"> Payment was received before the HENRY OS financial go-live date</label>'+
+    '<div id="quick-historical-fee" class="hidden"><label>Historical monthly fee, if different (GYD)<input name="historicalMonthlyFee" id="quick-member-old-fee" type="number" min=".01" step=".01"></label></div>'+
+    '<label>Evidence note (MMG, bank, cash receipt)<textarea name="notes" placeholder="What record did you check? Do not enter bank credentials."></textarea></label>'+
+    '<label class="member-check member-check-critical"><input name="confirmedReceived" type="checkbox" required> I checked the payment record and confirm that AMC actually received these funds.</label>'+
+    '<button type="submit" class="btn wide">Confirm paid &amp; update dashboard</button>'+
+    '<p class="subnote">One step: after your explicit confirmation, this saves a verified payment. It updates the verified-payment count and the main dashboard total for the actual receipt month. Duplicate references are blocked.</p></form></section>';
+}
 function renderMemberships(){
   const d=state.data;const members=d.memberships,old=d.legacyMembers;
   const summary=globalThis.HenryFinanceReport.summarize(d);
+  const pendingFor=(id,legacy=false)=>d.receipts.filter(r=>r.status==='pending'&&(legacy?r.legacyMembershipId===id:r.membershipId===id));
   return '<div class="section-title"><div><h2>Membership Billing</h2><p>New billing profiles default to GYD $950. Existing shipping Members Club profiles retain their own plan fee, and can now have payments verified directly. No automatic membership debt.</p></div></div>'+
     '<div class="finance-stat-grid" style="margin-bottom:18px">'+
     '<article class="finance-stat"><small>Member fees today</small><strong>'+money(summary.memberReceivedToday)+'</strong><p>Verified cash collected today</p></article>'+
@@ -175,17 +202,18 @@ function renderMemberships(){
     '<article class="finance-stat"><small>Verified historical member fees</small><strong>'+money(summary.historicalMemberVerified)+'</strong><p>NOT current cash collections</p></article>'+
     '<article class="finance-stat"><small>Legacy member profiles</small><strong>'+old.length+'</strong><p>Payment evidence still requires review</p></article>'+
     '</div>'+
+    '<div class="notice"><strong>What happened:</strong> A monthly fee is not a cash receipt. Click <strong>Record payment</strong>, confirm the actual MMG, bank, or cash receipt, and it will appear on the dashboard. Pending receipts can be verified here without re-entering them.</div>'+renderQuickMemberForm()+
     '<div class="notice"><strong>Legacy Members Club remains unchanged:</strong> Existing shipping allowance plans may have their own pricing and status. The billing records here do not change shipping discounts or reprice legacy plans. Reconcile member coverage and opening positions before linking those benefits.</div>'+
-    '<div class="two-col"><section class="card"><h3>Add a membership billing profile</h3><p class="sub">Creating a profile does not activate membership. Only an owner-verified payment creates coverage in the new Finance membership tracker. The existing shipping usage tracker remains independent.</p>'+
+    '<div class="two-col"><details class="card"><summary class="member-collapsible-title">Add a new membership profile (only if not already listed)</summary><div style="margin-top:12px"><h3>New membership profile</h3><p class="sub">Creating a profile does not activate membership. Only an owner-verified payment creates coverage in the new Finance membership tracker. The existing shipping usage tracker remains independent.</p>'+
     '<form class="form" data-form="member"><label>Member name<input name="customer" required maxlength="160"></label><div class="grid-fields"><label>WhatsApp<input name="whatsapp" maxlength="40"></label><label>Mailbox code<input name="mailboxCode" maxlength="60" placeholder="AMC203"></label></div>'+
     '<label>Monthly fee (GYD)<input name="monthlyFee" type="number" min=".01" step=".01" value="950" required></label><label>Internal notes<textarea name="notes" placeholder="Historical membership details can be reviewed later"></textarea></label>'+
-    '<button class="btn wide" type="submit">Create membership profile</button></form></section>'+
+    '<button class="btn wide" type="submit">Create membership profile</button></form></div></details>'+
     '<section class="card"><h3>Membership coverage</h3><p class="sub">Coverage is calculated from verified membership payments. Existing older memberships without reconciled payments are marked for review, not automatically expired.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Member</th><th>Monthly fee</th><th>Paid-through</th><th>Status</th><th>Verified payments</th></tr></thead><tbody>'+
-    (members.length?members.map(m=>'<tr><td><strong>'+esc(m.customer)+'</strong><small>'+esc(m.mailboxCode||'No mailbox code')+'</small></td><td>'+money(m.monthlyFee)+'<div class="action-inline"><button type="button" class="outline" data-member-fee="'+esc(m.id)+'">Edit fee</button></div></td><td>'+formatDate(m.paidThrough)+'</td><td>'+pill(m.status)+'</td><td>'+m.verifiedPaymentCount+'<div class="action-inline"><button type="button" class="outline" data-record-member="'+esc(m.id)+'">Record fee</button></div></td></tr>').join(''):'<tr><td colspan="5" class="empty">No new billing profiles yet.</td></tr>')+'</tbody></table></div></section></div>'+
+    (members.length?members.map(m=>'<tr><td><strong>'+esc(m.customer)+'</strong><small>'+esc(m.mailboxCode||'No mailbox code')+'</small></td><td>'+money(m.monthlyFee)+'<div class="action-inline"><button type="button" class="outline" data-member-fee="'+esc(m.id)+'">Edit fee</button></div></td><td>'+formatDate(m.paidThrough)+'</td><td>'+pill(m.status)+'</td><td>'+m.verifiedPaymentCount+' verified'+(pendingFor(m.id).length?'<small>'+pendingFor(m.id).length+' pending</small>':'')+'<div class="action-inline"><button type="button" class="btn secondary" data-record-member="'+esc(m.id)+'">Record payment</button></div></td></tr>').join(''):'<tr><td colspan="5" class="empty">No new billing profiles yet.</td></tr>')+'</tbody></table></div></section></div>'+
     '<section class="card"><h3>Existing Members Club usage registry (read-only reference)</h3><p class="sub">Existing plan fees and allowances are preserved. Record a real MMG, bank or cash payment against the member, then verify it. Active status alone does not prove payment.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Existing member</th><th>Mailbox</th><th>Existing plan</th><th>Plan fee</th><th>Shipping allowance</th><th>Verified membership receipts</th><th>Action</th></tr></thead><tbody>'+
-    (old.length?old.map(m=>'<tr><td>'+esc(m.customer)+'</td><td>'+esc(m.mailboxCode||'—')+'</td><td>'+esc(m.planName||'—')+'</td><td>'+money(m.monthlyFee)+'</td><td>'+esc(m.allowanceLb||'—')+' lb</td><td>'+money(d.receipts.filter(p=>p.status==='verified'&&p.legacyMembershipId===m.id).reduce((total,p)=>total+Number(p.amountGyd),0))+'<small>Historical and current receipts</small></td><td><button type="button" class="btn secondary" data-record-member="legacy:'+esc(m.id)+'">Record fee</button></td></tr>').join(''):'<tr><td colspan="7" class="empty">No legacy member profiles found.</td></tr>')+
+    (old.length?old.map(m=>'<tr><td>'+esc(m.customer)+'</td><td>'+esc(m.mailboxCode||'—')+'</td><td>'+esc(m.planName||'—')+'</td><td>'+money(m.monthlyFee)+'</td><td>'+esc(m.allowanceLb||'—')+' lb</td><td>'+money(d.receipts.filter(p=>p.status==='verified'&&p.legacyMembershipId===m.id).reduce((total,p)=>total+Number(p.amountGyd),0))+'<small>Historical and current receipts</small></td><td><button type="button" class="btn secondary" data-record-member="legacy:'+esc(m.id)+'">Record payment</button>'+(pendingFor(m.id,true).length?'<small>'+pendingFor(m.id,true).length+' pending</small>':'')+'</td></tr>').join(''):'<tr><td colspan="7" class="empty">No legacy member profiles found.</td></tr>')+
     '</tbody></table></div><p class="subnote">Review legacy usage in <a href="/admin/#members-club">Members Club →</a>. Neither module overwrites the other.</p></section>';
 }
 function renderReceipts(){
@@ -231,6 +259,16 @@ function updateMembershipAmount(){
   const special=$('receipt-historical')?.checked?Number($('receipt-old-fee')?.value):0;
   if($('receipt-amount'))$('receipt-amount').value=m&&months>0?((special>0?special:Number(m.monthlyFee))*months).toFixed(2):'';
 }
+function updateQuickAmount(){
+  if(!state.quickMemberId||!state.data)return;
+  const member=state.quickMemberId.startsWith('legacy:')
+    ?state.data.legacyMembers.find(m=>'legacy:'+m.id===state.quickMemberId)
+    :state.data.memberships.find(m=>m.id===state.quickMemberId);
+  const months=Number($('quick-member-months')?.value)||0;
+  const oldRate=$('quick-member-historical')?.checked?Number($('quick-member-old-fee')?.value):0;
+  const rate=oldRate>0?oldRate:Number(member?.monthlyFee||0);
+  if($('quick-member-amount'))$('quick-member-amount').value=rate>0&&months>0?(rate*months).toFixed(2):'';
+}
 function fillBill(){
   const s=state.data?.suppliers.find(s=>s.id===$('supplier-bill-select')?.value);
   const form=document.querySelector('[data-form="bill"]');if(!s||!form)return;
@@ -247,24 +285,30 @@ const handlers={
   bill:fd=>({supplierId:fd.get('supplierId'),dueDate:fd.get('dueDate'),actualAmount:fd.get('actualAmount'),exchangeRate:fd.get('exchangeRate'),notes:fd.get('notes')}),
   billpayment:fd=>({billId:fd.get('billId'),amountGyd:fd.get('amountGyd'),paidDate:fd.get('paidDate'),method:fd.get('method'),reference:fd.get('reference')}),
   member:fd=>({customer:fd.get('customer'),whatsapp:fd.get('whatsapp'),mailboxCode:fd.get('mailboxCode'),monthlyFee:fd.get('monthlyFee'),notes:fd.get('notes')}),
-  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes')})
+  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes')}),
+  quickmember:fd=>({membershipId:fd.get('membershipId'),months:fd.get('months'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes'),confirmedReceived:fd.get('confirmedReceived')==='on'})
 };
-const actions={supplier:'add_supplier',bill:'add_bill',billpayment:'pay_bill',member:'add_membership',receipt:'add_receipt'};
+const actions={supplier:'add_supplier',bill:'add_bill',billpayment:'pay_bill',member:'add_membership',receipt:'add_receipt',quickmember:'record_verified_member_payment'};
 async function submit(e){
   e.preventDefault();if(state.working||preview)return;
   const type=e.currentTarget.dataset.form;if(!handlers[type])return;
   const data=handlers[type](new FormData(e.currentTarget));
-  const question=type==='billpayment'?'I confirm that I checked this outgoing payment against AMC records. Record it as paid?':type==='bill'?'Confirm this supplier charge as an actual unpaid obligation?':null;
+  const question=type==='quickmember'?'I confirm I have checked the actual customer payment and that AMC received this money. Add this verified receipt to the dashboard?':type==='billpayment'?'I confirm that I checked this outgoing payment against AMC records. Record it as paid?':type==='bill'?'Confirm this supplier charge as an actual unpaid obligation?':null;
   if(question&&!confirm(question))return;
   state.working=true;
-  try{await api(actions[type],'POST',data);await reload();showMessage(type==='receipt'?'Payment saved as pending. Verify it after checking your account.':'Record saved successfully.')}
+  try{await api(actions[type],'POST',data);if(type==='quickmember')state.quickMemberId='';await reload();showMessage(type==='quickmember'?'Payment verified. The member record and dashboard collections now include it for its actual receipt month.':type==='receipt'?'Payment saved as pending. Verify it after checking your account.':'Record saved successfully.')}
   catch(err){showMessage(err.message,true)}
   finally{state.working=false;}
 }
 function wireForms(){
   document.querySelectorAll('form[data-form]').forEach(f=>f.addEventListener('submit',submit));
   document.querySelectorAll('[data-open-tab]').forEach(b=>b.addEventListener('click',()=>{state.tab=b.dataset.openTab;render()}));
-  document.querySelectorAll('[data-record-member]').forEach(b=>b.addEventListener('click',()=>{state.tab='receipts';render();$('receipt-type').value='membership';changeReceiptFields();$('receipt-member').value=b.dataset.recordMember;updateMembershipAmount();document.querySelector('[data-form="receipt"]')?.scrollIntoView({behavior:'smooth',block:'start'})}));
+  document.querySelectorAll('[data-record-member]').forEach(b=>b.addEventListener('click',()=>{state.quickMemberId=b.dataset.recordMember;state.tab='memberships';render();$('member-quick-pay')?.scrollIntoView({behavior:'smooth',block:'start'})}));
+  document.querySelectorAll('[data-close-quick-member]').forEach(b=>b.addEventListener('click',()=>{state.quickMemberId='';render()}));
+  document.querySelectorAll('[data-quick-verify]').forEach(b=>b.addEventListener('click',async()=>{if(state.working||preview)return;const rec=state.data.receipts.find(r=>r.id===b.dataset.quickVerify&&r.status==='pending');if(!rec)return;if(!confirm('Confirm you checked the actual MMG/bank receipt for '+rec.customer+' — '+money(rec.amountGyd)+'? Verify this existing payment without entering it twice?'))return;state.working=true;try{await api('decide_receipt','POST',{id:rec.id,decision:'verified'});await reload();showMessage('Existing payment verified. Your dashboard will include it for the date received.')}catch(e){showMessage(e.message,true)}finally{state.working=false}}));
+  $('quick-member-months')?.addEventListener('change',updateQuickAmount);
+  $('quick-member-old-fee')?.addEventListener('input',updateQuickAmount);
+  $('quick-member-historical')?.addEventListener('change',e=>{$('quick-historical-fee')?.classList.toggle('hidden',!e.target.checked);if(!e.target.checked&&$('quick-member-old-fee'))$('quick-member-old-fee').value='';updateQuickAmount()});
   $('receipt-type')?.addEventListener('change',changeReceiptFields);
   $('receipt-member')?.addEventListener('change',updateMembershipAmount);
   $('receipt-months')?.addEventListener('change',updateMembershipAmount);
