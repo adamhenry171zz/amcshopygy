@@ -5,7 +5,7 @@ const text=v=>String(v??'').trim();
 const today=()=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(v=>v.type===k)?.value).join('-')};
 const pill=s=>'<span class="chip '+esc(s)+'">'+esc(String(s||'—').replaceAll('_',' '))+'</span>';
 const preview=/^(deploy-preview-\d+--|agent-)/.test(location.hostname)||location.hostname.includes('netlify.app')&&!location.hostname.startsWith('preeminent-blancmange-');
-const state={data:null,tab:'summary',working:false,deepLinkApplied:false};
+const state={data:null,tab:'summary',working:false,deepLinkApplied:false,quickMemberId:''};
 const opts=(items,value='id',label='name',placeholder='Select…')=>'<option value="">'+esc(placeholder)+'</option>'+items.map(o=>'<option value="'+esc(o[value])+'">'+esc(o[label]||'Unnamed')+'</option>').join('');
 const formatDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
 const showMessage=(s,error=false)=>{const node=$('flash');node.textContent=s;node.className='flash'+(error?' error':'');setTimeout(()=>{if(node.textContent===s)node.classList.add('hidden')},5000)};
@@ -164,6 +164,37 @@ function renderSuppliers(){
     '<section class="card"><h3>Confirmed supplier bills</h3><p class="sub">These are real charges you entered, not automatically generated projections.</p><div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Bill date</th><th>Actual charge</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead><tbody>'+
     (bills.length?bills.map(b=>'<tr><td>'+esc(b.supplier)+'<small>'+esc(b.accountLabel)+'</small></td><td>'+formatDate(b.dueDate)+'</td><td>'+esc(b.actual.originalAmount)+' '+esc(b.actual.currency)+'<small>'+money(b.actualGyd)+'</small></td><td>'+money(b.paidGyd)+'</td><td>'+money(b.balanceGyd)+'</td><td>'+pill(b.status)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No confirmed supplier bills yet.</td></tr>')+
     '</tbody></table></div></section>';
+}
+function renderQuickMemberForm(){
+  if(!state.quickMemberId)return '';
+  const id=state.quickMemberId;
+  const member=id.startsWith('legacy:')?
+    state.data.legacyMembers.find(m=>'legacy:'+m.id===id):
+    state.data.memberships.find(m=>m.id===id);
+  if(!member)return '';
+  const fee=Number(member.monthlyFee)||0;
+  const pending=state.data.receipts.filter(r=>r.status==='pending'&&(
+    id.startsWith('legacy:')?r.legacyMembershipId===id.slice(7):r.membershipId===id));
+  return '<section class="card member-quick-pay" id="member-quick-pay">'+
+    '<div class="section-title"><div><h3>Record payment received: '+esc(member.customer)+'</h3>'+
+    '<p>Recorded fee: '+money(fee)+'/month · A monthly fee is not proof of money received.</p></div>'+
+    '<button type="button" class="outline" data-close-quick-member>Close</button></div>'+
+    (pending.length?'<div class="notice"><strong>'+pending.length+' existing pending payment(s).</strong> If you already recorded the receipt, verify it here instead of entering it again.'+
+      pending.map(r=>'<p>'+money(r.amountGyd)+' · '+esc(r.method)+' · '+esc(r.reference)+' · '+formatDate(r.receivedDate)+
+        ' <button type="button" class="btn secondary" data-quick-verify="'+esc(r.id)+'">Verify existing payment</button></p>').join('')+'</div>':'')+
+    '<form class="form" data-form="quickmember">'+
+    '<input type="hidden" name="membershipId" value="'+esc(id)+'">'+
+    '<div class="grid-fields"><label>Money received (GYD)<input name="amountGyd" id="quick-member-amount" type="number" step=".01" min=".01" value="'+fee.toFixed(2)+'" readonly required></label>'+
+    '<label>Months covered<input name="months" id="quick-member-months" type="number" min="1" max="24" value="1" required></label></div>'+
+    '<div class="grid-fields"><label>Actual payment date<input name="receivedDate" type="date" max="'+esc(state.data.asOf)+'" value="'+esc(state.data.asOf)+'" required></label>'+
+    '<label>Payment method<select name="method"><option>MMG</option><option>Bank transfer</option><option>Cash</option><option>Other</option></select></label></div>'+
+    '<label>Actual MMG/bank reference or cash receipt ID<input name="reference" type="text" maxlength="120" minlength="3" required placeholder="Unique payment reference"></label>'+
+    '<label class="member-check"><input type="checkbox" name="historical" id="quick-member-historical"> Payment was received before the HENRY OS financial go-live date</label>'+
+    '<div id="quick-historical-fee" class="hidden"><label>Historical monthly fee, if different (GYD)<input name="historicalMonthlyFee" id="quick-member-old-fee" type="number" min=".01" step=".01"></label></div>'+
+    '<label>Evidence note (MMG, bank, cash receipt)<textarea name="notes" placeholder="What record did you check? Do not enter bank credentials."></textarea></label>'+
+    '<label class="member-check member-check-critical"><input name="confirmedReceived" type="checkbox" required> I checked the payment record and confirm that AMC actually received these funds.</label>'+
+    '<button type="submit" class="btn wide">Confirm paid &amp; update dashboard</button>'+
+    '<p class="subnote">One step: after your explicit confirmation, this saves a verified payment. It updates the verified-payment count and the main dashboard total for the actual receipt month. Duplicate references are blocked.</p></form></section>';
 }
 function renderMemberships(){
   const d=state.data;const members=d.memberships,old=d.legacyMembers;
