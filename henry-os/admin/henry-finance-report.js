@@ -18,6 +18,68 @@
     return Number.isFinite(n)&&n>0?n:0;
   };
   const moneySum = rows => Math.round(rows.reduce((sum,item)=>sum+Math.round(number(item.amountGyd??item.amount)*100),0))/100;
+  // A CALENDAR-MONTH CASH RECEIPTS VIEW, not an accounting ledger or income statement.
+  // It consolidates the two existing payment stores by actual received date. Neither
+  // a membership profile nor a streaming due date proves that cash was collected.
+  const monthlyCollected = data => {
+    const today=data.asOf;
+    if(!isDate(today))throw new Error('Invalid reporting date');
+    const month=today.slice(0,7);
+    const normalizeRef=v=>String(v??'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const records=[
+      ...(data.legacyPayments||[]).filter(p=>['verified','paid'].includes(String(p.status||'').toLowerCase())).map(p=>({
+        source:'legacy',amount:p.amount,date:String(p.paymentDate||'').slice(0,10),reference:p.reference,
+        historical:true
+      })),
+      ...(data.receipts||[]).filter(p=>p.status==='verified').map(p=>({
+        source:'finance',amount:p.amountGyd,date:String(p.receivedDate||'').slice(0,10),reference:p.reference,
+        historical:p.historical===true
+      }))
+    ];
+    const groups=new Map();
+    let excludedNoReference=0,excludedInvalid=0;
+    for(const record of records){
+      // An old free-text reference may be missing or generic. It cannot
+      // safely be deduplicated, so withhold it for manual review.
+      const reference=normalizeRef(record.reference);
+      const amount=number(record.amount),cents=Math.round(amount*100);
+      if(!isDate(record.date)||!Number.isSafeInteger(cents)||cents<=0){excludedInvalid++;continue}
+      if(reference.length<4||['CASH','NONE','UNKNOWN','NORECEIPT','NOREf','NA','MMG','BANK'].includes(reference)){
+        excludedNoReference++;continue;
+      }
+      if(!groups.has(reference))groups.set(reference,[]);
+      groups.get(reference).push({...record,amountCents:cents,reference});
+    }
+    let totalCents=0,legacyCents=0,financeCents=0,overlapCents=0,historicalCents=0;
+    let distinctTransactions=0,duplicateRecords=0,conflictingReferences=0,conflictingRecords=0,excludedFuture=0;
+    for(const group of groups.values()){
+      const amounts=new Set(group.map(r=>r.amountCents));
+      const dates=new Set(group.map(r=>r.date));
+      // Never choose an arbitrary amount/date if two registers disagree.
+      if(amounts.size!==1||dates.size!==1){conflictingReferences++;conflictingRecords+=group.length;continue}
+      const entry=group[0];
+      if(entry.date.slice(0,7)!==month)continue;
+      if(entry.date>today){excludedFuture++;continue}
+      distinctTransactions++;
+      duplicateRecords+=group.length-1;
+      totalCents+=entry.amountCents;
+      if(group.some(r=>r.source==='legacy')&&group.some(r=>r.source==='finance'))overlapCents+=entry.amountCents;
+      else if(group.some(r=>r.source==='legacy'))legacyCents+=entry.amountCents;
+      else financeCents+=entry.amountCents;
+      if(group.every(r=>r.historical))historicalCents+=entry.amountCents;
+    }
+    const gyd=cents=>Math.round(cents)/100;
+    const needsReview=excludedNoReference+excludedInvalid+conflictingRecords;
+    return {
+      month,today,total:gyd(totalCents),
+      legacyOnly:gyd(legacyCents),financeOnly:gyd(financeCents),
+      duplicatesAcrossRegisters:gyd(overlapCents),historicalIncluded:gyd(historicalCents),
+      distinctTransactions,duplicateRecords,conflictingReferences,
+      excludedNoReference,excludedInvalid,excludedFuture,needsReview,
+      completeFromRecordedSources:needsReview===0,
+      sourceCount:records.length
+    };
+  };
   const summarize = data => {
     const today=data.asOf;
     if(!isDate(today)) throw new Error('Invalid reporting date');
@@ -64,5 +126,5 @@
       newMembershipCount:(data.memberships||[]).length
     };
   };
-  target.HenryFinanceReport={summarize,isDate,plusDays,number,moneySum};
+  target.HenryFinanceReport={summarize,monthlyCollected,isDate,plusDays,number,moneySum};
 })(globalThis);
