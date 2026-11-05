@@ -5,7 +5,7 @@ const text=v=>String(v??'').trim();
 const today=()=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(v=>v.type===k)?.value).join('-')};
 const pill=s=>'<span class="chip '+esc(s)+'">'+esc(String(s||'—').replaceAll('_',' '))+'</span>';
 const preview=/^(deploy-preview-\d+--|agent-)/.test(location.hostname)||location.hostname.includes('netlify.app')&&!location.hostname.startsWith('preeminent-blancmange-');
-const state={data:null,tab:'suppliers',working:false};
+const state={data:null,tab:'summary',working:false};
 const opts=(items,value='id',label='name',placeholder='Select…')=>'<option value="">'+esc(placeholder)+'</option>'+items.map(o=>'<option value="'+esc(o[value])+'">'+esc(o[label]||'Unnamed')+'</option>').join('');
 const formatDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
 const showMessage=(s,error=false)=>{const node=$('flash');node.textContent=s;node.className='flash'+(error?' error':'');setTimeout(()=>{if(node.textContent===s)node.classList.add('hidden')},5000)};
@@ -32,23 +32,75 @@ async function reload(){
 }
 function render(){
   const d=state.data;if(!d)return;
-  const verified=d.receipts.filter(r=>r.status==='verified').reduce((n,r)=>n+Number(r.amountGyd),0);
+  const report=globalThis.HenryFinanceReport.summarize(d);
   const paidBills=d.bills.reduce((n,b)=>n+Number(b.paidGyd),0);
   const billsDue=d.bills.reduce((n,b)=>n+Number(b.balanceGyd),0);
   const upcoming=d.suppliers.filter(s=>s.status==='active'&&s.nextExpectedBillDates?.length).length;
   $('metrics').innerHTML=[
-    ['Verified receipts (this module)',money(verified),'Not total AMC revenue'],
-    ['Supplier payments confirmed',money(paidBills),'This Phase 1 workspace only'],
-    ['Confirmed supplier bills unpaid',money(billsDue),'Does not include estimates'],
-    ['Accounts with scheduled bills',String(upcoming),'Schedules are projections']
+    ['Expected Streaming Today',money(report.expectedToday),'Scheduled renewals — NOT payments received'],
+    ['Verified Cash Collected Today',money(report.receivedToday),'Phase 1 receipts only, excludes historical'],
+    ['Membership Collected This Month',money(report.memberReceivedMonth),'Verified new membership fee payments'],
+    ['Supplier Bills Outstanding',money(billsDue),'Confirmed charges — not forecast expenses']
   ].map(([name,value,sub])=>'<article class="metric"><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong><p>'+esc(sub)+'</p></article>').join('');
   document.querySelectorAll('[data-tab]').forEach(el=>el.classList.toggle('active',el.dataset.tab===state.tab));
-  $('tab-body').innerHTML=state.tab==='suppliers'?renderSuppliers():state.tab==='memberships'?renderMemberships():renderReceipts();
+  $('tab-body').innerHTML=state.tab==='summary'?renderSummary():state.tab==='suppliers'?renderSuppliers():state.tab==='memberships'?renderMemberships():renderReceipts();
   if(preview){
     $('tab-body').querySelectorAll('form button[type=submit]').forEach(el=>{el.disabled=true;el.title='Preview is read-only'});
     if(!$('preview-message'))$('tab-body').insertAdjacentHTML('afterbegin','<div class="notice" id="preview-message"><strong>Read-only deployment preview.</strong> You can inspect the interface, but changes can be made only on the approved production site.</div>');
   }
   wireForms();
+}
+function renderSummary(){
+  const d=state.data,r=globalThis.HenryFinanceReport.summarize(d),entries=d.receipts||[],streaming=d.streaming||[];
+  const verifiedMembership=entries.filter(x=>x.relatedType==='membership'&&x.status==='verified');
+  const pending=entries.filter(x=>x.status==='pending');
+  const expectedToday=streaming.filter(x=>x.dueDate===d.asOf&&!['paused','cancelled','inactive'].includes(String(x.status||'').toLowerCase()));
+  const legacyVerified=(d.legacyPayments||[]).filter(x=>['verified','paid'].includes(String(x.status||'').toLowerCase()));
+  const head=(title,sub)=>'<div class="card-head"><div><h3>'+esc(title)+'</h3><p class="sub">'+esc(sub)+'</p></div></div>';
+  const stat=(name,value,note)=>'<article class="finance-stat"><small>'+esc(name)+'</small><strong>'+money(value)+'</strong><p>'+esc(note)+'</p></article>';
+  const memberRows=verifiedMembership.slice().sort((a,b)=>String(b.receivedDate).localeCompare(String(a.receivedDate)));
+  return '<div class="section-title"><div><h2>Financial Collections Overview</h2><p>As of '+esc(formatDate(r.today))+' · Week: '+esc(formatDate(r.weekStart))+' – '+esc(formatDate(r.weekEnd))+' (Guyana time)</p></div></div>'+
+    '<div class="notice"><strong>Two separate truths:</strong> A Netflix due date shows a scheduled collection opportunity, not confirmed money owed or received. New cash totals below count only owner-verified Phase 1 receipts. Historical fees and the old HENRY OS register remain separate until reconciled. These are cash figures, <em>not</em> earned revenue or profit.</div>'+
+    '<div class="section-title"><div><h2>Expected streaming renewals</h2><p>Estimated GYD based on the existing Streaming amount and next renewal date.</p></div></div>'+
+    '<div class="finance-stat-grid">'+
+      stat('Due today',r.expectedToday,r.expectedSubscriptionsToday+' subscription(s) with a scheduled due date today')+
+      stat('Next 7 days',r.expectedNext7,'Includes today')+
+      stat('This calendar week',r.expectedCalendarWeek,'Monday–Sunday')+
+      stat('This month',r.expectedMonth,'Scheduled due dates during '+r.month)+
+    '</div>'+
+    '<p class="subnote">'+(r.missingStreamingAmounts||0)+' active streaming record(s) have a due date but no valid amount; '+(r.missingStreamingDates||0)+' have no valid due date. They are excluded from forecast totals. <a href="/admin/streaming-reminders.html?v=20261105c">Open exact-date reminder filters →</a></p>'+
+    '<div class="section-title"><div><h2>Money actually received — verified</h2><p>GYD received from new verified payment records, grouped by original receipt date.</p></div></div>'+
+    '<div class="finance-stat-grid">'+
+      stat('Collected today',r.receivedToday,'All verified new Phase 1 customer cash')+
+      stat('Collected this week',r.receivedWeek,'Calendar week, Guyana time')+
+      stat('Collected this month',r.receivedMonth,'All customer receipt categories')+
+      stat('Membership fees this month',r.memberReceivedMonth,'Verified fees only, no assumed renewals')+
+    '</div>'+
+    '<div class="finance-breakdown"><div class="card"><h3>Monthly verified cash breakdown</h3>'+
+      '<div class="finance-detail"><span>Membership subscriptions</span><strong>'+money(r.memberReceivedMonth)+'</strong></div>'+
+      '<div class="finance-detail"><span>Streaming payments</span><strong>'+money(r.streamingReceivedMonth)+'</strong></div>'+
+      '<div class="finance-detail"><span>Unallocated customer receipts</span><strong>'+money(r.unallocatedReceivedMonth)+'</strong></div>'+
+      '<div class="finance-detail total"><span>Verified cash this month</span><strong>'+money(r.receivedMonth)+'</strong></div>'+
+      '<p class="subnote">Unallocated receipts are cash received but may remain customer liabilities until allocated. This breakdown is not a profit report.</p>'+
+      '<button type="button" class="btn" data-open-tab="receipts">Record or verify a payment →</button></div>'+
+    '<div class="card"><h3>Existing records still to reconcile</h3>'+
+      '<div class="finance-detail"><span>Verified historical member fees in Phase 1</span><strong>'+money(r.historicalMemberVerified)+'</strong></div>'+
+      '<div class="finance-detail"><span>Old HENRY OS verified-payment register</span><strong>'+money(r.legacyVerifiedAmount)+'</strong></div>'+
+      '<div class="finance-detail"><span>Existing legacy member profiles</span><strong>'+r.legacyMemberCount+'</strong></div>'+
+      '<div class="finance-detail"><span>Pending new receipts to check</span><strong>'+pending.length+'</strong></div>'+
+      '<p class="subnote"><strong>Do not add these two historical amounts to new collections.</strong> They may include older cash or overlapping transactions. Legacy profiles are not proof that a subscription fee was collected.</p>'+
+      '<button type="button" class="outline" data-open-tab="memberships">Review Members Club →</button></div></div>'+
+    '<section class="card"><h3>Member fees received — verified register</h3><p class="sub">These are payment records, not merely membership plans. Historical entries are shown but excluded from new cash totals.</p>'+
+      '<div class="table-wrap"><table><thead><tr><th>Member</th><th>Amount</th><th>Received</th><th>Fee / coverage</th><th>Accounting</th></tr></thead><tbody>'+
+      (memberRows.length?memberRows.map(p=>'<tr><td>'+esc(p.customer)+'</td><td>'+money(p.amountGyd)+'</td><td>'+formatDate(p.receivedDate)+'</td><td>'+esc(p.months||'—')+' month(s)<small>'+esc(p.method||'')+' · '+esc(p.reference||'')+'</small></td><td>'+pill(p.historical?'historical':'verified')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No verified Members Club fee payments are recorded in the new ledger. Existing WhatsApp or MMG receipts must be reviewed and entered first.</td></tr>')+
+      '</tbody></table></div></section>'+
+    '<section class="card"><h3>Netflix &amp; streaming due today</h3><p class="sub">Schedule only — payment status is not established by these dates.</p><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Service</th><th>Amount scheduled</th><th>Renewal date</th></tr></thead><tbody>'+
+      (expectedToday.length?expectedToday.map(x=>'<tr><td>'+esc(x.customer)+'</td><td>'+esc(x.service)+'<small>'+esc(x.plan||'')+'</small></td><td>'+(Number(x.amount)>0?money(String(x.amount).replace(/,/g,'')):'Amount missing')+'</td><td>'+formatDate(x.dueDate)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">No subscriptions with renewal dates today.</td></tr>')+
+      '</tbody></table></div></section>'+
+    '<section class="card"><h3>Older payment register — read-only</h3><p class="sub">Existing HENRY OS verified entries are visible for reconciliation. They are NOT automatically counted again in new collections.</p>'+
+      '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Amount</th><th>Category</th><th>Payment date</th><th>Reference</th></tr></thead><tbody>'+
+      (legacyVerified.length?legacyVerified.slice(0,100).map(x=>'<tr><td>'+esc(x.customer||'')+'</td><td>'+money(x.amount)+'</td><td>'+esc(x.relatedType||'Other')+'</td><td>'+formatDate(x.paymentDate)+'</td><td>'+esc(x.reference||'')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No verified legacy payment records to display.</td></tr>')+
+      '</tbody></table></div>'+(legacyVerified.length>100?'<p class="subnote">Showing the first 100 older verified payments; more require reconciliation.</p>':'')+'</section>';
 }
 function renderSuppliers(){
   const d=state.data;const accounts=d.suppliers, bills=d.bills;
@@ -82,7 +134,14 @@ function renderSuppliers(){
 }
 function renderMemberships(){
   const d=state.data;const members=d.memberships,old=d.legacyMembers;
+  const summary=globalThis.HenryFinanceReport.summarize(d);
   return '<div class="section-title"><div><h2>Membership Billing</h2><p>Monthly fee defaults to GYD $950 but can differ by member. No automatic membership debt.</p></div></div>'+
+    '<div class="finance-stat-grid" style="margin-bottom:18px">'+
+    '<article class="finance-stat"><small>Member fees today</small><strong>'+money(summary.memberReceivedToday)+'</strong><p>Verified cash collected today</p></article>'+
+    '<article class="finance-stat"><small>Member fees this month</small><strong>'+money(summary.memberReceivedMonth)+'</strong><p>New verified collections</p></article>'+
+    '<article class="finance-stat"><small>Verified historical member fees</small><strong>'+money(summary.historicalMemberVerified)+'</strong><p>NOT current cash collections</p></article>'+
+    '<article class="finance-stat"><small>Legacy member profiles</small><strong>'+old.length+'</strong><p>Payment evidence still requires review</p></article>'+
+    '</div>'+
     '<div class="notice"><strong>Legacy Members Club remains unchanged:</strong> Existing shipping allowance plans may have their own pricing and status. The billing records here do not change shipping discounts or reprice legacy plans. Reconcile member coverage and opening positions before linking those benefits.</div>'+
     '<div class="two-col"><section class="card"><h3>Add a membership billing profile</h3><p class="sub">Creating a profile does not activate membership. Only an owner-verified membership payment creates paid coverage.</p>'+
     '<form class="form" data-form="member"><label>Member name<input name="customer" required maxlength="160"></label><div class="grid-fields"><label>WhatsApp<input name="whatsapp" maxlength="40"></label><label>Mailbox code<input name="mailboxCode" maxlength="60" placeholder="AMC203"></label></div>'+
@@ -90,7 +149,7 @@ function renderMemberships(){
     '<button class="btn wide" type="submit">Create membership profile</button></form></section>'+
     '<section class="card"><h3>Membership coverage</h3><p class="sub">Coverage is calculated from verified membership payments. Existing older memberships without reconciled payments are marked for review, not automatically expired.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Member</th><th>Monthly fee</th><th>Paid-through</th><th>Status</th><th>Verified payments</th></tr></thead><tbody>'+
-    (members.length?members.map(m=>'<tr><td><strong>'+esc(m.customer)+'</strong><small>'+esc(m.mailboxCode||'No mailbox code')+'</small></td><td>'+money(m.monthlyFee)+'<div class="action-inline"><button type="button" class="outline" data-member-fee="'+esc(m.id)+'">Edit fee</button></div></td><td>'+formatDate(m.paidThrough)+'</td><td>'+pill(m.status)+'</td><td>'+m.verifiedPaymentCount+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No new billing profiles yet.</td></tr>')+'</tbody></table></div></section></div>'+
+    (members.length?members.map(m=>'<tr><td><strong>'+esc(m.customer)+'</strong><small>'+esc(m.mailboxCode||'No mailbox code')+'</small></td><td>'+money(m.monthlyFee)+'<div class="action-inline"><button type="button" class="outline" data-member-fee="'+esc(m.id)+'">Edit fee</button></div></td><td>'+formatDate(m.paidThrough)+'</td><td>'+pill(m.status)+'</td><td>'+m.verifiedPaymentCount+'<div class="action-inline"><button type="button" class="outline" data-record-member="'+esc(m.id)+'">Record fee</button></div></td></tr>').join(''):'<tr><td colspan="5" class="empty">No new billing profiles yet.</td></tr>')+'</tbody></table></div></section></div>'+
     '<section class="card"><h3>Existing Members Club usage registry (read-only reference)</h3><p class="sub">These existing plan fees and allowances are preserved. Do not assume a legacy Active status proves payment.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Legacy member</th><th>Mailbox</th><th>Existing plan</th><th>Legacy plan fee</th><th>Shipping allowance</th></tr></thead><tbody>'+
     (old.length?old.map(m=>'<tr><td>'+esc(m.customer)+'</td><td>'+esc(m.mailboxCode||'—')+'</td><td>'+esc(m.planName||'—')+'</td><td>'+money(m.monthlyFee)+'</td><td>'+esc(m.allowanceLb||'—')+' lb</td></tr>').join(''):'<tr><td colspan="5" class="empty">No legacy member profiles found.</td></tr>')+
@@ -108,14 +167,16 @@ function renderReceipts(){
     '<label>Customer (used for unallocated receipts)<input name="customer" placeholder="Customer name"></label>'+
     '<div class="grid-fields"><label>Payment method<select name="method"><option>MMG</option><option>Bank transfer</option><option>Cash</option><option>Other</option></select></label><label>Date received<input name="receivedDate" type="date" value="'+today()+'" required></label></div>'+
     '<label>MMG / bank reference or cash receipt number<input name="reference" minlength="3" required maxlength="120"></label>'+
-    '<label>Notes (not passwords)<textarea name="notes"></textarea></label><button class="btn wide" type="submit">Record as pending verification</button></form></section>'+
+    '<label class="subnote"><input type="checkbox" id="receipt-historical" name="historical" style="width:auto"> Collected BEFORE HENRY OS 2.0 go-live (historical payment)</label>'+
+    '<div id="receipt-historical-rate" class="hidden"><label>Historical monthly member fee (GYD)<input name="historicalMonthlyFee" id="receipt-old-fee" type="number" min=".01" step=".01" placeholder="Enter original rate, if different"></label></div>'+
+    '<label>Notes / receipt evidence (no passwords)<textarea name="notes" placeholder="MMG receipt / bank history / owner verification"></textarea></label><button class="btn wide" type="submit">Record as pending verification</button></form></section>'+
     '<section class="card"><h3>Pending your decision</h3><p class="sub">Before clicking Verify, check the payment with your MMG, bank or cash records. A screenshot alone is not confirmation.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Payer / category</th><th>Amount</th><th>Reference</th><th>Received</th><th>Actions</th></tr></thead><tbody>'+
     (receipts.filter(r=>r.status==='pending').length?receipts.filter(r=>r.status==='pending').map(r=>'<tr><td>'+esc(r.customer)+'<small>'+esc(r.relatedType)+'</small></td><td>'+money(r.amountGyd)+'</td><td>'+esc(r.method)+'<small>'+esc(r.reference)+'</small></td><td>'+formatDate(r.receivedDate)+'</td><td><div class="action-inline"><button type="button" class="btn secondary" data-verify="'+esc(r.id)+'">Verify</button><button type="button" class="btn danger" data-reject="'+esc(r.id)+'">Reject</button></div></td></tr>').join(''):'<tr><td colspan="5" class="empty">No payments awaiting verification.</td></tr>')+
     '</tbody></table></div></section></div>'+
     '<section class="card"><h3>Payment register</h3><p class="sub">Verified and rejected decisions are retained. Entries from legacy HENRY OS are not rewritten or automatically counted here.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Amount</th><th>Method / reference</th><th>Category</th><th>Date</th><th>Status</th></tr></thead><tbody>'+
-    (receipts.length?receipts.map(r=>'<tr><td>'+esc(r.customer)+'</td><td>'+money(r.amountGyd)+'</td><td>'+esc(r.method)+'<small>'+esc(r.reference)+'</small></td><td>'+esc(r.relatedType)+(r.months?' · '+r.months+' month(s)':'')+'</td><td>'+formatDate(r.receivedDate)+'</td><td>'+pill(r.status)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No Phase 1 payments recorded yet.</td></tr>')+
+    (receipts.length?receipts.map(r=>'<tr><td>'+esc(r.customer)+'</td><td>'+money(r.amountGyd)+'</td><td>'+esc(r.method)+'<small>'+esc(r.reference)+'</small></td><td>'+esc(r.relatedType)+(r.months?' · '+r.months+' month(s)':'')+'</td><td>'+formatDate(r.receivedDate)+'</td><td>'+pill(r.status)+(r.historical?' <small>Historical, not current cash</small>':'')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No Phase 1 payments recorded yet.</td></tr>')+
     '</tbody></table></div></section>';
 }
 function changeReceiptFields(){
@@ -123,13 +184,15 @@ function changeReceiptFields(){
   $('receipt-member-row')?.classList.toggle('hidden',type!=='membership');
   $('receipt-stream-row')?.classList.toggle('hidden',type!=='streaming');
   $('receipt-months-row')?.classList.toggle('hidden',type!=='membership');
+  $('receipt-historical-rate')?.classList.toggle('hidden',type!=='membership'||!$('receipt-historical')?.checked);
   const amount=$('receipt-amount');if(amount)amount.readOnly=type==='membership';
   if(type==='membership')updateMembershipAmount();
 }
 function updateMembershipAmount(){
   const m=state.data?.memberships.find(m=>m.id===$('receipt-member')?.value);
   const months=Number($('receipt-months')?.value)||0;
-  if($('receipt-amount'))$('receipt-amount').value=m&&months>0?(Number(m.monthlyFee)*months).toFixed(2):'';
+  const special=$('receipt-historical')?.checked?Number($('receipt-old-fee')?.value):0;
+  if($('receipt-amount'))$('receipt-amount').value=m&&months>0?((special>0?special:Number(m.monthlyFee))*months).toFixed(2):'';
 }
 function fillBill(){
   const s=state.data?.suppliers.find(s=>s.id===$('supplier-bill-select')?.value);
@@ -147,7 +210,7 @@ const handlers={
   bill:fd=>({supplierId:fd.get('supplierId'),dueDate:fd.get('dueDate'),actualAmount:fd.get('actualAmount'),exchangeRate:fd.get('exchangeRate'),notes:fd.get('notes')}),
   billpayment:fd=>({billId:fd.get('billId'),amountGyd:fd.get('amountGyd'),paidDate:fd.get('paidDate'),method:fd.get('method'),reference:fd.get('reference')}),
   member:fd=>({customer:fd.get('customer'),whatsapp:fd.get('whatsapp'),mailboxCode:fd.get('mailboxCode'),monthlyFee:fd.get('monthlyFee'),notes:fd.get('notes')}),
-  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),notes:fd.get('notes')})
+  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes')})
 };
 const actions={supplier:'add_supplier',bill:'add_bill',billpayment:'pay_bill',member:'add_membership',receipt:'add_receipt'};
 async function submit(e){
@@ -163,9 +226,13 @@ async function submit(e){
 }
 function wireForms(){
   document.querySelectorAll('form[data-form]').forEach(f=>f.addEventListener('submit',submit));
+  document.querySelectorAll('[data-open-tab]').forEach(b=>b.addEventListener('click',()=>{state.tab=b.dataset.openTab;render()}));
+  document.querySelectorAll('[data-record-member]').forEach(b=>b.addEventListener('click',()=>{state.tab='receipts';render();$('receipt-type').value='membership';changeReceiptFields();$('receipt-member').value=b.dataset.recordMember;updateMembershipAmount();document.querySelector('[data-form="receipt"]')?.scrollIntoView({behavior:'smooth',block:'start'})}));
   $('receipt-type')?.addEventListener('change',changeReceiptFields);
   $('receipt-member')?.addEventListener('change',updateMembershipAmount);
   $('receipt-months')?.addEventListener('change',updateMembershipAmount);
+  $('receipt-historical')?.addEventListener('change',e=>{ $('receipt-historical-rate')?.classList.toggle('hidden',!e.target.checked||$('receipt-type')?.value!=='membership');if(!e.target.checked&&$('receipt-old-fee'))$('receipt-old-fee').value='';updateMembershipAmount(); });
+  $('receipt-old-fee')?.addEventListener('input',updateMembershipAmount);
   $('supplier-bill-select')?.addEventListener('change',fillBill);
   $('supplier-pay-select')?.addEventListener('change',fillSupplierPayment);
   fillBill();fillSupplierPayment();changeReceiptFields();

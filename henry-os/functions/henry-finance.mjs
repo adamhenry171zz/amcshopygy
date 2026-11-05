@@ -55,9 +55,9 @@ export default async (req,context)=>{
 
   if(action==='bootstrap'&&req.method==='GET')return withError(async()=>{
     const legacyMembership=getStore('henry-memberships'),legacyAMC=getStore('henry-amc');
-    const [suppliers,memberships,receipts,bills,oldMembers,oldSubscriptions]=await Promise.all([
+    const [suppliers,memberships,receipts,bills,oldMembers,oldSubscriptions,oldPayments]=await Promise.all([
       read(store,'suppliers'),read(store,'memberships'),read(store,'receipts'),read(store,'bills'),
-      load(legacyMembership,'members/').catch(()=>[]),load(legacyAMC,'streaming/').catch(()=>[])
+      load(legacyMembership,'members/').catch(()=>[]),load(legacyAMC,'streaming/').catch(()=>[]),load(legacyAMC,'payments/').catch(()=>[])
     ]);
     return json({asOf,
       suppliers:suppliers.map(s=>supplierResponse(s,asOf)),
@@ -65,7 +65,8 @@ export default async (req,context)=>{
       receipts:receipts.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),
       bills:bills.map(billResponse),
       legacyMembers:oldMembers.map(m=>({id:m.id,customer:m.customer,mailboxCode:m.mailboxCode,planName:m.planName,monthlyFee:m.monthlyFee,allowanceLb:m.allowanceLb,status:m.status})),
-      streaming:oldSubscriptions.map(s=>({id:s.id,customer:s.customer,service:s.service,plan:s.plan,dueDate:s.dueDate}))
+      streaming:oldSubscriptions.map(s=>({id:s.id,customer:s.customer,service:s.service,plan:s.plan,dueDate:s.dueDate,amount:s.amount,status:s.status||''})),
+      legacyPayments:oldPayments.map(p=>({id:p.id,customer:p.customer,amount:p.amount,method:p.method,reference:p.reference,status:p.status,paymentDate:p.paymentDate,relatedType:p.relatedType,relatedId:p.relatedId}))
     });
   });
   if(req.method!=='POST')return json({error:'Not found'},404);
@@ -183,8 +184,15 @@ export default async (req,context)=>{
     const relatedType=clean(body.relatedType,30),paymentMethod=method(body.method),reference=validateReference(body.reference);
     if(!['membership','streaming','unallocated'].includes(relatedType))throw new Error('Invalid payment category.');
     const amountGyd=positiveMoney(body.amountGyd),receivedDate=safeDate(body.receivedDate);
+    const historical=body.historical===true;
+    const receiptNote=clean(body.notes,1000);
+    if(historical&&receiptNote.length<8)throw new Error('Describe how this pre-launch payment was verified. It will be excluded from new cash collections.');
     const existing=await read(store,'receipts');
     if(duplicateRef(existing,paymentMethod,reference))return json({error:'A receipt with this payment method and reference already exists.'},409);
+    // Prevent an old HENRY OS payment being re-imported into the new cash register.
+    const originalPayments=await load(getStore('henry-amc'),'payments/').catch(()=>[]);
+    if(originalPayments.some(p=>clean(p.method,40).toLowerCase()===paymentMethod.toLowerCase()&&normalRef(p.reference)===normalRef(reference)))
+      return json({error:'This reference already exists in the previous HENRY OS payments. Review the original instead of counting it twice.'},409);
     let customer=clean(body.customer,160),membershipId='',streamingId='',months=0,agreedFee='';
     if(relatedType==='membership'){
       membershipId=clean(body.membershipId,100);
@@ -193,7 +201,7 @@ export default async (req,context)=>{
       if(!member)throw new Error('Membership not found.');
       months=Number(body.months);
       if(!Number.isInteger(months)||months<1||months>24)throw new Error('Months must be between 1 and 24.');
-      agreedFee=member.monthlyFee;
+      agreedFee=historical&&body.historicalMonthlyFee?positiveMoney(body.historicalMonthlyFee):member.monthlyFee;
       if(toCents(amountGyd)!==toCents(agreedFee)*months)throw new Error('Phase 1 membership receipts must equal fee × months. Hold mixed or overpayments for the future allocation feature.');
       customer=member.customer;
     }else if(relatedType==='streaming'){
@@ -204,7 +212,7 @@ export default async (req,context)=>{
       customer=subscription.customer||customer;
     }else if(!customer)throw new Error('Enter the payer name.');
     const item={id:id(),relatedType,customer,amountGyd,receivedDate,method:paymentMethod,reference,
-      membershipId,streamingId,months,agreedFee,status:'pending',notes:clean(body.notes,1000),
+      membershipId,streamingId,months,agreedFee,historical,status:'pending',notes:receiptNote,
       createdAt:now,updatedAt:now};
     await store.setJSON('finance/receipts/'+item.id,item);return json({item},201);
   });

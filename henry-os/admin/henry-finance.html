@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="theme-color" content="#071426">
   <title>HENRY OS 2.0 | Phase 1 Finance</title>
-  <link rel="stylesheet" href="/admin/henry-finance.css">
+  <link rel="stylesheet" href="/admin/henry-finance.css?v=20261105c">
 </head>
 <body>
   <div class="app-wrap">
@@ -18,8 +18,8 @@
     <main>
       <div class="intro">
         <p class="eyebrow">OWNER-ONLY FINANCE WORKSPACE</p>
-        <h1>Subscriptions, membership fees <span>&amp; supplier bills.</span></h1>
-        <p>Keep customer renewals separate from supplier costs, track paid membership periods, and approve receipts manually.</p>
+        <h1>Your money, member fees <span>&amp; upcoming renewals.</span></h1>
+        <p>See expected customer renewals and verified money received, by date and service. Track membership collections separately from supplier spending.</p>
       </div>
       <section id="login-notice" class="notice hidden" role="alert">
         <strong>Owner sign-in required.</strong>
@@ -31,9 +31,9 @@
         <div class="notice" role="note"><strong>Phase 1 scope:</strong> Financial records entered here are new and independent from the existing Invoice Factory, Netflix renewals and Members Club shipping allowances. Legacy records are preserved. Opening balances, credits, card-service invoices, unified profit and automatic allocation come in later phases. Scheduled supplier costs are estimates, not confirmed debts.</div>
         <div id="metrics" class="metrics"></div>
         <nav class="tabs" aria-label="Finance workspace sections">
-          <button type="button" data-tab="suppliers" class="active">Supplier Accounts</button>
+          <button type="button" data-tab="summary" class="active">Collections Overview</button><button type="button" data-tab="suppliers">Supplier Accounts</button>
           <button type="button" data-tab="memberships">Membership Billing</button>
-          <button type="button" data-tab="receipts">Verify Payments</button>
+          <button type="button" data-tab="receipts">Record &amp; Verify Payments</button>
         </nav>
         <section id="tab-body" aria-live="polite"></section>
       </section>
@@ -41,6 +41,6 @@
     </main>
     <footer>Private AMC Shopping management · No public customer checkout or automatic charges are created here.</footer>
   </div>
-  <script type="module" src="/admin/henry-finance.js"></script>
+  <script src="/admin/henry-finance-report.js?v=20261105c"></script><script type="module" src="/admin/henry-finance.js?v=20261105c"></script>
 </body>
 </html>
