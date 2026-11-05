@@ -56,7 +56,7 @@ test('retired finance page disappears from site and old bookmarks redirect to ma
  assert.match(config,/from = "\/admin\/henry-finance\.html"\s+to = "\/admin\/"\s+status = 302\s+force = true/);
  assert.ok(!index.includes('/admin/henry-finance.html'));
  assert.ok(!tracker.includes('/admin/henry-finance.html'));
- assert.ok(index.includes('app.js?v=20261105g'));
+ assert.ok(index.includes('app.js?v=20261105h'));
 });
 
 test('underlying finance receipts are preserved for reconciliation when owner supplies new design',()=>{
@@ -64,4 +64,13 @@ test('underlying finance receipts are preserved for reconciliation when owner su
  assert.ok(inject.includes("'henry-finance-logic.mjs'"));
  assert.ok(api.includes("const STORE='henry-finance-phase1'"));
  assert.ok(api.includes("store.setJSON('finance/receipts/'"));
+});
+
+test('monthly overview has no technical duplicate or reconciliation captions',()=>{
+ const start=admin.indexOf('async function fillFinanceSnapshot(){');
+ const end=admin.indexOf('function render(){',start);
+ const block=admin.slice(start,end);
+ assert.ok(!block.includes('Verified recorded receipts ·'));
+ assert.ok(!block.includes('other record(s) need review'));
+ assert.ok(block.includes("money(month.total)"));
 });
