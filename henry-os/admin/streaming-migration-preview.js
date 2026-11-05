@@ -1,5 +1,11 @@
 /* HENRY OS: owner-only Netflix migration preview. Never uploads source passwords. */
-export const SNAPSHOT_DATE = "2026-11-04";
+const guyanaDay = () => {
+  const parts = new Intl.DateTimeFormat('en-US',{timeZone:'America/Guyana',
+    year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+  return ['year','month','day'].map(k=>parts.find(p=>p.type===k)?.value).join('-');
+};
+export const SNAPSHOT_DATE = guyanaDay();
+const PREVIEW_ONLY = typeof window !== 'undefined' && /^deploy-preview-\d+--/.test(window.location.hostname);
 const START = "2026-10-01";
 const END = "2026-11-30";
 const SHEET = "N/ACCOUNTS / Sheet1";
@@ -45,7 +51,7 @@ const identity = x => String(x || "").trim().toLowerCase().replace(/\s+/g, " ");
 const phone = x => String(x || "").replace(/\D/g, "");
 const validId = x => /^[a-z0-9_-]{8,60}$/i.test(x);
 
-export function prepareMigration(csv, existing = []) {
+export function prepareMigration(csv, existing = [], asOfDate = SNAPSHOT_DATE) {
   const matrix = parseCSV(csv);
   if (!matrix.length) throw new Error("The selected CSV is empty");
   const headers = matrix[0].map(normHeader);
@@ -87,8 +93,8 @@ export function prepareMigration(csv, existing = []) {
     if (!item.reason && expiryRaw && !expiry) item.reason = "Invalid expiry date";
     if (!item.reason && !amount) item.reason = "Missing or invalid customer charge";
     const isOctNov = renewal >= START && renewal <= END;
-    const isFutureRenewal = renewal > SNAPSHOT_DATE;
-    const futureExpiry = expiry > SNAPSHOT_DATE;
+    const isFutureRenewal = renewal > asOfDate;
+    const futureExpiry = expiry > asOfDate;
     if (!item.reason && !(isOctNov || isFutureRenewal || futureExpiry))
       item.reason = "No October–November 2026 customer renewal or later future renewal/expiry date";
     if (item.reason) { summary.review.push(item); continue; }
@@ -102,19 +108,19 @@ export function prepareMigration(csv, existing = []) {
       continue;
     }
     const notes = [
-      "Imported from " + SHEET + " row " + rowNumber + " (migration snapshot " + SNAPSHOT_DATE + ").",
+      "Imported from " + SHEET + " row " + rowNumber + " (migration snapshot " + asOfDate + ").",
       isFutureRenewal ? "Future customer renewal date is treated as prepaid; no past payment transaction was created." : "",
-      renewal && renewal <= SNAPSHOT_DATE ? "Active by owner rule. Original customer renewal date: " + renewal + ". Date is held out of forecasts until next renewal is verified." : "",
-      futureExpiry && (!renewal || renewal <= SNAPSHOT_DATE)
+      renewal && renewal <= asOfDate ? "Active by owner rule. Original customer renewal date: " + renewal + ". Date is held out of forecasts until next renewal is verified." : "",
+      futureExpiry && (!renewal || renewal <= asOfDate)
         ? "Future expiry preserved for reference; customer payment due date requires verification." : "",
       accountDue ? "Netflix provider-side account payment date: " + accountDue + " (not customer payment due)." : ""
     ].filter(Boolean).join(" ");
     summary.ready.push({
-      ...item, reason:renewal && renewal <= SNAPSHOT_DATE ? "Active; old due date held from financial forecast pending verification" :
+      ...item, reason:renewal && renewal <= asOfDate ? "Active; old due date held from financial forecast pending verification" :
         !renewal ? "Active; verify next customer billing date" : "Active; future renewal preserved",
       record:{
         customer:name, whatsapp, service:"Netflix", plan:val("ACCOUNT TYPE"), amount,
-        dueDate:renewal > SNAPSHOT_DATE ? renewal : "", status:"active", accountEmail:email, notes
+        dueDate:renewal > asOfDate ? renewal : "", status:"active", accountEmail:email, notes
       },
       id
     });
@@ -165,12 +171,15 @@ async function handleFile(e) {
     $("existing-count").textContent=prepared.existing.length;
     showRows(prepared.ready,"ready-rows");
     showRows([...prepared.review,...prepared.existing,...prepared.ignored],"review-rows");
-    $("approved").disabled=prepared.ready.length===0;
-    say("Preview complete. No data was written. Review past-due dates and excluded rows before importing.");
+    $("approved").disabled=PREVIEW_ONLY || prepared.ready.length===0;
+    say(PREVIEW_ONLY
+  ? "Preview only: importing from a Netlify Deploy Preview is blocked because it may share the live data store. Use production after the change is approved."
+  : "Preview complete. No data was written. Review past-due dates and excluded rows before importing.");
   } catch(err){say(err.message,true);}
 }
 async function commit() {
   if (!prepared || !prepared.ready.length || !$("approved").checked) return;
+  if (PREVIEW_ONLY) { say("Import blocked in deploy preview to protect live customer records.",true); return; }
   const count=prepared.ready.length;
   if (!confirm("Import up to " + count + " Netflix subscriptions into HENRY OS?\n\nNo passwords or historic payment transactions will be sent. Existing subscriptions are never overwritten.")) return;
   $("commit").disabled=true;$("picker").disabled=true;$("approved").disabled=true;
@@ -198,14 +207,16 @@ async function commit() {
 async function boot() {
   $("picker").disabled=true;$("approved").disabled=true;$("commit").disabled=true;
   $("picker").addEventListener("change",handleFile);
-  $("approved").addEventListener("change",()=>{$("commit").disabled=!prepared || !prepared.ready.length || !$("approved").checked;});
+  $("approved").addEventListener("change",()=>{$("commit").disabled=PREVIEW_ONLY || !prepared || !prepared.ready.length || !$("approved").checked;});
   $("commit").addEventListener("click",commit);
   try {
     const session=await request("/.netlify/functions/henry-auth?action=session");
     if (!session.authenticated) throw new Error("Sign in to HENRY OS first.");
     await refreshExisting();
     $("picker").disabled=false;
-    say("Signed in. Export N/ACCOUNTS Sheet1 as CSV and select it here to preview, with no changes made.");
+    say(PREVIEW_ONLY
+   ? "Preview mode: CSV audit is available; importing is disabled until the tool is approved and live on the production site."
+   : "Signed in. Select your sanitized Netflix CSV to preview records, then review before importing.");
   } catch(err){say(err.message+" Return to /admin/ and sign in.",true);}
 }
 if (typeof document !== "undefined") boot();
