@@ -294,6 +294,15 @@ function renderQueue(){
  $('queue-skip').onclick=advanceQueue;
 }
 function advanceQueue(){state.index++;renderQueue()}
+function dedupeRecipients(rows){
+ const seen=new Set(),unique=[];let duplicates=0;
+ for(const s of rows){
+  const key=[phone(s.whatsapp),String(s.service||'').trim().toLowerCase(),s.dueDate].join('|');
+  if(seen.has(key)){duplicates++;continue}
+  seen.add(key);unique.push(s);
+ }
+ return {unique,duplicates};
+}
 function buildQueue(){
  if(state.working||!state.data)return;
  const eligible=state.data.subscriptions.filter(s=>state.selected.has(s.id)&&canPrepare(s));
@@ -301,12 +310,7 @@ function buildQueue(){
  if(!eligible.length){flash('No eligible unsent reminders are selected. Check phone numbers, dates and reminder status.',true);return}
  // Same recipient + service + renewal date may represent duplicate imported accounts.
  // Suppress duplicate outbound drafts in this batch, without deleting source records.
- const seen=new Set(),unique=[];let duplicates=0;
- for(const s of eligible){
-  const key=[phone(s.whatsapp),String(s.service||'').trim().toLowerCase(),s.dueDate].join('|');
-  if(seen.has(key)){duplicates++;continue}
-  seen.add(key);unique.push(s);
- }
+ const {unique,duplicates}=dedupeRecipients(eligible);
  if(unique.length>100){flash('Prepare at most 100 customers per queue. Narrow your filters.',true);return}
  state.queue=unique.map(s=>({id:s.id,dueDate:s.dueDate,stage:s.stage,customer:s.customer}));
  state.index=0;state.sentInQueue.clear();
