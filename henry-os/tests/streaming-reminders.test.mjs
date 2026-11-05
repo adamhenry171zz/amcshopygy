@@ -106,7 +106,7 @@ test('prior cycle message requires explicitly-approved follow-up before next-sta
  assert.equal(h.filteredRows().length,0);
  h.state.statusFilter='sent';assert.equal(h.filteredRows().length,1);
  assert.throws(()=>h.validateQueueMessage(a),/intentional follow-up/);
- h.state.followups.add('a');assert.match(h.validateQueueMessage(a),/Hi a/);
+ h.state.followups.add('a');assert.match(h.validateQueueMessage(a),/Hi Customer/);
  h.state.includeUpdate.add('a');
  assert.throws(()=>h.validateQueueMessage(a),/opted in/);
  h.state.consents.add('a');assert.match(h.validateQueueMessage(a),/Prime Video/);
