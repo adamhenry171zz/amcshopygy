@@ -1,122 +1,377 @@
+// HENRY OS Streaming Renewal Reminders — owner-operated bulk manual WhatsApp queue.
+// Customer renewal records are READ ONLY; only the separate reminder log receives writes.
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel=v=>v?new Date(v+'T12:00:00').toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}):'Not set';
-const money=v=>v!==''&&v!==null&&v!==undefined&&Number.isFinite(Number(String(v).replace(/,/g,'')))&&Number(String(v).replace(/,/g,''))>0?'GYD $'+Number(String(v).replace(/,/g,'')).toLocaleString('en-US',{maximumFractionDigits:2}):'';
-const state={data:null,selectedId:'',service:'Netflix',includeUpdate:false,confirmedConsent:false};
-const labels={due_today:'Due today',due_soon:'Within 7 days',past_date:'Verify past date',needs_date:'Renewal date missing',upcoming:'Upcoming',inactive:'Paused / cancelled'};
-let lastDraft='';
-function flash(s,error=false){const n=$('status');n.textContent=s;n.className='status'+(error?' error':'');setTimeout(()=>{if(n.textContent===s)n.classList.add('hidden')},5200)}
-async function api(action,method='GET',data){
- const response=await fetch('/.netlify/functions/henry-streaming-reminders?action='+encodeURIComponent(action),{method,credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});
- let result={};try{result=await response.json()}catch{}
- if(response.status===401){$('workspace').classList.add('hidden');$('sign-in').classList.remove('hidden');throw Error('Owner session required. Sign in again.')}
- if(!response.ok)throw Error(result.error||'Unable to complete request.');
- return result;
-}
-const tplContext=s=>{
- const firstName=String(s.customer||'Customer').trim().split(/\s+/)[0];
- return {firstName,customer:s.customer||'Customer',service:s.service||'Netflix',plan:s.plan||'',dueDate:dateLabel(s.dueDate),amountLine:money(s.amount)?'The amount on file is '+money(s.amount)+'. ':''};
+const money=v=>{
+ const n=Number(String(v??'').replace(/,/g,''));
+ return v!==''&&v!==null&&v!==undefined&&Number.isFinite(n)&&n>0?'GYD $'+n.toLocaleString('en-US',{maximumFractionDigits:2}):'';
 };
-function renderTemplate(template,record){
- const tokens=tplContext(record);
- return String(template||'').replace(/\{\{(firstName|customer|service|plan|dueDate|amountLine)\}\}/g,(_,key)=>tokens[key]||'');
+const isDate=v=>{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(v||'')))return false;
+ const d=new Date(v+'T12:00:00Z');
+ return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;
+};
+const plusDays=(date,days)=>{
+ if(!isDate(date)||!Number.isInteger(days))return '';
+ const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);
+};
+const phone=value=>{
+ let digits=String(value||'').replace(/\D/g,'');
+ if(/^6\d{6}$/.test(digits))digits='592'+digits;
+ return /^\d{10,15}$/.test(digits)?digits:'';
+};
+const labels={
+ due_today:'Due today',due_soon:'Upcoming',past_date:'Past date — verify',
+ needs_date:'Date missing',upcoming:'Scheduled',inactive:'Paused / cancelled'
+};
+const state={
+ data:null,service:'Netflix',dateFilter:'today',statusFilter:'not_sent',search:'',
+ specific:'',from:'',to:'',dates:new Set(),selected:new Set(),queue:[],index:0,
+ drafts:new Map(),prepared:new Map(),includeUpdate:new Set(),consents:new Set(),
+ followups:new Set(),sentChecked:new Set(),sentInQueue:new Set(),working:false
+};
+const isPreview=/(?:^deploy-preview-\d+--|^branch--)/.test(location.hostname);
+function flash(message,error=false){
+ const node=$('status');node.textContent=message;node.className='status'+(error?' error':'');
+ setTimeout(()=>{if(node.textContent===message)node.classList.add('hidden')},5600);
 }
-function defaultText(s){
+async function api(action,method='GET',body){
+ const response=await fetch('/.netlify/functions/henry-streaming-reminders?action='+encodeURIComponent(action),{
+  method,credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},
+  body:body?JSON.stringify(body):undefined
+ });
+ let data={};try{data=await response.json()}catch{}
+ if(response.status===401){$('workspace').classList.add('hidden');$('sign-in').classList.remove('hidden');throw Error('Owner session expired. Sign in to HENRY OS.')}
+ if(!response.ok)throw Error(data.error||'Could not complete the reminder request.');
+ return data;
+}
+const tplContext=s=>({
+ firstName:String(s.customer||'Customer').trim().split(/\s+/)[0],
+ customer:s.customer||'Customer',service:s.service||'Netflix',plan:s.plan||'',
+ dueDate:dateLabel(s.dueDate),amountLine:money(s.amount)?'The amount on file is '+money(s.amount)+'. ':''
+});
+function renderTemplate(template,record){
+ const v=tplContext(record);
+ return String(template||'').replace(/\{\{(firstName|customer|service|plan|dueDate|amountLine)\}\}/g,(_,k)=>v[k]||'');
+}
+function defaultDraft(s){
  const key=s.stage==='due_today'?'dayTemplate':s.stage==='follow_up'?'followupTemplate':'friendlyTemplate';
  return renderTemplate(state.data.settings[key],s);
 }
-function outputText(s){
- const base=$('draft')?.value??defaultText(s);
- const update=state.includeUpdate&&state.confirmedConsent?String(state.data.settings.recommendedUpdate||'').trim():'';
- return (base.trim()+(update?'\n\nAMC Update: '+update:'')).trim();
+const getCustomer=id=>state.data?.subscriptions.find(s=>s.id===id);
+const cycleLog=s=>state.data.logs.find(l=>l.subscriptionId===s.id&&l.dueDate===s.dueDate);
+const currentStageLog=s=>state.data.logs.find(l=>l.subscriptionId===s.id&&l.dueDate===s.dueDate&&l.stage===s.stage);
+const canPrepare=s=>!!(s&&isDate(s.dueDate)&&s.stage&&phone(s.whatsapp)&&!currentStageLog(s)&&s.category!=='inactive');
+const matchService=s=>state.service==='*'||String(s.service).toLowerCase()===state.service.toLowerCase();
+function matchDate(s){
+ const d=s.dueDate,t=state.data.today;
+ switch(state.dateFilter){
+  case 'today':return d===t;
+  case 'tomorrow':return d===plusDays(t,1);
+  case 'days3':return isDate(d)&&d>=t&&d<=plusDays(t,2);
+  case 'days7':return isDate(d)&&d>=t&&d<=plusDays(t,6);
+  case 'overdue':return isDate(d)&&d<t;
+  case 'specific':return isDate(state.specific)&&d===state.specific;
+  case 'range':return isDate(state.from)&&isDate(state.to)&&state.from<=state.to&&isDate(d)&&d>=state.from&&d<=state.to;
+  case 'multiple':return state.dates.has(d);
+  case 'all':return true;
+  default:return false;
+ }
 }
-function phone(v){
- let digits=String(v||'').replace(/\D/g,'');
- if(/^[6][0-9]{6}$/.test(digits))digits='592'+digits;
- return /^\d{10,15}$/.test(digits)?digits:'';
+function matchStatus(s){
+ const sent=!!cycleLog(s);
+ const attention=!s.stage||!isDate(s.dueDate)||!phone(s.whatsapp)||s.category==='inactive';
+ if(state.statusFilter==='not_sent')return !sent&&!attention;
+ if(state.statusFilter==='sent')return sent;
+ if(state.statusFilter==='attention')return attention;
+ return true;
 }
-function logged(s){return state.data.logs.some(l=>l.subscriptionId===s.id&&l.dueDate===s.dueDate&&l.stage===s.stage)}
-function filterRows(){
- return state.data.subscriptions.filter(s=>state.service==='*'||s.service.toLowerCase()===state.service.toLowerCase());
+function filteredRows(){
+ const q=state.search.toLowerCase().trim();
+ return state.data.subscriptions.filter(s=>matchService(s)&&matchDate(s)&&matchStatus(s)&&
+  (!q||[s.customer,s.plan,s.service,s.whatsapp].some(v=>String(v||'').toLowerCase().includes(q))))
+ .sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||String(a.customer).localeCompare(String(b.customer)));
+}
+function labelFor(s){
+ if(currentStageLog(s))return 'Sent ✓';
+ if(cycleLog(s))return 'Reminded earlier';
+ if(!s.stage||!isDate(s.dueDate))return 'Date needed';
+ if(!phone(s.whatsapp))return 'Phone needed';
+ return labels[s.category]||'Ready';
+}
+function reasonFor(s){
+ if(!isDate(s.dueDate))return 'Renewal date missing. Fix in HENRY OS Streaming.';
+ if(s.category==='inactive')return 'Paused or cancelled. Update status before reminders.';
+ if(!phone(s.whatsapp))return 'No valid WhatsApp number. Fix in HENRY OS Streaming.';
+ if(currentStageLog(s))return 'Already recorded sent at this reminder stage.';
+ return '';
+}
+function renderFilters(){
+ $('service-filter').innerHTML='<option value="Netflix">Netflix</option><option value="*">All services</option>'+
+  [...new Set(state.data.subscriptions.map(s=>String(s.service||'').trim()).filter(Boolean))]
+  .filter(s=>s.toLowerCase()!=='netflix').sort((a,b)=>a.localeCompare(b))
+  .map(s=>'<option value="'+esc(s)+'">'+esc(s)+'</option>').join('');
+ $('service-filter').value=state.service;
+ $('date-filter').value=state.dateFilter;
+ $('status-filter').value=state.statusFilter;
+ $('customer-search').value=state.search;
+ $('specific-date').value=state.specific;
+ $('date-from').value=state.from;
+ $('date-to').value=state.to;
+ $('specific-options').classList.toggle('hidden',state.dateFilter!=='specific');
+ $('range-options').classList.toggle('hidden',state.dateFilter!=='range');
+ $('multiple-options').classList.toggle('hidden',state.dateFilter!=='multiple');
+ $('date-chips').innerHTML=[...state.dates].sort().map(d=>
+  '<span class="date-chip">'+esc(dateLabel(d))+' <button type="button" data-remove-date="'+esc(d)+'" aria-label="Remove '+esc(dateLabel(d))+'">×</button></span>'
+ ).join('')||'<span class="muted">Add one or more dates to find customers due on those days.</span>';
+ $('date-chips').querySelectorAll('[data-remove-date]').forEach(b=>b.onclick=()=>{
+  state.dates.delete(b.dataset.removeDate);render();
+ });
 }
 function renderStats(){
- const s=filterRows();
- const stats=[['Renewals due today',s.filter(r=>r.category==='due_today').length,'Review and prepare messages'],
- ['Within next 7 days',s.filter(r=>r.category==='due_soon').length,'Upcoming renewals'],
- ['Past dates to verify',s.filter(r=>r.category==='past_date').length,'Not confirmed debts'],
- ['Missing renewal date',s.filter(r=>r.category==='needs_date').length,'Set dates in Streaming']];
- $('stats').innerHTML=stats.map(([title,value,desc])=>'<article class="stat"><small>'+esc(title)+'</small><strong>'+value+'</strong><p>'+esc(desc)+'</p></article>').join('');
+ const records=state.data.subscriptions.filter(s=>matchService(s)&&s.category!=='inactive');
+ const t=state.data.today;
+ const stats=[
+  ['Due today',records.filter(s=>s.dueDate===t).length,'Customers due today'],
+  ['Next 7 days',records.filter(s=>s.dueDate>=t&&s.dueDate<=plusDays(t,6)).length,'Includes today'],
+  ['Past dates',records.filter(s=>isDate(s.dueDate)&&s.dueDate<t).length,'Review — not confirmed debts'],
+  ['Not yet reminded',records.filter(s=>s.stage&&!cycleLog(s)&&phone(s.whatsapp)).length,'Across all due dates']
+ ];
+ $('stats').innerHTML=stats.map(([title,n,desc])=>
+  '<article class="stat"><small>'+esc(title)+'</small><strong>'+n+'</strong><p>'+esc(desc)+'</p></article>').join('');
+}
+function selectionSummary(){
+ const count=state.selected.size;
+ $('select-count').textContent=count+' selected';
+ $('selection-caption').textContent=count?count+' customer'+(count===1?'':'s')+' selected across your date filters.':'No customers selected.';
+ $('build-queue').disabled=count===0||state.working;
 }
 function renderList(){
- const rows=filterRows();
+ const rows=filteredRows();
+ $('result-caption').textContent=rows.length+' matching record'+(rows.length===1?'':'s')+'. Eligible customers can be added to the queue.';
  $('customer-list').innerHTML=rows.map(s=>{
- const sent=s.stage&&logged(s);
- return '<button type="button" class="customer '+(state.selectedId===s.id?'active':'')+'" data-customer="'+esc(s.id)+'"><span><strong>'+esc(s.customer||'(customer name missing)')+'</strong><small>'+esc(s.service)+' · '+esc(s.plan||'Plan not recorded')+' · '+esc(dateLabel(s.dueDate))+'</small></span><span class="tag '+esc(s.category)+'">'+(sent?'Sent ✓':esc(labels[s.category]||'Upcoming'))+'</span></button>';
- }).join('')||'<div class="empty">No streaming records match this filter.</div>';
- document.querySelectorAll('[data-customer]').forEach(b=>b.onclick=()=>{state.selectedId=b.dataset.customer;state.includeUpdate=false;state.confirmedConsent=false;lastDraft='';render()});
+  const eligible=canPrepare(s),reason=reasonFor(s);
+  return '<label class="customer-choice '+(state.selected.has(s.id)?'selected':'')+'">'+
+   '<input type="checkbox" data-pick="'+esc(s.id)+'" '+(state.selected.has(s.id)?'checked':'')+(eligible?'':' disabled')+'>'+
+   '<span class="customer-main"><strong>'+esc(s.customer||'(unnamed customer)')+'</strong><small>'+
+    esc(s.service||'Streaming')+' · '+esc(s.plan||'Plan not recorded')+' · '+esc(dateLabel(s.dueDate))+
+    (reason?'<br>'+esc(reason):'')+
+   '</small></span><span class="tag '+esc(s.category)+'">'+esc(labelFor(s))+'</span></label>';
+ }).join('')||'<div class="empty">No matching customers. Try another date or status filter.</div>';
+ $('customer-list').querySelectorAll('[data-pick]').forEach(input=>input.addEventListener('change',e=>{
+  if(e.target.checked)state.selected.add(e.target.dataset.pick);else state.selected.delete(e.target.dataset.pick);
+  renderList();selectionSummary();
+ }));
+ selectionSummary();
 }
-function renderCompose(){
- const s=state.data.subscriptions.find(x=>x.id===state.selectedId);
- if(!s){$('compose').innerHTML='<div class="empty">Select a customer to prepare a reminder.</div>';return}
- if(s.category==='needs_date'){$('compose').innerHTML='<div class="notice"><strong>No renewal date available.</strong> Open Streaming in HENRY OS and edit this customer’s Payment due date. We will not invent one.</div><a class="light" href="/admin/">Open Streaming →</a>';return}
- if(s.category==='inactive'){$('compose').innerHTML='<div class="notice"><strong>Customer currently paused or cancelled.</strong> Reminders are blocked until their status is updated in Streaming.</div>';return}
- if(s.category==='upcoming'){$('compose').innerHTML='<div class="notice"><strong>Renewal is more than seven days away.</strong> Reminders appear in the seven-day window. Current scheduled date: '+esc(dateLabel(s.dueDate))+'.</div>';return}
- const sent=logged(s),hasPhone=!!phone(s.whatsapp),hasUpdate=!!String(state.data.settings.recommendedUpdate||'').trim();
- const help=s.category==='past_date'?'This date has already passed. The message asks the customer to confirm their renewal; it does not claim a debt.':'Use this draft as a courteous renewal notice, not an invoice or receipt.';
- $('compose').innerHTML='<p class="muted">'+esc(s.customer)+' · '+esc(s.service)+' · '+esc(dateLabel(s.dueDate))+'</p>'+
-  '<p class="muted">'+esc(help)+'</p>'+
-  (sent?'<div class="notice"><strong>Already recorded as sent for this renewal stage.</strong> Change the renewal date in Streaming when the next verified renewal period is established.</div>':'')+
-  '<div class="form"><label>Custom WhatsApp message<textarea id="draft" rows="8" maxlength="2000">'+esc(lastDraft||defaultText(s))+'</textarea></label>'+
-  '<label class="checkbox"><input type="checkbox" id="include-update" '+(hasUpdate?'':'disabled')+'> Add the optional AMC service update (only with customer consent)</label>'+
-  '<label class="checkbox hidden" id="consent-row"><input type="checkbox" id="consent"> I confirm this customer opted in to promotional updates</label>'+
-  (!hasUpdate?'<p class="muted">Set an optional recommended update in the templates section below if needed.</p>':'')+
-  (!hasPhone?'<p class="muted">This customer has no valid WhatsApp number on file. Update it in Streaming first.</p>':'')+
-  '<div class="btn-row"><button type="button" class="primary" id="open-whatsapp" '+(!hasPhone||sent?'disabled':'')+'>Open WhatsApp draft</button><button type="button" class="light" id="copy-message">Copy message</button></div>'+
-  '<label class="checkbox"><input type="checkbox" id="actually-sent" '+(sent?'disabled':'')+'> I have actually sent this message to the customer</label>'+
-  '<button type="button" class="light" id="mark-sent" disabled>Record as sent</button></div>';
- $('draft')?.addEventListener('input',e=>{lastDraft=e.target.value});
- $('include-update')?.addEventListener('change',e=>{state.includeUpdate=e.target.checked;$('consent-row').classList.toggle('hidden',!state.includeUpdate);if(!state.includeUpdate){state.confirmedConsent=false;$('consent').checked=false}});
- $('consent')?.addEventListener('change',e=>{state.confirmedConsent=e.target.checked});
- $('copy-message')?.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(outputText(s));flash('Message copied.')}catch{flash('Copy was blocked; select the text manually.',true)}});
- $('open-whatsapp')?.addEventListener('click',()=>{
-   if(state.includeUpdate&&!state.confirmedConsent){flash('Confirm marketing consent or leave the optional update unchecked.',true);return}
-   const message=outputText(s);if(message.length<10){flash('Please finish the message first.',true);return}
-   window.open('https://wa.me/'+phone(s.whatsapp)+'?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');
-   flash('WhatsApp draft opened. Only mark it sent after you actually send it.');
+function queueItem(){
+ const snap=state.queue[state.index];
+ return snap?getCustomer(snap.id):null;
+}
+function resetPrepared(id){
+ state.prepared.delete(id);state.sentChecked.delete(id);
+}
+function queueMessage(s){
+ const draft=state.drafts.get(s.id)??defaultDraft(s);
+ const recommendation=state.includeUpdate.has(s.id)&&state.consents.has(s.id)
+   ?String(state.data.settings.recommendedUpdate||'').trim():'';
+ return (draft.trim()+(recommendation?'\n\nAMC Update: '+recommendation:'')).trim();
+}
+function validateQueueMessage(s){
+ if(state.includeUpdate.has(s.id)&&!state.consents.has(s.id))throw Error('Confirm this customer opted in to promotional updates or turn off the update.');
+ if(cycleLog(s)&&!currentStageLog(s)&&!state.followups.has(s.id))throw Error('This customer was already reminded for this renewal. Confirm the intentional follow-up first.');
+ const message=queueMessage(s);
+ if(message.length<10||message.length>2000)throw Error('Message must be 10–2,000 characters.');
+ return message;
+}
+function renderQueue(){
+ $('queue-count').textContent=state.queue.length?(state.index>=state.queue.length?'Finished':(state.index+1)+' / '+state.queue.length):'No queue';
+ if(!state.queue.length){$('queue-body').innerHTML='<div class="empty">Select customers and choose “Build WhatsApp queue” to begin.</div>';return}
+ const done=state.sentInQueue.size;
+ if(state.index>=state.queue.length){
+  $('queue-body').innerHTML='<div class="queue-finished"><strong>Queue review complete</strong><p>'+
+   done+' message'+(done===1?' was':'s were')+' recorded as actually sent, out of '+state.queue.length+' queued. Unsent or skipped messages were not marked as sent.</p>'+
+   '<button type="button" class="light" id="queue-restart">Close this queue</button></div>';
+  $('queue-restart').onclick=()=>{state.queue=[];state.index=0;state.sentInQueue.clear();renderQueue()};
+  return;
+ }
+ const snap=state.queue[state.index],s=queueItem();
+ const valid=!!s&&s.dueDate===snap.dueDate&&s.stage===snap.stage&&canPrepare(s);
+ if(!valid){
+  $('queue-body').innerHTML='<div class="queue-callout"><strong>Record needs review.</strong><p>Customer '+esc(snap.customer)+
+   ' was changed, marked as sent, or cannot receive a WhatsApp reminder. Refresh and rebuild the queue if needed.</p></div>'+
+   '<button type="button" id="queue-skip" class="light">Skip this record →</button>';
+  $('queue-skip').onclick=()=>advanceQueue();
+  return;
+ }
+ const draft=state.drafts.get(s.id)??defaultDraft(s);
+ const prepared=state.prepared.get(s.id);
+ const cycleSent=!!cycleLog(s);
+ const hasUpdate=!!String(state.data.settings.recommendedUpdate||'').trim();
+ const checkFollow=cycleSent&&!currentStageLog(s);
+ $('queue-body').innerHTML=
+  '<div class="queue-head"><div><strong>'+esc(s.customer)+'</strong><small>'+esc(s.service)+' · '+esc(s.plan||'Plan not recorded')+' · Due '+esc(dateLabel(s.dueDate))+'</small></div><span class="tag '+esc(s.category)+'">'+esc(labelFor(s))+'</span></div>'+
+  '<div class="queue-step"><small class="muted">Item '+(state.index+1)+' of '+state.queue.length+' · '+done+' recorded sent</small><progress max="'+state.queue.length+'" value="'+state.index+'"></progress></div>'+
+  (s.category==='past_date'?'<div class="queue-callout">Past date: ask the customer to confirm their renewal. Do not claim a debt or assume payment was missed.</div>':'')+
+  (checkFollow?'<div class="queue-callout"><strong>Previously reminded on this same renewal.</strong> A new-stage follow-up is possible, but must be intentional.<label class="checkbox"><input id="followup-consent" type="checkbox" '+(state.followups.has(s.id)?'checked':'')+'> I intend to send this additional follow-up</label></div>':'')+
+  '<div class="form"><label>Personalized message for '+esc(s.customer)+
+   '<textarea id="draft" maxlength="2000" rows="7">'+esc(draft)+'</textarea></label>'+
+   '<label class="checkbox"><input type="checkbox" id="include-update" '+(state.includeUpdate.has(s.id)?'checked':'')+(hasUpdate?'':' disabled')+'> Add optional AMC service recommendation</label>'+
+   (hasUpdate?'<p class="muted">Update preview: '+esc(state.data.settings.recommendedUpdate)+'</p>':'<p class="muted">No recommendation is configured. Renewal-only messages are the default.</p>')+
+   '<label class="checkbox '+(state.includeUpdate.has(s.id)?'':'hidden')+'" id="consent-row"><input id="marketing-consent" type="checkbox" '+(state.consents.has(s.id)?'checked':'')+'> I confirm this customer opted in to promotional updates</label>'+
+   '<div class="queue-actions"><button type="button" id="open-whatsapp" class="primary btn-emphasis">Open WhatsApp draft</button>'+
+   '<button type="button" id="copy-message" class="light">Copy message</button></div>'+
+   '<p class="queue-footnote">Opening or copying does not send the message or update the sent log. Send it yourself, then confirm below.</p>'+
+   (prepared?'<div class="queue-callout">Message prepared by '+esc(prepared.method)+'. Verify that you actually sent this exact message.</div>':'')+
+   '<div class="queue-confirm"><label class="checkbox"><input type="checkbox" id="actually-sent" '+(state.sentChecked.has(s.id)?'checked':'')+(prepared?'':' disabled')+'> I have actually sent this message to '+esc(s.customer)+'</label>'+
+   '<button type="button" class="primary" id="mark-sent" '+(state.sentChecked.has(s.id)&&prepared?'':' disabled')+'>Confirm sent &amp; next customer →</button></div>'+
+   '<div class="queue-skip"><button class="light" id="queue-previous" type="button" '+(state.index===0?'disabled':'')+'>← Previous</button><button class="light" id="queue-skip" type="button">Skip for now →</button></div>'+
+   '</div>';
+ const draftInput=$('draft');
+ draftInput.addEventListener('input',e=>{
+  state.drafts.set(s.id,e.target.value);
+  resetPrepared(s.id);
+  $('actually-sent').checked=false;$('actually-sent').disabled=true;$('mark-sent').disabled=true;
  });
- $('actually-sent')?.addEventListener('change',e=>{$('mark-sent').disabled=!e.target.checked});
- $('mark-sent')?.addEventListener('click',async()=>{
-   if(state.includeUpdate&&!state.confirmedConsent){flash('Marketing consent must be confirmed before recording a promotional update.',true);return}
-   const message=outputText(s);if(message.length<10){flash('Message is too short.',true);return}
-   if(!confirm('Confirm you already SENT this exact reminder via WhatsApp? Opening WhatsApp alone does not count.'))return;
-   try{await api('mark_sent','POST',{subscriptionId:s.id,dueDate:s.dueDate,stage:s.stage,message,confirmedSent:true,includedRecommendation:state.includeUpdate,marketingConsentConfirmed:state.confirmedConsent});flash('Reminder recorded as sent.');lastDraft='';await reload()}catch(e){flash(e.message,true)}
+ $('include-update').onchange=e=>{
+  if(e.target.checked)state.includeUpdate.add(s.id);else{state.includeUpdate.delete(s.id);state.consents.delete(s.id)}
+  resetPrepared(s.id);renderQueue();
+ };
+ $('marketing-consent')?.addEventListener('change',e=>{
+  if(e.target.checked)state.consents.add(s.id);else state.consents.delete(s.id);
+  resetPrepared(s.id);renderQueue();
  });
+ $('followup-consent')?.addEventListener('change',e=>{
+  if(e.target.checked)state.followups.add(s.id);else state.followups.delete(s.id);
+  resetPrepared(s.id);renderQueue();
+ });
+ $('open-whatsapp').onclick=()=>{
+  try{
+   const message=validateQueueMessage(s);
+   const number=phone(s.whatsapp);
+   if(!number)throw Error('No valid WhatsApp number is saved for this customer.');
+   const popup=window.open('https://wa.me/'+number+'?text='+encodeURIComponent(message),'_blank');
+   if(!popup)throw Error('WhatsApp window was blocked. Allow popups or use Copy message.');
+   try{popup.opener=null}catch{}
+   state.prepared.set(s.id,{method:'WhatsApp draft',message,update:state.includeUpdate.has(s.id),consent:state.consents.has(s.id)});
+   state.sentChecked.delete(s.id);renderQueue();
+   flash('WhatsApp draft opened. Send it there, then confirm here.');
+  }catch(err){flash(err.message,true)}
+ };
+ $('copy-message').onclick=async()=>{
+  try{
+   const message=validateQueueMessage(s);
+   await navigator.clipboard.writeText(message);
+   state.prepared.set(s.id,{method:'copying',message,update:state.includeUpdate.has(s.id),consent:state.consents.has(s.id)});
+   state.sentChecked.delete(s.id);renderQueue();
+   flash('Message copied. Paste and send it yourself before confirming.');
+  }catch(err){flash(err.message||'Copy failed. Please try again.',true)}
+ };
+ $('actually-sent').onchange=e=>{if(e.target.checked)state.sentChecked.add(s.id);else state.sentChecked.delete(s.id);$('mark-sent').disabled=!e.target.checked};
+ $('mark-sent').onclick=async()=>{
+  const snapshot=state.prepared.get(s.id);
+  if(!snapshot||!state.sentChecked.has(s.id)||state.working)return;
+  if(!confirm('Have you actually SENT this message to '+s.customer+'?\n\nOpening WhatsApp or copying alone does not count.'))return;
+  state.working=true;$('mark-sent').disabled=true;
+  try{
+   const result=await api('mark_sent','POST',{
+    subscriptionId:s.id,dueDate:snap.dueDate,stage:snap.stage,
+    message:snapshot.message,confirmedSent:true,
+    includedRecommendation:snapshot.update,marketingConsentConfirmed:snapshot.consent
+   });
+   state.data.logs.push(result.item);
+   state.sentInQueue.add(s.id+'|'+snap.dueDate+'|'+snap.stage);
+   state.selected.delete(s.id);
+   resetPrepared(s.id);
+   state.index++;
+   flash('Recorded as sent to '+s.customer+'.');
+   renderList();renderQueue();renderStats();
+  }catch(err){flash(err.message,true);$('mark-sent').disabled=false}
+  finally{state.working=false}
+ };
+ $('queue-previous').onclick=()=>{if(state.index>0){state.index--;renderQueue()}};
+ $('queue-skip').onclick=advanceQueue;
+}
+function advanceQueue(){state.index++;renderQueue()}
+function dedupeRecipients(rows){
+ const seen=new Set(),unique=[];let duplicates=0;
+ for(const s of rows){
+  const key=[phone(s.whatsapp),String(s.service||'').trim().toLowerCase(),s.dueDate].join('|');
+  if(seen.has(key)){duplicates++;continue}
+  seen.add(key);unique.push(s);
+ }
+ return {unique,duplicates};
+}
+function buildQueue(){
+ if(state.working||!state.data)return;
+ const eligible=state.data.subscriptions.filter(s=>state.selected.has(s.id)&&canPrepare(s));
+ eligible.sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))||String(a.customer).localeCompare(String(b.customer)));
+ if(!eligible.length){flash('No eligible unsent reminders are selected. Check phone numbers, dates and reminder status.',true);return}
+ // Same recipient + service + renewal date may represent duplicate imported accounts.
+ // Suppress duplicate outbound drafts in this batch, without deleting source records.
+ const {unique,duplicates}=dedupeRecipients(eligible);
+ if(unique.length>100){flash('Prepare at most 100 customers per queue. Narrow your filters.',true);return}
+ state.queue=unique.map(s=>({id:s.id,dueDate:s.dueDate,stage:s.stage,customer:s.customer}));
+ state.index=0;state.sentInQueue.clear();
+ renderQueue();
+ flash('Prepared '+state.queue.length+' individual message(s). '+(duplicates?duplicates+' possible duplicate recipient record(s) were excluded. ':'')+'Nothing has been sent.');
 }
 function fillSettings(){
- const form=$('settings-form');for(const key of ['friendlyTemplate','dayTemplate','followupTemplate','recommendedUpdate'])form.elements[key].value=state.data.settings[key]||'';
+ const form=$('settings-form');
+ for(const key of ['friendlyTemplate','dayTemplate','followupTemplate','recommendedUpdate'])
+  form.elements[key].value=state.data.settings[key]||'';
 }
 function render(){
  if(!state.data)return;
- const current=$('service-filter').value;
- const services=[...new Set(state.data.subscriptions.map(x=>String(x.service||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
- $('service-filter').innerHTML='<option value="Netflix">Netflix</option><option value="*">All services</option>'+services.filter(x=>x.toLowerCase()!=='netflix').map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join('');
- $('service-filter').value=services.some(x=>x.toLowerCase()===current.toLowerCase())||['Netflix','*'].includes(current)?current:'Netflix';
- renderStats();renderList();renderCompose();fillSettings()}
-async function reload(){
+ renderFilters();renderStats();renderList();renderQueue();
+}
+async function refresh(){
  $('loading').classList.remove('hidden');
  try{
-  const res=await fetch('/.netlify/functions/henry-auth?action=session',{credentials:'same-origin',cache:'no-store'});
-  const auth=await res.json();if(!auth.authenticated){$('sign-in').classList.remove('hidden');$('workspace').classList.add('hidden');return}
+  const auth=await fetch('/.netlify/functions/henry-auth?action=session',{credentials:'same-origin',cache:'no-store'}).then(r=>r.json());
+  if(!auth.authenticated){$('sign-in').classList.remove('hidden');$('workspace').classList.add('hidden');return}
   $('sign-in').classList.add('hidden');
-  state.data=await api('overview');$('workspace').classList.remove('hidden');
-  if(state.selectedId&&!state.data.subscriptions.some(s=>s.id===state.selectedId))state.selectedId='';
+  const firstLoad=!state.data;
+  state.data=await api('overview');
+  state.selected=new Set([...state.selected].filter(id=>state.data.subscriptions.some(s=>s.id===id)));
+  $('workspace').classList.remove('hidden');
+  if(firstLoad){state.specific=state.data.today;state.from=state.data.today;state.to=state.data.today;fillSettings()}
   render();
- }catch(e){flash(e.message,true)}finally{$('loading').classList.add('hidden')}
+ }catch(err){flash(err.message||'Failed to refresh reminder data.',true)}
+ finally{$('loading').classList.add('hidden')}
 }
-$('service-filter').addEventListener('change',e=>{state.service=e.target.value;state.selectedId='';lastDraft='';render()});
-$('settings-form').addEventListener('submit',async e=>{
- e.preventDefault();
- const body=Object.fromEntries(new FormData(e.currentTarget).entries());
- try{const res=await api('save_settings','POST',body);state.data.settings=res.settings;lastDraft='';render();flash('Saved templates. New drafts use your updated wording.')}catch(e){flash(e.message,true)}
+$('reload').addEventListener('click',refresh);
+$('service-filter').addEventListener('change',e=>{state.service=e.target.value;render()});
+$('date-filter').addEventListener('change',e=>{state.dateFilter=e.target.value;render()});
+$('status-filter').addEventListener('change',e=>{state.statusFilter=e.target.value;render()});
+$('customer-search').addEventListener('input',e=>{
+ state.search=e.target.value;renderStats();renderList();
 });
-$('reload').addEventListener('click',reload);reload();
+$('specific-date').addEventListener('change',e=>{state.specific=e.target.value;renderList()});
+$('date-from').addEventListener('change',e=>{state.from=e.target.value;renderList()});
+$('date-to').addEventListener('change',e=>{state.to=e.target.value;renderList()});
+$('add-date').addEventListener('click',()=>{
+ const v=$('multi-date-input').value;
+ if(!isDate(v)){flash('Choose a valid date before adding it.',true);return}
+ if(state.dates.size>=31&&!state.dates.has(v)){flash('Choose up to 31 dates per filter.',true);return}
+ state.dates.add(v);render();
+});
+$('select-visible').addEventListener('click',()=>{
+ const s=filteredRows().filter(canPrepare);
+ s.forEach(row=>state.selected.add(row.id));
+ renderList();flash('Selected '+s.length+' eligible customer'+(s.length===1?'':'s')+' from the filtered list.');
+});
+$('clear-selection').addEventListener('click',()=>{state.selected.clear();renderList()});
+$('build-queue').addEventListener('click',buildQueue);
+$('settings-form').addEventListener('submit',async e=>{
+ e.preventDefault();if(state.working)return;state.working=true;
+ try{
+  const response=await api('save_settings','POST',Object.fromEntries(new FormData(e.currentTarget).entries()));
+  state.data.settings=response.settings;
+  flash('Templates saved. Existing manually edited drafts were kept.');
+  renderQueue();
+ }catch(err){flash(err.message,true)}
+ finally{state.working=false}
+});
+refresh();
