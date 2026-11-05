@@ -193,12 +193,22 @@ export default async (req,context)=>{
     const originalPayments=await load(getStore('henry-amc'),'payments/').catch(()=>[]);
     if(originalPayments.some(p=>clean(p.method,40).toLowerCase()===paymentMethod.toLowerCase()&&normalRef(p.reference)===normalRef(reference)))
       return json({error:'This reference already exists in the previous HENRY OS payments. Review the original instead of counting it twice.'},409);
-    let customer=clean(body.customer,160),membershipId='',streamingId='',months=0,agreedFee='';
+    let customer=clean(body.customer,160),membershipId='',legacyMembershipId='',streamingId='',months=0,agreedFee='';
     if(relatedType==='membership'){
-      membershipId=clean(body.membershipId,100);
-      if(!validLinkId(membershipId))throw new Error('Select a member.');
-      const member=await store.get('finance/memberships/'+membershipId,{type:'json'}).catch(()=>null);
-      if(!member)throw new Error('Membership not found.');
+      const selection=clean(body.membershipId,110);
+      let member=null;
+      if(selection.startsWith('legacy:')){
+        legacyMembershipId=selection.slice(7);
+        if(!validLinkId(legacyMembershipId))throw new Error('Select an existing member.');
+        member=await getStore('henry-memberships').get('members/'+legacyMembershipId,{type:'json'}).catch(()=>null);
+        if(!member)throw new Error('The existing Members Club member could not be found.');
+        if(!member.monthlyFee)throw new Error('This member has no recorded plan fee. Review their plan before recording payment.');
+      }else{
+        membershipId=selection;
+        if(!validLinkId(membershipId))throw new Error('Select a member.');
+        member=await store.get('finance/memberships/'+membershipId,{type:'json'}).catch(()=>null);
+        if(!member)throw new Error('Membership not found.');
+      }
       months=Number(body.months);
       if(!Number.isInteger(months)||months<1||months>24)throw new Error('Months must be between 1 and 24.');
       agreedFee=historical&&body.historicalMonthlyFee?positiveMoney(body.historicalMonthlyFee):member.monthlyFee;
@@ -212,7 +222,7 @@ export default async (req,context)=>{
       customer=subscription.customer||customer;
     }else if(!customer)throw new Error('Enter the payer name.');
     const item={id:id(),relatedType,customer,amountGyd,receivedDate,method:paymentMethod,reference,
-      membershipId,streamingId,months,agreedFee,historical,status:'pending',notes:receiptNote,
+      membershipId,legacyMembershipId,streamingId,months,agreedFee,historical,status:'pending',notes:receiptNote,
       createdAt:now,updatedAt:now};
     await store.setJSON('finance/receipts/'+item.id,item);return json({item},201);
   });
@@ -227,7 +237,12 @@ export default async (req,context)=>{
     if(decision==='verified'&&old.relatedType==='membership'){
       // Membership payment is a single exact allocation. Coverage is derived from verified events.
       if(toCents(old.amountGyd)!==toCents(old.agreedFee)*Number(old.months))throw new Error('Membership amount no longer matches its recorded allocation.');
-      if(!await store.get('finance/memberships/'+old.membershipId,{type:'json'}).catch(()=>null))throw new Error('Linked membership no longer exists.');
+      if(old.legacyMembershipId){
+        if(!validLinkId(old.legacyMembershipId)||!await getStore('henry-memberships').get('members/'+old.legacyMembershipId,{type:'json'}).catch(()=>null))
+          throw new Error('The existing Members Club profile no longer exists.');
+      }else if(!await store.get('finance/memberships/'+old.membershipId,{type:'json'}).catch(()=>null)){
+        throw new Error('Linked membership no longer exists.');
+      }
     }
     const item={...old,status:decision,decisionReason:reason,decidedBy:adminEmail,decidedAt:now,updatedAt:now};
     await store.setJSON('finance/receipts/'+receiptId,item);return json({item});
