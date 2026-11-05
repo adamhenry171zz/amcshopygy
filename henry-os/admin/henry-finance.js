@@ -34,15 +34,10 @@ async function reload(){
         ?state.data.legacyMembers.some(x=>'legacy:'+x.id===member)
         :state.data.memberships.some(x=>x.id===member);
       if(valid){
-        state.tab='receipts';
+        state.tab='memberships';
+        state.quickMemberId=member;
         render();
-        const chooser=$('receipt-member');
-        if(chooser){
-          $('receipt-type').value='membership';
-          changeReceiptFields();
-          chooser.value=member;
-          updateMembershipAmount();
-        }
+        document.getElementById('member-quick-pay')?.scrollIntoView({behavior:'smooth',block:'start'});
         return;
       }
     }
@@ -264,6 +259,16 @@ function updateMembershipAmount(){
   const special=$('receipt-historical')?.checked?Number($('receipt-old-fee')?.value):0;
   if($('receipt-amount'))$('receipt-amount').value=m&&months>0?((special>0?special:Number(m.monthlyFee))*months).toFixed(2):'';
 }
+function updateQuickAmount(){
+  if(!state.quickMemberId||!state.data)return;
+  const member=state.quickMemberId.startsWith('legacy:')
+    ?state.data.legacyMembers.find(m=>'legacy:'+m.id===state.quickMemberId)
+    :state.data.memberships.find(m=>m.id===state.quickMemberId);
+  const months=Number($('quick-member-months')?.value)||0;
+  const oldRate=$('quick-member-historical')?.checked?Number($('quick-member-old-fee')?.value):0;
+  const rate=oldRate>0?oldRate:Number(member?.monthlyFee||0);
+  if($('quick-member-amount'))$('quick-member-amount').value=rate>0&&months>0?(rate*months).toFixed(2):'';
+}
 function fillBill(){
   const s=state.data?.suppliers.find(s=>s.id===$('supplier-bill-select')?.value);
   const form=document.querySelector('[data-form="bill"]');if(!s||!form)return;
@@ -280,24 +285,30 @@ const handlers={
   bill:fd=>({supplierId:fd.get('supplierId'),dueDate:fd.get('dueDate'),actualAmount:fd.get('actualAmount'),exchangeRate:fd.get('exchangeRate'),notes:fd.get('notes')}),
   billpayment:fd=>({billId:fd.get('billId'),amountGyd:fd.get('amountGyd'),paidDate:fd.get('paidDate'),method:fd.get('method'),reference:fd.get('reference')}),
   member:fd=>({customer:fd.get('customer'),whatsapp:fd.get('whatsapp'),mailboxCode:fd.get('mailboxCode'),monthlyFee:fd.get('monthlyFee'),notes:fd.get('notes')}),
-  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes')})
+  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes')}),
+  quickmember:fd=>({membershipId:fd.get('membershipId'),months:fd.get('months'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes'),confirmedReceived:fd.get('confirmedReceived')==='on'})
 };
-const actions={supplier:'add_supplier',bill:'add_bill',billpayment:'pay_bill',member:'add_membership',receipt:'add_receipt'};
+const actions={supplier:'add_supplier',bill:'add_bill',billpayment:'pay_bill',member:'add_membership',receipt:'add_receipt',quickmember:'record_verified_member_payment'};
 async function submit(e){
   e.preventDefault();if(state.working||preview)return;
   const type=e.currentTarget.dataset.form;if(!handlers[type])return;
   const data=handlers[type](new FormData(e.currentTarget));
-  const question=type==='billpayment'?'I confirm that I checked this outgoing payment against AMC records. Record it as paid?':type==='bill'?'Confirm this supplier charge as an actual unpaid obligation?':null;
+  const question=type==='quickmember'?'I confirm I have checked the actual customer payment and that AMC received this money. Add this verified receipt to the dashboard?':type==='billpayment'?'I confirm that I checked this outgoing payment against AMC records. Record it as paid?':type==='bill'?'Confirm this supplier charge as an actual unpaid obligation?':null;
   if(question&&!confirm(question))return;
   state.working=true;
-  try{await api(actions[type],'POST',data);await reload();showMessage(type==='receipt'?'Payment saved as pending. Verify it after checking your account.':'Record saved successfully.')}
+  try{await api(actions[type],'POST',data);if(type==='quickmember')state.quickMemberId='';await reload();showMessage(type==='quickmember'?'Payment verified. The member record and dashboard collections now include it for its actual receipt month.':type==='receipt'?'Payment saved as pending. Verify it after checking your account.':'Record saved successfully.')}
   catch(err){showMessage(err.message,true)}
   finally{state.working=false;}
 }
 function wireForms(){
   document.querySelectorAll('form[data-form]').forEach(f=>f.addEventListener('submit',submit));
   document.querySelectorAll('[data-open-tab]').forEach(b=>b.addEventListener('click',()=>{state.tab=b.dataset.openTab;render()}));
-  document.querySelectorAll('[data-record-member]').forEach(b=>b.addEventListener('click',()=>{state.tab='receipts';render();$('receipt-type').value='membership';changeReceiptFields();$('receipt-member').value=b.dataset.recordMember;updateMembershipAmount();document.querySelector('[data-form="receipt"]')?.scrollIntoView({behavior:'smooth',block:'start'})}));
+  document.querySelectorAll('[data-record-member]').forEach(b=>b.addEventListener('click',()=>{state.quickMemberId=b.dataset.recordMember;state.tab='memberships';render();$('member-quick-pay')?.scrollIntoView({behavior:'smooth',block:'start'})}));
+  document.querySelectorAll('[data-close-quick-member]').forEach(b=>b.addEventListener('click',()=>{state.quickMemberId='';render()}));
+  document.querySelectorAll('[data-quick-verify]').forEach(b=>b.addEventListener('click',async()=>{if(state.working||preview)return;const rec=state.data.receipts.find(r=>r.id===b.dataset.quickVerify&&r.status==='pending');if(!rec)return;if(!confirm('Confirm you checked the actual MMG/bank receipt for '+rec.customer+' — '+money(rec.amountGyd)+'? Verify this existing payment without entering it twice?'))return;state.working=true;try{await api('decide_receipt','POST',{id:rec.id,decision:'verified'});await reload();showMessage('Existing payment verified. Your dashboard will include it for the date received.')}catch(e){showMessage(e.message,true)}finally{state.working=false}}));
+  $('quick-member-months')?.addEventListener('change',updateQuickAmount);
+  $('quick-member-old-fee')?.addEventListener('input',updateQuickAmount);
+  $('quick-member-historical')?.addEventListener('change',e=>{$('quick-historical-fee')?.classList.toggle('hidden',!e.target.checked);if(!e.target.checked&&$('quick-member-old-fee'))$('quick-member-old-fee').value='';updateQuickAmount()});
   $('receipt-type')?.addEventListener('change',changeReceiptFields);
   $('receipt-member')?.addEventListener('change',updateMembershipAmount);
   $('receipt-months')?.addEventListener('change',updateMembershipAmount);
