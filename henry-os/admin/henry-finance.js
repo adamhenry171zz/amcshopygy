@@ -5,7 +5,7 @@ const text=v=>String(v??'').trim();
 const today=()=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(v=>v.type===k)?.value).join('-')};
 const pill=s=>'<span class="chip '+esc(s)+'">'+esc(String(s||'—').replaceAll('_',' '))+'</span>';
 const preview=/^(deploy-preview-\d+--|agent-)/.test(location.hostname)||location.hostname.includes('netlify.app')&&!location.hostname.startsWith('preeminent-blancmange-');
-const state={data:null,tab:'suppliers',working:false};
+const state={data:null,tab:'summary',working:false};
 const opts=(items,value='id',label='name',placeholder='Select…')=>'<option value="">'+esc(placeholder)+'</option>'+items.map(o=>'<option value="'+esc(o[value])+'">'+esc(o[label]||'Unnamed')+'</option>').join('');
 const formatDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
 const showMessage=(s,error=false)=>{const node=$('flash');node.textContent=s;node.className='flash'+(error?' error':'');setTimeout(()=>{if(node.textContent===s)node.classList.add('hidden')},5000)};
@@ -32,23 +32,75 @@ async function reload(){
 }
 function render(){
   const d=state.data;if(!d)return;
-  const verified=d.receipts.filter(r=>r.status==='verified').reduce((n,r)=>n+Number(r.amountGyd),0);
+  const report=globalThis.HenryFinanceReport.summarize(d);
   const paidBills=d.bills.reduce((n,b)=>n+Number(b.paidGyd),0);
   const billsDue=d.bills.reduce((n,b)=>n+Number(b.balanceGyd),0);
   const upcoming=d.suppliers.filter(s=>s.status==='active'&&s.nextExpectedBillDates?.length).length;
   $('metrics').innerHTML=[
-    ['Verified receipts (this module)',money(verified),'Not total AMC revenue'],
-    ['Supplier payments confirmed',money(paidBills),'This Phase 1 workspace only'],
-    ['Confirmed supplier bills unpaid',money(billsDue),'Does not include estimates'],
-    ['Accounts with scheduled bills',String(upcoming),'Schedules are projections']
+    ['Expected Streaming Today',money(report.expectedToday),'Scheduled renewals — NOT payments received'],
+    ['Verified Cash Collected Today',money(report.receivedToday),'Phase 1 receipts only, excludes historical'],
+    ['Membership Collected This Month',money(report.memberReceivedMonth),'Verified new membership fee payments'],
+    ['Supplier Bills Outstanding',money(billsDue),'Confirmed charges — not forecast expenses']
   ].map(([name,value,sub])=>'<article class="metric"><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong><p>'+esc(sub)+'</p></article>').join('');
   document.querySelectorAll('[data-tab]').forEach(el=>el.classList.toggle('active',el.dataset.tab===state.tab));
-  $('tab-body').innerHTML=state.tab==='suppliers'?renderSuppliers():state.tab==='memberships'?renderMemberships():renderReceipts();
+  $('tab-body').innerHTML=state.tab==='summary'?renderSummary():state.tab==='suppliers'?renderSuppliers():state.tab==='memberships'?renderMemberships():renderReceipts();
   if(preview){
     $('tab-body').querySelectorAll('form button[type=submit]').forEach(el=>{el.disabled=true;el.title='Preview is read-only'});
     if(!$('preview-message'))$('tab-body').insertAdjacentHTML('afterbegin','<div class="notice" id="preview-message"><strong>Read-only deployment preview.</strong> You can inspect the interface, but changes can be made only on the approved production site.</div>');
   }
   wireForms();
+}
+function renderSummary(){
+  const d=state.data,r=globalThis.HenryFinanceReport.summarize(d),entries=d.receipts||[],streaming=d.streaming||[];
+  const verifiedMembership=entries.filter(x=>x.relatedType==='membership'&&x.status==='verified');
+  const pending=entries.filter(x=>x.status==='pending');
+  const expectedToday=streaming.filter(x=>x.dueDate===d.asOf&&!['paused','cancelled','inactive'].includes(String(x.status||'').toLowerCase()));
+  const legacyVerified=(d.legacyPayments||[]).filter(x=>['verified','paid'].includes(String(x.status||'').toLowerCase()));
+  const head=(title,sub)=>'<div class="card-head"><div><h3>'+esc(title)+'</h3><p class="sub">'+esc(sub)+'</p></div></div>';
+  const stat=(name,value,note)=>'<article class="finance-stat"><small>'+esc(name)+'</small><strong>'+money(value)+'</strong><p>'+esc(note)+'</p></article>';
+  const memberRows=verifiedMembership.slice().sort((a,b)=>String(b.receivedDate).localeCompare(String(a.receivedDate)));
+  return '<div class="section-title"><div><h2>Financial Collections Overview</h2><p>As of '+esc(formatDate(r.today))+' · Week: '+esc(formatDate(r.weekStart))+' – '+esc(formatDate(r.weekEnd))+' (Guyana time)</p></div></div>'+
+    '<div class="notice"><strong>Two separate truths:</strong> A Netflix due date shows a scheduled collection opportunity, not confirmed money owed or received. New cash totals below count only owner-verified Phase 1 receipts. Historical fees and the old HENRY OS register remain separate until reconciled. These are cash figures, <em>not</em> earned revenue or profit.</div>'+
+    '<div class="section-title"><div><h2>Expected streaming renewals</h2><p>Estimated GYD based on the existing Streaming amount and next renewal date.</p></div></div>'+
+    '<div class="finance-stat-grid">'+
+      stat('Due today',r.expectedToday,r.expectedSubscriptionsToday+' subscription(s) with a scheduled due date today')+
+      stat('Next 7 days',r.expectedNext7,'Includes today')+
+      stat('This calendar week',r.expectedCalendarWeek,'Monday–Sunday')+
+      stat('This month',r.expectedMonth,'Scheduled due dates during '+r.month)+
+    '</div>'+
+    '<p class="subnote">'+(r.missingStreamingAmounts||0)+' active streaming record(s) have a due date but no valid amount; '+(r.missingStreamingDates||0)+' have no valid due date. They are excluded from forecast totals. <a href="/admin/streaming-reminders.html?v=20261105c">Open exact-date reminder filters →</a></p>'+
+    '<div class="section-title"><div><h2>Money actually received — verified</h2><p>GYD received from new verified payment records, grouped by original receipt date.</p></div></div>'+
+    '<div class="finance-stat-grid">'+
+      stat('Collected today',r.receivedToday,'All verified new Phase 1 customer cash')+
+      stat('Collected this week',r.receivedWeek,'Calendar week, Guyana time')+
+      stat('Collected this month',r.receivedMonth,'All customer receipt categories')+
+      stat('Membership fees this month',r.memberReceivedMonth,'Verified fees only, no assumed renewals')+
+    '</div>'+
+    '<div class="finance-breakdown"><div class="card"><h3>Monthly verified cash breakdown</h3>'+
+      '<div class="finance-detail"><span>Membership subscriptions</span><strong>'+money(r.memberReceivedMonth)+'</strong></div>'+
+      '<div class="finance-detail"><span>Streaming payments</span><strong>'+money(r.streamingReceivedMonth)+'</strong></div>'+
+      '<div class="finance-detail"><span>Unallocated customer receipts</span><strong>'+money(r.unallocatedReceivedMonth)+'</strong></div>'+
+      '<div class="finance-detail total"><span>Verified cash this month</span><strong>'+money(r.receivedMonth)+'</strong></div>'+
+      '<p class="subnote">Unallocated receipts are cash received but may remain customer liabilities until allocated. This breakdown is not a profit report.</p>'+
+      '<button type="button" class="btn" data-open-tab="receipts">Record or verify a payment →</button></div>'+
+    '<div class="card"><h3>Existing records still to reconcile</h3>'+
+      '<div class="finance-detail"><span>Verified historical member fees in Phase 1</span><strong>'+money(r.historicalMemberVerified)+'</strong></div>'+
+      '<div class="finance-detail"><span>Old HENRY OS verified-payment register</span><strong>'+money(r.legacyVerifiedAmount)+'</strong></div>'+
+      '<div class="finance-detail"><span>Existing legacy member profiles</span><strong>'+r.legacyMemberCount+'</strong></div>'+
+      '<div class="finance-detail"><span>Pending new receipts to check</span><strong>'+pending.length+'</strong></div>'+
+      '<p class="subnote"><strong>Do not add these two historical amounts to new collections.</strong> They may include older cash or overlapping transactions. Legacy profiles are not proof that a subscription fee was collected.</p>'+
+      '<button type="button" class="outline" data-open-tab="memberships">Review Members Club →</button></div></div>'+
+    '<section class="card"><h3>Member fees received — verified register</h3><p class="sub">These are payment records, not merely membership plans. Historical entries are shown but excluded from new cash totals.</p>'+
+      '<div class="table-wrap"><table><thead><tr><th>Member</th><th>Amount</th><th>Received</th><th>Fee / coverage</th><th>Accounting</th></tr></thead><tbody>'+
+      (memberRows.length?memberRows.map(p=>'<tr><td>'+esc(p.customer)+'</td><td>'+money(p.amountGyd)+'</td><td>'+formatDate(p.receivedDate)+'</td><td>'+esc(p.months||'—')+' month(s)<small>'+esc(p.method||'')+' · '+esc(p.reference||'')+'</small></td><td>'+pill(p.historical?'historical':'verified')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No verified Members Club fee payments are recorded in the new ledger. Existing WhatsApp or MMG receipts must be reviewed and entered first.</td></tr>')+
+      '</tbody></table></div></section>'+
+    '<section class="card"><h3>Netflix &amp; streaming due today</h3><p class="sub">Schedule only — payment status is not established by these dates.</p><div class="table-wrap"><table><thead><tr><th>Customer</th><th>Service</th><th>Amount scheduled</th><th>Renewal date</th></tr></thead><tbody>'+
+      (expectedToday.length?expectedToday.map(x=>'<tr><td>'+esc(x.customer)+'</td><td>'+esc(x.service)+'<small>'+esc(x.plan||'')+'</small></td><td>'+(Number(x.amount)>0?money(String(x.amount).replace(/,/g,'')):'Amount missing')+'</td><td>'+formatDate(x.dueDate)+'</td></tr>').join(''):'<tr><td colspan="4" class="empty">No subscriptions with renewal dates today.</td></tr>')+
+      '</tbody></table></div></section>'+
+    '<section class="card"><h3>Older payment register — read-only</h3><p class="sub">Existing HENRY OS verified entries are visible for reconciliation. They are NOT automatically counted again in new collections.</p>'+
+      '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Amount</th><th>Category</th><th>Payment date</th><th>Reference</th></tr></thead><tbody>'+
+      (legacyVerified.length?legacyVerified.slice(0,100).map(x=>'<tr><td>'+esc(x.customer||'')+'</td><td>'+money(x.amount)+'</td><td>'+esc(x.relatedType||'Other')+'</td><td>'+formatDate(x.paymentDate)+'</td><td>'+esc(x.reference||'')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No verified legacy payment records to display.</td></tr>')+
+      '</tbody></table></div>'+(legacyVerified.length>100?'<p class="subnote">Showing the first 100 older verified payments; more require reconciliation.</p>':'')+'</section>';
 }
 function renderSuppliers(){
   const d=state.data;const accounts=d.suppliers, bills=d.bills;
