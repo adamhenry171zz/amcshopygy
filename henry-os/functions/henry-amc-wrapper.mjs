@@ -132,19 +132,15 @@ async function reconcileInvoicePayments(store,data=null){
 const jsonResponse=(body,source)=>new Response(JSON.stringify(body),{status:source.status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 
 export default async (req, context)=>{
-  // Netlify Blobs getStore() is site-wide: a Deploy Preview shares production data.
-  // Fail closed for migration IDs unless Netlify confirms the production context.
-  const incomingUrl=new URL(req.url);
-  if(incomingUrl.searchParams.get('action')==='save'&&req.method==='POST'){
-    let incoming=null;try{incoming=await req.clone().json()}catch{}
-    if(incoming?.type==='streaming'&&/^netflix-[a-z0-9_-]{8,60}$/i.test(String(incoming.id||''))&&context?.deploy?.context!=='production'){
-      return new Response(JSON.stringify({error:'Netflix bulk import is disabled outside production. Preview CSV safely, then import on the approved production site.'}),{
-        status:403,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}
-      });
-    }
+  // getStore() is shared across deploys. Read previews, but never mutate live data.
+  const actionRequested=new URL(req.url).searchParams.get('action')||'bootstrap';
+  if(['save','delete'].includes(actionRequested)&&context?.deploy?.context!=='production'){
+    return new Response(JSON.stringify({error:'HENRY OS is read-only outside production to protect real customer records.'}),{
+      status:403,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}
+    });
   }
   const copy=req.clone();
-  const response=await core(req);
+  const response=await core(req,context);
   if(!response.ok)return response;
   const url=new URL(copy.url);
   const action=url.searchParams.get('action')||'bootstrap';
@@ -158,13 +154,15 @@ export default async (req, context)=>{
 
   if(action==='bootstrap'&&copy.method==='GET'){
     let data;try{data=await response.json()}catch{return response}
-    await applyOct15PaidMigration(store);
-    data.invoices=await readType(store,'invoices');
-    data.payments=await readType(store,'payments');
-    data.customers=await readType(store,'customers');
-    const reconciled=await reconcileInvoicePayments(store,data);
-    data.invoices=reconciled.invoices;
-    data.payments=reconciled.payments;
+    if(context?.deploy?.context==='production'){
+      await applyOct15PaidMigration(store);
+      data.invoices=await readType(store,'invoices');
+      data.payments=await readType(store,'payments');
+      data.customers=await readType(store,'customers');
+      const reconciled=await reconcileInvoicePayments(store,data);
+      data.invoices=reconciled.invoices;
+      data.payments=reconciled.payments;
+    }
     data.generatedAt=new Date().toISOString();
     return jsonResponse(data,response);
   }
