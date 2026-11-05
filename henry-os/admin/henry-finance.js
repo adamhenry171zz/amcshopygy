@@ -87,7 +87,7 @@ function renderSummary(){
       stat('This calendar week',r.expectedCalendarWeek,'Monday–Sunday')+
       stat('This month',r.expectedMonth,'Scheduled due dates during '+r.month)+
     '</div>'+
-    '<p class="subnote">'+(r.missingStreamingAmounts||0)+' active streaming record(s) have a due date but no valid amount; '+(r.missingStreamingDates||0)+' have no valid due date. They are excluded from forecast totals. <a href="/admin/streaming-reminders.html?v=20261105c">Open exact-date reminder filters →</a></p>'+
+    '<p class="subnote">'+(r.missingStreamingAmounts||0)+' active streaming record(s) have a due date but no valid amount; '+(r.missingStreamingDates||0)+' have no valid due date. They are excluded from forecast totals. <a href="/admin/streaming-reminders.html?v=20261105d">Open exact-date reminder filters →</a></p>'+
     '<div class="notice"><strong>Missing Members Club collections?</strong> Open <button type="button" class="outline" data-open-tab="memberships">Membership Billing</button>, find the existing member, and select <strong>Record fee</strong>. Check your MMG or bank history and verify each payment. Do not invent payment references or duplicate profiles.</div>'+ 
     '<div class="section-title"><div><h2>Money actually received — verified</h2><p>GYD received from new verified payment records, grouped by original receipt date.</p></div></div>'+
     '<div class="finance-stat-grid">'+
