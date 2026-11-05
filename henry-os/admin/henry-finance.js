@@ -2,7 +2,7 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=v=>'GYD $'+(Number(v)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const text=v=>String(v??'').trim();
-const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const today=()=>{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());return ['year','month','day'].map(k=>p.find(v=>v.type===k)?.value).join('-')};
 const pill=s=>'<span class="chip '+esc(s)+'">'+esc(String(s||'—').replaceAll('_',' '))+'</span>';
 const preview=/^(deploy-preview-\d+--|agent-)/.test(location.hostname)||location.hostname.includes('netlify.app')&&!location.hostname.startsWith('preeminent-blancmange-');
 const state={data:null,tab:'suppliers',working:false};
@@ -58,7 +58,7 @@ function renderSuppliers(){
     '<div class="two-col"><section class="card"><h3>Add supplier account</h3><p class="sub">Use an account label only. Never enter passwords, card numbers or account PINs.</p>'+
     '<form class="form" data-form="supplier"><label>Supplier / provider<input name="name" required maxlength="120" placeholder="Netflix"></label><label>Service<input name="service" required maxlength="80" placeholder="Netflix"></label><label>Account label<input name="accountLabel" required maxlength="120" placeholder="Account A"></label>'+
     '<div class="grid-fields"><label>Estimated charge<input name="estimatedAmount" type="number" min="0.01" step=".01" required placeholder="15.00"></label><label>Currency<select name="currency" id="supplier-currency"><option>USD</option><option>GYD</option></select></label></div>'+
-    '<div class="grid-fields"><label>GYD per USD rate<input name="exchangeRate" type="number" step=".01" min=".01" value="215"></label><label>First expected bill date<input name="firstDueDate" type="date" required></label></div>'+
+    '<div class="grid-fields"><label>GYD per USD rate<input name="exchangeRate" type="number" step=".01" min=".01" placeholder="Confirm actual exchange rate"></label><label>First expected bill date<input name="firstDueDate" type="date" required></label></div>'+
     '<label>Billing cycle<select name="recurrence"><option value="monthly">Monthly</option><option value="one_time">One-time</option></select></label>'+
     '<label>Link existing customer subscriptions (optional)<select name="linkedSubscriptionIds" multiple size="4">'+d.streaming.map(s=>'<option value="'+esc(s.id)+'">'+esc((s.customer||'Customer')+' · '+(s.service||'Streaming'))+'</option>').join('')+'</select></label>'+
     '<label>Internal notes<textarea name="notes" placeholder="No login credentials here"></textarea></label><button class="btn wide" type="submit">Add supplier account</button></form></section>'+
