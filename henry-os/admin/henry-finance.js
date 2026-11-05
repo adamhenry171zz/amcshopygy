@@ -134,7 +134,14 @@ function renderSuppliers(){
 }
 function renderMemberships(){
   const d=state.data;const members=d.memberships,old=d.legacyMembers;
+  const summary=globalThis.HenryFinanceReport.summarize(d);
   return '<div class="section-title"><div><h2>Membership Billing</h2><p>Monthly fee defaults to GYD $950 but can differ by member. No automatic membership debt.</p></div></div>'+
+    '<div class="finance-stat-grid" style="margin-bottom:18px">'+
+    '<article class="finance-stat"><small>Member fees today</small><strong>'+money(summary.memberReceivedToday)+'</strong><p>Verified cash collected today</p></article>'+
+    '<article class="finance-stat"><small>Member fees this month</small><strong>'+money(summary.memberReceivedMonth)+'</strong><p>New verified collections</p></article>'+
+    '<article class="finance-stat"><small>Verified historical member fees</small><strong>'+money(summary.historicalMemberVerified)+'</strong><p>NOT current cash collections</p></article>'+
+    '<article class="finance-stat"><small>Legacy member profiles</small><strong>'+old.length+'</strong><p>Payment evidence still requires review</p></article>'+
+    '</div>'+
     '<div class="notice"><strong>Legacy Members Club remains unchanged:</strong> Existing shipping allowance plans may have their own pricing and status. The billing records here do not change shipping discounts or reprice legacy plans. Reconcile member coverage and opening positions before linking those benefits.</div>'+
     '<div class="two-col"><section class="card"><h3>Add a membership billing profile</h3><p class="sub">Creating a profile does not activate membership. Only an owner-verified membership payment creates paid coverage.</p>'+
     '<form class="form" data-form="member"><label>Member name<input name="customer" required maxlength="160"></label><div class="grid-fields"><label>WhatsApp<input name="whatsapp" maxlength="40"></label><label>Mailbox code<input name="mailboxCode" maxlength="60" placeholder="AMC203"></label></div>'+
@@ -142,7 +149,7 @@ function renderMemberships(){
     '<button class="btn wide" type="submit">Create membership profile</button></form></section>'+
     '<section class="card"><h3>Membership coverage</h3><p class="sub">Coverage is calculated from verified membership payments. Existing older memberships without reconciled payments are marked for review, not automatically expired.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Member</th><th>Monthly fee</th><th>Paid-through</th><th>Status</th><th>Verified payments</th></tr></thead><tbody>'+
-    (members.length?members.map(m=>'<tr><td><strong>'+esc(m.customer)+'</strong><small>'+esc(m.mailboxCode||'No mailbox code')+'</small></td><td>'+money(m.monthlyFee)+'<div class="action-inline"><button type="button" class="outline" data-member-fee="'+esc(m.id)+'">Edit fee</button></div></td><td>'+formatDate(m.paidThrough)+'</td><td>'+pill(m.status)+'</td><td>'+m.verifiedPaymentCount+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No new billing profiles yet.</td></tr>')+'</tbody></table></div></section></div>'+
+    (members.length?members.map(m=>'<tr><td><strong>'+esc(m.customer)+'</strong><small>'+esc(m.mailboxCode||'No mailbox code')+'</small></td><td>'+money(m.monthlyFee)+'<div class="action-inline"><button type="button" class="outline" data-member-fee="'+esc(m.id)+'">Edit fee</button></div></td><td>'+formatDate(m.paidThrough)+'</td><td>'+pill(m.status)+'</td><td>'+m.verifiedPaymentCount+'<div class="action-inline"><button type="button" class="outline" data-record-member="'+esc(m.id)+'">Record fee</button></div></td></tr>').join(''):'<tr><td colspan="5" class="empty">No new billing profiles yet.</td></tr>')+'</tbody></table></div></section></div>'+
     '<section class="card"><h3>Existing Members Club usage registry (read-only reference)</h3><p class="sub">These existing plan fees and allowances are preserved. Do not assume a legacy Active status proves payment.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Legacy member</th><th>Mailbox</th><th>Existing plan</th><th>Legacy plan fee</th><th>Shipping allowance</th></tr></thead><tbody>'+
     (old.length?old.map(m=>'<tr><td>'+esc(m.customer)+'</td><td>'+esc(m.mailboxCode||'—')+'</td><td>'+esc(m.planName||'—')+'</td><td>'+money(m.monthlyFee)+'</td><td>'+esc(m.allowanceLb||'—')+' lb</td></tr>').join(''):'<tr><td colspan="5" class="empty">No legacy member profiles found.</td></tr>')+
@@ -160,14 +167,16 @@ function renderReceipts(){
     '<label>Customer (used for unallocated receipts)<input name="customer" placeholder="Customer name"></label>'+
     '<div class="grid-fields"><label>Payment method<select name="method"><option>MMG</option><option>Bank transfer</option><option>Cash</option><option>Other</option></select></label><label>Date received<input name="receivedDate" type="date" value="'+today()+'" required></label></div>'+
     '<label>MMG / bank reference or cash receipt number<input name="reference" minlength="3" required maxlength="120"></label>'+
-    '<label>Notes (not passwords)<textarea name="notes"></textarea></label><button class="btn wide" type="submit">Record as pending verification</button></form></section>'+
+    '<label class="subnote"><input type="checkbox" id="receipt-historical" name="historical" style="width:auto"> Collected BEFORE HENRY OS 2.0 go-live (historical payment)</label>'+
+    '<div id="receipt-historical-rate" class="hidden"><label>Historical monthly member fee (GYD)<input name="historicalMonthlyFee" id="receipt-old-fee" type="number" min=".01" step=".01" placeholder="Enter original rate, if different"></label></div>'+
+    '<label>Notes / receipt evidence (no passwords)<textarea name="notes" placeholder="MMG receipt / bank history / owner verification"></textarea></label><button class="btn wide" type="submit">Record as pending verification</button></form></section>'+
     '<section class="card"><h3>Pending your decision</h3><p class="sub">Before clicking Verify, check the payment with your MMG, bank or cash records. A screenshot alone is not confirmation.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Payer / category</th><th>Amount</th><th>Reference</th><th>Received</th><th>Actions</th></tr></thead><tbody>'+
     (receipts.filter(r=>r.status==='pending').length?receipts.filter(r=>r.status==='pending').map(r=>'<tr><td>'+esc(r.customer)+'<small>'+esc(r.relatedType)+'</small></td><td>'+money(r.amountGyd)+'</td><td>'+esc(r.method)+'<small>'+esc(r.reference)+'</small></td><td>'+formatDate(r.receivedDate)+'</td><td><div class="action-inline"><button type="button" class="btn secondary" data-verify="'+esc(r.id)+'">Verify</button><button type="button" class="btn danger" data-reject="'+esc(r.id)+'">Reject</button></div></td></tr>').join(''):'<tr><td colspan="5" class="empty">No payments awaiting verification.</td></tr>')+
     '</tbody></table></div></section></div>'+
     '<section class="card"><h3>Payment register</h3><p class="sub">Verified and rejected decisions are retained. Entries from legacy HENRY OS are not rewritten or automatically counted here.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Amount</th><th>Method / reference</th><th>Category</th><th>Date</th><th>Status</th></tr></thead><tbody>'+
-    (receipts.length?receipts.map(r=>'<tr><td>'+esc(r.customer)+'</td><td>'+money(r.amountGyd)+'</td><td>'+esc(r.method)+'<small>'+esc(r.reference)+'</small></td><td>'+esc(r.relatedType)+(r.months?' · '+r.months+' month(s)':'')+'</td><td>'+formatDate(r.receivedDate)+'</td><td>'+pill(r.status)+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No Phase 1 payments recorded yet.</td></tr>')+
+    (receipts.length?receipts.map(r=>'<tr><td>'+esc(r.customer)+'</td><td>'+money(r.amountGyd)+'</td><td>'+esc(r.method)+'<small>'+esc(r.reference)+'</small></td><td>'+esc(r.relatedType)+(r.months?' · '+r.months+' month(s)':'')+'</td><td>'+formatDate(r.receivedDate)+'</td><td>'+pill(r.status)+(r.historical?' <small>Historical, not current cash</small>':'')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No Phase 1 payments recorded yet.</td></tr>')+
     '</tbody></table></div></section>';
 }
 function changeReceiptFields(){
@@ -175,13 +184,15 @@ function changeReceiptFields(){
   $('receipt-member-row')?.classList.toggle('hidden',type!=='membership');
   $('receipt-stream-row')?.classList.toggle('hidden',type!=='streaming');
   $('receipt-months-row')?.classList.toggle('hidden',type!=='membership');
+  $('receipt-historical-rate')?.classList.toggle('hidden',type!=='membership'||!$('receipt-historical')?.checked);
   const amount=$('receipt-amount');if(amount)amount.readOnly=type==='membership';
   if(type==='membership')updateMembershipAmount();
 }
 function updateMembershipAmount(){
   const m=state.data?.memberships.find(m=>m.id===$('receipt-member')?.value);
   const months=Number($('receipt-months')?.value)||0;
-  if($('receipt-amount'))$('receipt-amount').value=m&&months>0?(Number(m.monthlyFee)*months).toFixed(2):'';
+  const special=$('receipt-historical')?.checked?Number($('receipt-old-fee')?.value):0;
+  if($('receipt-amount'))$('receipt-amount').value=m&&months>0?((special>0?special:Number(m.monthlyFee))*months).toFixed(2):'';
 }
 function fillBill(){
   const s=state.data?.suppliers.find(s=>s.id===$('supplier-bill-select')?.value);
@@ -199,7 +210,7 @@ const handlers={
   bill:fd=>({supplierId:fd.get('supplierId'),dueDate:fd.get('dueDate'),actualAmount:fd.get('actualAmount'),exchangeRate:fd.get('exchangeRate'),notes:fd.get('notes')}),
   billpayment:fd=>({billId:fd.get('billId'),amountGyd:fd.get('amountGyd'),paidDate:fd.get('paidDate'),method:fd.get('method'),reference:fd.get('reference')}),
   member:fd=>({customer:fd.get('customer'),whatsapp:fd.get('whatsapp'),mailboxCode:fd.get('mailboxCode'),monthlyFee:fd.get('monthlyFee'),notes:fd.get('notes')}),
-  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),notes:fd.get('notes')})
+  receipt:fd=>({relatedType:fd.get('relatedType'),membershipId:fd.get('membershipId'),streamingId:fd.get('streamingId'),months:fd.get('months'),customer:fd.get('customer'),amountGyd:fd.get('amountGyd'),method:fd.get('method'),reference:fd.get('reference'),receivedDate:fd.get('receivedDate'),historical:fd.get('historical')==='on',historicalMonthlyFee:fd.get('historicalMonthlyFee'),notes:fd.get('notes')})
 };
 const actions={supplier:'add_supplier',bill:'add_bill',billpayment:'pay_bill',member:'add_membership',receipt:'add_receipt'};
 async function submit(e){
@@ -215,9 +226,13 @@ async function submit(e){
 }
 function wireForms(){
   document.querySelectorAll('form[data-form]').forEach(f=>f.addEventListener('submit',submit));
+  document.querySelectorAll('[data-open-tab]').forEach(b=>b.addEventListener('click',()=>{state.tab=b.dataset.openTab;render()}));
+  document.querySelectorAll('[data-record-member]').forEach(b=>b.addEventListener('click',()=>{state.tab='receipts';render();$('receipt-type').value='membership';changeReceiptFields();$('receipt-member').value=b.dataset.recordMember;updateMembershipAmount();document.querySelector('[data-form="receipt"]')?.scrollIntoView({behavior:'smooth',block:'start'})}));
   $('receipt-type')?.addEventListener('change',changeReceiptFields);
   $('receipt-member')?.addEventListener('change',updateMembershipAmount);
   $('receipt-months')?.addEventListener('change',updateMembershipAmount);
+  $('receipt-historical')?.addEventListener('change',e=>{ $('receipt-historical-rate')?.classList.toggle('hidden',!e.target.checked||$('receipt-type')?.value!=='membership');if(!e.target.checked&&$('receipt-old-fee'))$('receipt-old-fee').value='';updateMembershipAmount(); });
+  $('receipt-old-fee')?.addEventListener('input',updateMembershipAmount);
   $('supplier-bill-select')?.addEventListener('change',fillBill);
   $('supplier-pay-select')?.addEventListener('change',fillSupplierPayment);
   fillBill();fillSupplierPayment();changeReceiptFields();
