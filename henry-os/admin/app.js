@@ -112,10 +112,10 @@ async function fillFinanceSnapshot(){
   if(!globalThis.HenryFinanceReport?.monthlyCollected)throw Error('Collections report unavailable.');
   const month=globalThis.HenryFinanceReport.monthlyCollected(finance);
   if(main){
+   // Keep the audit/deduplication calculation intact; technical reconciliation
+   // metadata must not clutter the owner-facing overview card.
    main.innerHTML='<small>TOTAL COLLECTED THIS MONTH</small>'+
-     '<strong>'+money(month.total)+'</strong>'+
-     '<div class="sub">Verified recorded receipts · '+esc(month.month)+' · duplicates excluded</div>'+
-     (month.needsReview?'<div class="sub">'+month.needsReview+' other record(s) need review and are not included.</div>':'');
+     '<strong>'+money(month.total)+'</strong>';
   }
   // This is the owner's one-time, confirmed November 2026 member breakdown,
   // not two new receipts or a recurring rule. Do not add 30k to cash again.
