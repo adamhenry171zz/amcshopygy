@@ -148,6 +148,20 @@ export default async (req,context)=>{
     return json({item:calculateMembership(item,[],asOf)},201);
   });
 
+  if(action==='update_member_fee')return withError(async()=>{
+    const memberId=clean(body.id,100);
+    if(!validLinkId(memberId))throw new Error('Choose a membership.');
+    const member=await store.get('finance/memberships/'+memberId,{type:'json'}).catch(()=>null);
+    if(!member)throw new Error('Member not found.');
+    const nextFee=positiveMoney(body.monthlyFee);
+    if(nextFee===member.monthlyFee)return json({item:member});
+    const prior=[...(member.feeHistory||[])];
+    prior.push({oldFee:member.monthlyFee,newFee:nextFee,changedBy:adminEmail,changedAt:now});
+    const item={...member,monthlyFee:nextFee,feeHistory:prior,updatedAt:now};
+    await store.setJSON('finance/memberships/'+memberId,item);
+    return json({item:calculateMembership(item,await read(store,'receipts'),asOf)});
+  });
+
   if(action==='add_receipt')return withError(async()=>{
     const relatedType=clean(body.relatedType,30),paymentMethod=method(body.method),reference=validateReference(body.reference);
     if(!['membership','streaming','unallocated'].includes(relatedType))throw new Error('Invalid payment category.');
