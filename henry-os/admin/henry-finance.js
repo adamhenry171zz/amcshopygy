@@ -69,6 +69,7 @@ function renderSummary(){
       stat('This month',r.expectedMonth,'Scheduled due dates during '+r.month)+
     '</div>'+
     '<p class="subnote">'+(r.missingStreamingAmounts||0)+' active streaming record(s) have a due date but no valid amount; '+(r.missingStreamingDates||0)+' have no valid due date. They are excluded from forecast totals. <a href="/admin/streaming-reminders.html?v=20261105c">Open exact-date reminder filters →</a></p>'+
+    '<div class="notice"><strong>Missing Members Club collections?</strong> Open <button type="button" class="outline" data-open-tab="memberships">Membership Billing</button>, find the existing member, and select <strong>Record fee</strong>. Check your MMG or bank history and verify each payment. Do not invent payment references or duplicate profiles.</div>'+ 
     '<div class="section-title"><div><h2>Money actually received — verified</h2><p>GYD received from new verified payment records, grouped by original receipt date.</p></div></div>'+
     '<div class="finance-stat-grid">'+
       stat('Collected today',r.receivedToday,'All verified new Phase 1 customer cash')+
@@ -150,18 +151,20 @@ function renderMemberships(){
     '<section class="card"><h3>Membership coverage</h3><p class="sub">Coverage is calculated from verified membership payments. Existing older memberships without reconciled payments are marked for review, not automatically expired.</p>'+
     '<div class="table-wrap"><table><thead><tr><th>Member</th><th>Monthly fee</th><th>Paid-through</th><th>Status</th><th>Verified payments</th></tr></thead><tbody>'+
     (members.length?members.map(m=>'<tr><td><strong>'+esc(m.customer)+'</strong><small>'+esc(m.mailboxCode||'No mailbox code')+'</small></td><td>'+money(m.monthlyFee)+'<div class="action-inline"><button type="button" class="outline" data-member-fee="'+esc(m.id)+'">Edit fee</button></div></td><td>'+formatDate(m.paidThrough)+'</td><td>'+pill(m.status)+'</td><td>'+m.verifiedPaymentCount+'<div class="action-inline"><button type="button" class="outline" data-record-member="'+esc(m.id)+'">Record fee</button></div></td></tr>').join(''):'<tr><td colspan="5" class="empty">No new billing profiles yet.</td></tr>')+'</tbody></table></div></section></div>'+
-    '<section class="card"><h3>Existing Members Club usage registry (read-only reference)</h3><p class="sub">These existing plan fees and allowances are preserved. Do not assume a legacy Active status proves payment.</p>'+
-    '<div class="table-wrap"><table><thead><tr><th>Legacy member</th><th>Mailbox</th><th>Existing plan</th><th>Legacy plan fee</th><th>Shipping allowance</th></tr></thead><tbody>'+
-    (old.length?old.map(m=>'<tr><td>'+esc(m.customer)+'</td><td>'+esc(m.mailboxCode||'—')+'</td><td>'+esc(m.planName||'—')+'</td><td>'+money(m.monthlyFee)+'</td><td>'+esc(m.allowanceLb||'—')+' lb</td></tr>').join(''):'<tr><td colspan="5" class="empty">No legacy member profiles found.</td></tr>')+
+    '<section class="card"><h3>Existing Members Club usage registry (read-only reference)</h3><p class="sub">Existing plan fees and allowances are preserved. Record a real MMG, bank or cash payment against the member, then verify it. Active status alone does not prove payment.</p>'+
+    '<div class="table-wrap"><table><thead><tr><th>Existing member</th><th>Mailbox</th><th>Existing plan</th><th>Plan fee</th><th>Shipping allowance</th><th>Verified membership receipts</th><th>Action</th></tr></thead><tbody>'+
+    (old.length?old.map(m=>'<tr><td>'+esc(m.customer)+'</td><td>'+esc(m.mailboxCode||'—')+'</td><td>'+esc(m.planName||'—')+'</td><td>'+money(m.monthlyFee)+'</td><td>'+esc(m.allowanceLb||'—')+' lb</td><td>'+money(d.receipts.filter(p=>p.status==='verified'&&p.legacyMembershipId===m.id).reduce((total,p)=>total+Number(p.amountGyd),0))+'<small>Historical and current receipts</small></td><td><button type="button" class="btn secondary" data-record-member="legacy:'+esc(m.id)+'">Record fee</button></td></tr>').join(''):'<tr><td colspan="7" class="empty">No legacy member profiles found.</td></tr>')+
     '</tbody></table></div><p class="subnote">Review legacy usage in <a href="/admin/#members-club">Members Club →</a>. Neither module overwrites the other.</p></section>';
 }
 function renderReceipts(){
   const d=state.data;const receipts=d.receipts;
+  const existingChoices=(d.legacyMembers||[]).map(m=>'<option value="legacy:'+esc(m.id)+'">'+esc(m.customer)+' · '+esc(m.planName||'Members Club')+' · '+money(m.monthlyFee)+'/month</option>').join('');
+  const newChoices=(d.memberships||[]).map(m=>'<option value="'+esc(m.id)+'">'+esc(m.customer)+' · '+money(m.monthlyFee)+'/month</option>').join('');
   return '<div class="section-title"><div><h2>Owner Payment Verification</h2><p>All new customer receipts begin Pending. Only your authenticated owner account can verify or reject them.</p></div></div>'+
     '<div class="notice"><strong>Financial foundation only:</strong> Verified receipts here track actual cash received in this new workspace. Streaming renewals and old shipping invoices are NOT automatically settled; allocating mixed payments, customer credit and unified profit reporting require the later ledger upgrade. Membership receipts must exactly equal the selected fee × number of months.</div>'+
     '<div class="two-col"><section class="card"><h3>Record payment for review</h3><form class="form" data-form="receipt">'+
     '<label>Payment relates to<select name="relatedType" id="receipt-type"><option value="membership">Members Club fee</option><option value="streaming">Streaming subscription (reference only)</option><option value="unallocated">Unallocated customer payment</option></select></label>'+
-    '<label id="receipt-member-row">Member<select name="membershipId" id="receipt-member">'+opts(d.memberships,'id','customer','Choose member…')+'</select></label>'+
+    '<label id="receipt-member-row">Member<select name="membershipId" id="receipt-member" required><option value="">Choose a member…</option><optgroup label="Existing Members Club">'+existingChoices+'</optgroup><optgroup label="New Finance billing profiles">'+newChoices+'</optgroup></select><small>Existing members use their existing plan fee. No duplicate profile is created.</small></label>'+
     '<label id="receipt-stream-row" class="hidden">Existing streaming subscription<select name="streamingId" id="receipt-stream">'+opts(d.streaming,'id','customer','Choose subscription…')+'</select></label>'+
     '<div class="grid-fields"><label id="receipt-months-row">Months purchased<input name="months" id="receipt-months" type="number" min="1" max="24" value="1"></label><label>Payment amount (GYD)<input name="amountGyd" id="receipt-amount" type="number" min=".01" step=".01" required></label></div>'+
     '<label>Customer (used for unallocated receipts)<input name="customer" placeholder="Customer name"></label>'+
@@ -189,7 +192,8 @@ function changeReceiptFields(){
   if(type==='membership')updateMembershipAmount();
 }
 function updateMembershipAmount(){
-  const m=state.data?.memberships.find(m=>m.id===$('receipt-member')?.value);
+  const selection=$('receipt-member')?.value||'';
+  const m=selection.startsWith('legacy:')?state.data?.legacyMembers.find(m=>m.id===selection.slice(7)):state.data?.memberships.find(m=>m.id===selection);
   const months=Number($('receipt-months')?.value)||0;
   const special=$('receipt-historical')?.checked?Number($('receipt-old-fee')?.value):0;
   if($('receipt-amount'))$('receipt-amount').value=m&&months>0?((special>0?special:Number(m.monthlyFee))*months).toFixed(2):'';
