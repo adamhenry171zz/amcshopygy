@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#071426">
+  <title>HENRY OS 2.0 | Phase 1 Finance</title>
+  <link rel="stylesheet" href="/admin/henry-finance.css">
+</head>
+<body>
+  <div class="app-wrap">
+    <header class="top">
+      <a href="/admin/" class="back" aria-label="Back to HENRY OS">← HENRY OS</a>
+      <div class="brand"><span class="mark">H</span><span><strong>HENRY <em>OS</em></strong><small>AMC FINANCE · PHASE 1</small></span></div>
+      <button class="outline" id="refresh" type="button" disabled>Refresh</button>
+    </header>
+    <main>
+      <div class="intro">
+        <p class="eyebrow">OWNER-ONLY FINANCE WORKSPACE</p>
+        <h1>Subscriptions, membership fees <span>&amp; supplier bills.</span></h1>
+        <p>Keep customer renewals separate from supplier costs, track paid membership periods, and approve receipts manually.</p>
+      </div>
+      <section id="login-notice" class="notice hidden" role="alert">
+        <strong>Owner sign-in required.</strong>
+        <p>Please sign in to HENRY OS first. This screen does not accept or store passwords.</p>
+        <a href="/admin/">Open HENRY OS sign-in →</a>
+      </section>
+      <section id="loading" class="card" aria-live="polite">Connecting to your private financial records…</section>
+      <section id="finance-app" class="hidden">
+        <div class="notice" role="note"><strong>Phase 1 scope:</strong> Financial records entered here are new and independent from the existing Invoice Factory, Netflix renewals and Members Club shipping allowances. Legacy records are preserved. Opening balances, credits, card-service invoices, unified profit and automatic allocation come in later phases. Scheduled supplier costs are estimates, not confirmed debts.</div>
+        <div id="metrics" class="metrics"></div>
+        <nav class="tabs" aria-label="Finance workspace sections">
+          <button type="button" data-tab="suppliers" class="active">Supplier Accounts</button>
+          <button type="button" data-tab="memberships">Membership Billing</button>
+          <button type="button" data-tab="receipts">Verify Payments</button>
+        </nav>
+        <section id="tab-body" aria-live="polite"></section>
+      </section>
+      <p id="flash" class="flash hidden" role="status" aria-live="polite"></p>
+    </main>
+    <footer>Private AMC Shopping management · No public customer checkout or automatic charges are created here.</footer>
+  </div>
+  <script type="module" src="/admin/henry-finance.js"></script>
+</body>
+</html>
