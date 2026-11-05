@@ -17,7 +17,7 @@
     </header>
     <section class="card migration-panel" aria-labelledby="rules-title">
       <h2 id="rules-title">Migration safety rules</h2>
-      <p>The October–November 2026 customer-renewal records qualify as active. Later future renewal dates also qualify, including advance-paid subscriptions. The snapshot reference is <strong>November 4, 2026</strong>.</p>
+      <p>The October–November 2026 customer-renewal records qualify as active. Later future renewal dates also qualify, including advance-paid subscriptions. The migration is assessed against the current day in Guyana.</p>
       <p><strong>Important:</strong> Column DATE is the customer's renewal date. ACCOUNT PAYMENT DATE is Netflix's provider-side renewal and is <em>not</em> a customer payment obligation. We do not create historical payment transactions from these dates.</p>
       <p>This tool never sends the Netflix Password, Gmail Password, PIN, payment-history notes, or unrelated spreadsheet columns to HENRY OS. Only approved customer, plan, amount, and renewal information is saved to the private Streaming store. It does not change the Google Sheet.</p>
     </section>
@@ -46,7 +46,7 @@
     </section>
     <section class="card migration-panel" aria-labelledby="commit-title">
       <h2 id="commit-title">4. Import into private HENRY OS</h2>
-      <p>This step writes only to the HENRY OS Streaming module. It does not update website subscription prices, create customer charges, generate receipts, or activate other streaming services. Stable subscription IDs help avoid duplicates on retries.</p>
+      <p>Deploy Previews are review-only; the import button is disabled there because they can share production storage. On the approved production site, this step writes only to the HENRY OS Streaming module. It does not update website subscription prices, create customer charges, generate receipts, or activate other streaming services. Stable subscription IDs help avoid duplicates on retries.</p>
       <label class="migration-check"><input type="checkbox" id="approved" disabled> I have reviewed the qualifying records and understand that an active subscription does not itself prove a transaction was recorded as paid.</label>
       <div><button type="button" class="primary" id="commit" disabled>Import reviewed Netflix subscriptions</button></div>
     </section>
