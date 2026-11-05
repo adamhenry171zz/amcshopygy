@@ -251,8 +251,9 @@ function renderQueue(){
    const message=validateQueueMessage(s);
    const number=phone(s.whatsapp);
    if(!number)throw Error('No valid WhatsApp number is saved for this customer.');
-   const popup=window.open('https://wa.me/'+number+'?text='+encodeURIComponent(message),'_blank','noopener,noreferrer');
-   if(popup===null)throw Error('WhatsApp window was blocked. Allow popups or use Copy message.');
+   const popup=window.open('https://wa.me/'+number+'?text='+encodeURIComponent(message),'_blank');
+   if(!popup)throw Error('WhatsApp window was blocked. Allow popups or use Copy message.');
+   try{popup.opener=null}catch{}
    state.prepared.set(s.id,{method:'WhatsApp draft',message,update:state.includeUpdate.has(s.id),consent:state.consents.has(s.id)});
    state.sentChecked.delete(s.id);renderQueue();
    flash('WhatsApp draft opened. Send it there, then confirm here.');
@@ -298,11 +299,19 @@ function buildQueue(){
  const eligible=state.data.subscriptions.filter(s=>state.selected.has(s.id)&&canPrepare(s));
  eligible.sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))||String(a.customer).localeCompare(String(b.customer)));
  if(!eligible.length){flash('No eligible unsent reminders are selected. Check phone numbers, dates and reminder status.',true);return}
- if(eligible.length>100){flash('Prepare at most 100 customers per queue. Narrow your filters.',true);return}
- state.queue=eligible.map(s=>({id:s.id,dueDate:s.dueDate,stage:s.stage,customer:s.customer}));
+ // Same recipient + service + renewal date may represent duplicate imported accounts.
+ // Suppress duplicate outbound drafts in this batch, without deleting source records.
+ const seen=new Set(),unique=[];let duplicates=0;
+ for(const s of eligible){
+  const key=[phone(s.whatsapp),String(s.service||'').trim().toLowerCase(),s.dueDate].join('|');
+  if(seen.has(key)){duplicates++;continue}
+  seen.add(key);unique.push(s);
+ }
+ if(unique.length>100){flash('Prepare at most 100 customers per queue. Narrow your filters.',true);return}
+ state.queue=unique.map(s=>({id:s.id,dueDate:s.dueDate,stage:s.stage,customer:s.customer}));
  state.index=0;state.sentInQueue.clear();
  renderQueue();
- flash('Prepared '+state.queue.length+' individual messages. No WhatsApp messages have been sent.');
+ flash('Prepared '+state.queue.length+' individual message(s). '+(duplicates?duplicates+' possible duplicate recipient record(s) were excluded. ':'')+'Nothing has been sent.');
 }
 function fillSettings(){
  const form=$('settings-form');
