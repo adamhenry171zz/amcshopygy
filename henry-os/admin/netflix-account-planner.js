@@ -57,7 +57,7 @@ function filteredAccounts(){
  const q=modeState.search.toLowerCase().trim();
  return modeState.rows.filter(a=>
   matchAccountDate(a)&&
-  (modeState.statusFilter==='all'||a.status===modeState.statusFilter)&&
+  (modeState.statusFilter==='all'||(modeState.statusFilter==='updated_recently'?a.lastUpdatedAt&&Date.now()-Date.parse(a.lastUpdatedAt)<=7*86400000:a.status===modeState.statusFilter))&&
   (!q||[a.customer,a.plan,a.service,a.subscriptionId].some(v=>String(v||'').toLowerCase().includes(q)))
  ).sort((a,b)=>String(a.accountDueDate||'9999').localeCompare(String(b.accountDueDate||'9999'))||a.customer.localeCompare(b.customer));
 }
@@ -211,7 +211,7 @@ function bindAccountPlanner(){
  node('account-date-filter').onchange=e=>{modeState.dateFilter=e.target.value;renderAccountPlanner()};
  node('account-status-filter').onchange=e=>{
   modeState.statusFilter=e.target.value;
-  if(['needs_date','update_required'].includes(e.target.value))modeState.dateFilter='all';
+  if(['needs_date','update_required','updated_recently'].includes(e.target.value))modeState.dateFilter='all';
   renderAccountPlanner();
  };
  node('account-search').oninput=e=>{modeState.search=e.target.value;renderAccountList()};
