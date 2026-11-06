@@ -52,7 +52,7 @@ const providerState=(subscription,overlay)=>{
     service:clean(subscription.service||'Netflix',90),plan:clean(subscription.plan,120),
     customerDueDate:isoDate(subscription.dueDate),
     accountDueDate:date,importedAccountDate:imported,
-    dateSource:overlay?.currentDueDate?'Owner-updated':'Original Netflix import',
+    dateSource:overlay?.sourceType==='manual'?'Owner-updated':'Original Netflix import',
     paidAt:overlay?.paidAt||'',serviceUpdatedAt:overlay?.serviceUpdatedAt||'',
     lastUpdatedAt:overlay?.lastUpdatedAt||'',lastCompletedDate:overlay?.lastCompletedDate||'',
     historyCount:Array.isArray(overlay?.history)?overlay.history.length:0,
@@ -114,7 +114,7 @@ export default async (req,context)=>{
       if(note.length<8)return json({error:'Add a short reason or source for correcting this date.'},400);
       const corrected=isoDate(body.newAccountDueDate);
       if(!corrected||corrected===expected)return json({error:'Choose a valid, different account payment date.'},400);
-      item={...prev,subscriptionId,currentDueDate:corrected,paidAt:'',
+      item={...prev,subscriptionId,currentDueDate:corrected,sourceType:'manual',paidAt:'',
         history:[...(Array.isArray(prev?.history)?prev.history:[]),{
           type:'date_correction',previousDate:expected,nextDate:corrected,
           note,updatedAt:now,confirmedBy:email}].slice(-24),
@@ -122,7 +122,7 @@ export default async (req,context)=>{
     }else if(action==='account_payment'){
       if(body.confirmedPaid!==true)return json({error:'Confirm you actually paid the provider before marking it paid.'},400);
       if(prev?.paidAt)return json({error:'Provider payment is already recorded for this account date.'},409);
-      item={...prev,subscriptionId,currentDueDate:expected,
+      item={...prev,subscriptionId,currentDueDate:expected,sourceType:prev?.sourceType||'imported',
         paidAt:now,paymentNote:note,updatedAt:now,updatedBy:email,
         history:Array.isArray(prev?.history)?prev.history.slice(-24):[]};
     }else{
@@ -134,7 +134,7 @@ export default async (req,context)=>{
       const history=[...(Array.isArray(prev?.history)?prev.history:[]),
         {date:expected,nextDate,providerPaidAt:prev.paidAt,accountUpdatedAt:now,
          note,confirmedBy:email}].slice(-24);
-      item={subscriptionId,currentDueDate:nextDate,
+      item={subscriptionId,currentDueDate:nextDate,sourceType:'manual',
         paidAt:'',paymentNote:'',serviceUpdatedAt:now,lastUpdatedAt:now,
         lastCompletedDate:expected,history,updatedAt:now,updatedBy:email};
     }
