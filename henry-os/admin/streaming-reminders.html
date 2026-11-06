@@ -3,14 +3,50 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#071426">
 <title>HENRY OS — Bulk Streaming Renewal Reminders</title>
-<link rel="stylesheet" href="/admin/streaming-reminders.css?v=20261105c">
+<link rel="stylesheet" href="/admin/streaming-reminders.css?v=20261105i">
 </head><body><div class="shell">
-<header class="head"><a href="/admin/" class="back">← HENRY OS</a><div class="brand">HENRY <em>OS</em><small>STREAMING RENEWAL REMINDERS</small></div><button id="reload" class="light" type="button">Refresh</button></header>
+<header class="head"><a href="/admin/" class="back">← HENRY OS</a><div class="brand">HENRY <em>OS</em><small>STREAMING RENEWALS & ACCOUNT UPDATES</small></div><button id="reload" class="light" type="button">Refresh</button></header>
 <main>
-<div class="hero"><small>AMC SHOPPING · PRIVATE OWNER WORKSPACE · BULK DATE FILTERS</small><h1>Bulk reminders. <span>Personal messages.</span></h1><p>Select customers by due date, build a WhatsApp send queue, and record each message only after you actually send it. Renewal dates come directly from your existing Streaming records.</p></div>
+<div class="hero"><small>AMC SHOPPING · PRIVATE OWNER WORKSPACE · BULK DATE FILTERS</small><h1>Netflix renewals. <span>Know what to update next.</span></h1><p>See your next seven days of Netflix provider payments and account updates, plus the existing customer payment reminder queue. Both dates come from your imported Netflix records.</p></div>
 <section id="sign-in" class="panel hidden" role="alert"><strong>Owner sign-in required.</strong><p>Sign in to HENRY OS and reopen this page.</p><a href="/admin/">Open sign-in →</a></section>
 <section id="loading" class="panel" aria-live="polite">Loading existing streaming renewal dates…</section>
 <div id="workspace" class="hidden">
+<div class="planner-switch" role="group" aria-label="Choose reminder or account-update view">
+ <button id="show-accounts" type="button" class="planner-switch-button active" aria-pressed="true">AMC Account Updates</button>
+ <button id="show-customers" type="button" class="planner-switch-button" aria-pressed="false">Customer Payment Reminders</button>
+</div>
+<section id="accounts-mode" class="account-workspace" aria-labelledby="account-heading">
+ <div class="section-head"><div><h2 id="account-heading">Netflix accounts I need to update</h2>
+ <p class="muted">These dates come from the <strong>ACCOUNT PAYMENT DATE</strong> column in your original Netflix import. They are not customer payment dates or proof that Netflix has been paid.</p></div><span class="tag">Guyana · UTC−4</span></div>
+ <div id="account-stats" class="stats"></div>
+ <section class="panel filter-panel">
+ <div class="filter-grid">
+  <label>Provider payment date<select id="account-date-filter">
+   <option value="days7">Next 7 days</option><option value="today">Due today</option>
+   <option value="tomorrow">Tomorrow</option><option value="days3">Next 3 days</option>
+   <option value="overdue">Past dates — check</option><option value="specific">Specific date</option>
+   <option value="range">Date range</option><option value="all">All accounts</option>
+  </select></label>
+  <label>Action required<select id="account-status-filter">
+   <option value="all">All statuses</option><option value="payment_to_check">Provider payment to check</option>
+   <option value="update_required">Paid — update account</option><option value="updated_recently">Recently updated</option><option value="needs_date">Date missing</option>
+  </select></label>
+  <label>Search Netflix accounts<input type="search" id="account-search" placeholder="Customer or account type"/></label>
+ </div>
+ <div id="account-specific-row" class="date-options hidden"><label>Specific provider due date<input id="account-specific-date" type="date"></label></div>
+ <div id="account-range-row" class="date-options hidden">
+ <label>From<input id="account-from-date" type="date"></label><label>Through<input id="account-to-date" type="date"></label></div>
+ </section>
+ <div class="cols">
+  <section class="panel"><div class="section-head"><div><h2>Upcoming account payments</h2><p class="muted" id="account-count">Loading…</p></div></div>
+   <div id="account-list" class="account-list" aria-live="polite"></div></section>
+  <section class="panel"><h2>Complete an account task</h2>
+    <p class="muted">Choose an account. Confirm paying Netflix and updating its service separately. Nothing is automatically charged, renewed, or recorded as a supplier expense.</p>
+    <div id="account-editor" aria-live="polite"><div class="empty">Select an account to see its update actions.</div></div></section>
+ </div>
+ <div class="notice"><strong>Shared Netflix accounts:</strong> Several customers may use the same provider account. This planner tracks each imported subscription separately; it does not create several Netflix supplier bills or assume a customer has paid AMC. Check the real supplier account before recording any provider payment.</div>
+</section>
+<div id="customer-mode" class="hidden">
 <div class="notice"><strong>Manual WhatsApp queue:</strong> This system opens one prefilled WhatsApp conversation at a time; it never sends automatically. Opening or copying a message does not count as sent. Check and confirm each delivery yourself. An old due date does not prove a customer owes money. Already-reminded customers are excluded by default.</div>
 <div class="stats" id="stats"></div>
 <section class="panel filter-panel" aria-labelledby="filter-title">
@@ -65,6 +101,7 @@
  </form>
 </section>
 </div>
+</div>
 <p id="status" role="status" class="status hidden"></p>
 </main><footer>Private A.M.C Shopping management · Messages are not automatically sent · Customer payment records remain unchanged.</footer>
-</div><script type="module" src="/admin/streaming-reminders.js?v=20261105c"></script></body></html>
+</div><script type="module" src="/admin/streaming-reminders.js?v=20261105i"></script><script type="module" src="/admin/netflix-account-planner.js?v=20261105i"></script></body></html>

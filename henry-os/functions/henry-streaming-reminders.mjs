@@ -35,6 +35,30 @@ const readAll=async(store,prefix)=>{
   const records=await Promise.all(blobs.map(b=>store.get(b.key,{type:'json'}).catch(()=>null)));
   return records.filter(Boolean);
 };
+// Imported N/ACCOUNTS uses DATE for the customer's renewal date. During the
+// original import, ACCOUNT PAYMENT DATE was preserved in private notes only.
+// Do not infer that either date is evidence of payment received.
+const importedProviderDate=s=>{
+  const direct=isoDate(s.accountPaymentDate||'');
+  if(direct)return direct;
+  const match=/Netflix provider-side account payment date:\s*(\d{4}-\d{2}-\d{2})\b/i.exec(String(s.notes||''));
+  return isoDate(match?.[1]);
+};
+const providerState=(subscription,overlay)=>{
+  const imported=importedProviderDate(subscription);
+  const date=isoDate(overlay?.currentDueDate)||imported;
+  const inactive=['cancelled','paused'].includes(String(subscription.status||'').toLowerCase());
+  return {subscriptionId:subscription.id,customer:clean(subscription.customer,160),
+    service:clean(subscription.service||'Netflix',90),plan:clean(subscription.plan,120),
+    customerDueDate:isoDate(subscription.dueDate),
+    accountDueDate:date,importedAccountDate:imported,
+    dateSource:overlay?.sourceType==='manual'?'Owner-updated':'Original Netflix import',
+    paidAt:overlay?.paidAt||'',serviceUpdatedAt:overlay?.serviceUpdatedAt||'',
+    lastUpdatedAt:overlay?.lastUpdatedAt||'',lastCompletedDate:overlay?.lastCompletedDate||'',
+    historyCount:Array.isArray(overlay?.history)?overlay.history.length:0,
+    status:inactive?'inactive':!date?'needs_date':overlay?.paidAt?'update_required':'payment_to_check',
+    category:inactive?'inactive':classify(date,day())};
+};
 const settingsDefault={friendlyTemplate:'Hi {{firstName}} 👋, this is AMC Shopping. A quick reminder that your {{service}} subscription is scheduled to renew on {{dueDate}}. {{amountLine}}If you have already renewed, please let us know so we can update your record. Thank you for choosing AMC Shopping!','dayTemplate':'Hi {{firstName}}, your {{service}} subscription has its renewal date today ({{dueDate}}). {{amountLine}}Please let us know if you have already renewed. Thank you for shopping with AMC!','followupTemplate':'Hi {{firstName}}, we are following up on your {{service}} subscription. The renewal date we have on file is {{dueDate}}. If you already renewed, please tell us so we can correct our record. Thank you!','recommendedUpdate':''};
 
 export default async (req,context)=>{
@@ -48,8 +72,8 @@ export default async (req,context)=>{
   const source=getStore('henry-amc'),store=getStore('henry-streaming-reminders');
   const today=day();
   if(action==='overview'&&req.method==='GET'){
-    const [subscriptions,logs,settings]=await Promise.all([
-      readAll(source,'streaming/'),readAll(store,'logs/'),store.get('settings/templates',{type:'json'}).catch(()=>null)
+    const [subscriptions,logs,settings,accountStates]=await Promise.all([
+      readAll(source,'streaming/'),readAll(store,'logs/'),store.get('settings/templates',{type:'json'}).catch(()=>null),readAll(store,'account-updates/')
     ]);
     const rows=subscriptions.map(s=>{
       const dueDate=isoDate(s.dueDate);
@@ -59,7 +83,63 @@ export default async (req,context)=>{
       return {id:s.id,customer:s.customer||'',whatsapp:s.whatsapp||'',service:s.service||'Netflix',
         plan:s.plan||'',amount:s.amount||'',dueDate,status:s.status||'',category,stage};
     }).sort((a,b)=>(a.category==='due_today'?-1:a.category==='due_soon'?0:a.category==='past_date'?1:a.category==='needs_date'?3:2)-(b.category==='due_today'?-1:b.category==='due_soon'?0:b.category==='past_date'?1:b.category==='needs_date'?3:2)||String(a.dueDate).localeCompare(String(b.dueDate)));
-    return json({today,subscriptions:rows,logs:logs.map(l=>({id:l.id,subscriptionId:l.subscriptionId,dueDate:l.dueDate,stage:l.stage,sentAt:l.sentAt,marketingConsentConfirmed:!!l.marketingConsentConfirmed})),settings:{...settingsDefault,...(settings||{})}});
+    const accountsById=new Map(accountStates.map(x=>[x.subscriptionId,x]));
+    const accountUpdates=subscriptions
+      .filter(s=>String(s.service||'Netflix').toLowerCase()==='netflix'&&safeId(s.id))
+      .map(s=>providerState(s,accountsById.get(s.id)))
+      .sort((a,b)=>String(a.accountDueDate||'9999').localeCompare(String(b.accountDueDate||'9999'))||a.customer.localeCompare(b.customer));
+    return json({today,subscriptions:rows,accountUpdates,logs:logs.map(l=>({id:l.id,subscriptionId:l.subscriptionId,dueDate:l.dueDate,stage:l.stage,sentAt:l.sentAt,marketingConsentConfirmed:!!l.marketingConsentConfirmed})),settings:{...settingsDefault,...(settings||{})}});
+  }
+  // Owner-only AMC operational checklist. This never charges Netflix, sends a
+  // message, updates customer billing, or creates accounting/supplier transactions.
+  if(['account_payment','account_updated','set_account_date'].includes(action)&&req.method==='POST'){
+    let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    const subscriptionId=clean(body.subscriptionId,100);
+    const expected=isoDate(body.accountDueDate);
+    if(!safeId(subscriptionId)||(action!=='set_account_date'&&!expected))return json({error:'Choose a Netflix account with a valid update date.'},400);
+    const sub=await source.get('streaming/'+subscriptionId,{type:'json'}).catch(()=>null);
+    if(!sub||String(sub.service||'Netflix').toLowerCase()!=='netflix'
+      ||['paused','cancelled'].includes(String(sub.status||'').toLowerCase()))
+      return json({error:'The Netflix account is missing or inactive. Refresh and review.'},409);
+    const key='account-updates/'+subscriptionId;
+    const prev=await store.get(key,{type:'json'}).catch(()=>null);
+    const current=providerState(sub,prev);
+    if(current.accountDueDate!==expected)return json({error:'The provider date changed. Refresh before recording an action.'},409);
+    const now=new Date().toISOString();
+    const note=clean(body.note,600);
+    let item;
+    if(action==='set_account_date'){
+      if(body.confirmedReview!==true) return json({error:'Confirm you checked the actual provider renewal date.'},400);
+      if(prev?.paidAt) return json({error:'Provider payment was already confirmed for this cycle. Complete that update before changing the next date.'},409);
+      if(note.length<8)return json({error:'Add a short reason or source for correcting this date.'},400);
+      const corrected=isoDate(body.newAccountDueDate);
+      if(!corrected||corrected===expected)return json({error:'Choose a valid, different account payment date.'},400);
+      item={...prev,subscriptionId,currentDueDate:corrected,sourceType:'manual',paidAt:'',
+        history:[...(Array.isArray(prev?.history)?prev.history:[]),{
+          type:'date_correction',previousDate:expected,nextDate:corrected,
+          note,updatedAt:now,confirmedBy:email}].slice(-24),
+        updatedAt:now,updatedBy:email};
+    }else if(action==='account_payment'){
+      if(body.confirmedPaid!==true)return json({error:'Confirm you actually paid the provider before marking it paid.'},400);
+      if(prev?.paidAt)return json({error:'Provider payment is already recorded for this account date.'},409);
+      item={...prev,subscriptionId,currentDueDate:expected,sourceType:prev?.sourceType||'imported',
+        paidAt:now,paymentNote:note,updatedAt:now,updatedBy:email,
+        history:Array.isArray(prev?.history)?prev.history.slice(-24):[]};
+    }else{
+      if(body.confirmedUpdated!==true)return json({error:'Confirm the Netflix account was actually updated.'},400);
+      if(!prev?.paidAt)return json({error:'Confirm the provider payment for this cycle before closing the update task.'},409);
+      const nextDate=isoDate(body.nextAccountDueDate);
+      if(!nextDate||nextDate<=expected||nextDate<=today)
+        return json({error:'Enter the real next provider payment date after the current date. Do not assume a monthly extension.'},400);
+      const history=[...(Array.isArray(prev?.history)?prev.history:[]),
+        {date:expected,nextDate,providerPaidAt:prev.paidAt,accountUpdatedAt:now,
+         note,confirmedBy:email}].slice(-24);
+      item={subscriptionId,currentDueDate:nextDate,sourceType:'manual',
+        paidAt:'',paymentNote:'',serviceUpdatedAt:now,lastUpdatedAt:now,
+        lastCompletedDate:expected,history,updatedAt:now,updatedBy:email};
+    }
+    await store.setJSON(key,item);
+    return json({account:providerState(sub,item),action},200);
   }
   if(action==='save_settings'&&req.method==='POST'){
     let input;try{input=await req.json()}catch{return json({error:'Invalid JSON'},400)}

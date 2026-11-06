@@ -5,7 +5,7 @@ if(!fs.existsSync(site))throw Error('Site directory not found');
 const root=new URL('../henry-os/admin/',import.meta.url);
 const dest=path.join(site,'admin');
 fs.mkdirSync(dest,{recursive:true});
-for(const name of ['index.html','styles.css','app.js','henry-live-sync.js','membership-tracker.js','membership-tracker.css','invoice-factory-preview.html','invoice-factory-preview.css','invoice-factory-workspace.css','invoice-factory-fixes.css','invoice-factory-preview.js','invoice-factory-handoff.js','streaming-migration-preview.html','streaming-migration-preview.js','streaming-migration-preview.css','henry-finance-report.js','henry-finance.js','henry-finance.css','streaming-reminders.html','streaming-reminders.js','streaming-reminders.css'])fs.copyFileSync(new URL(name,root),path.join(dest,name));
+for(const name of ['index.html','styles.css','app.js','henry-live-sync.js','membership-tracker.js','membership-tracker.css','invoice-factory-preview.html','invoice-factory-preview.css','invoice-factory-workspace.css','invoice-factory-fixes.css','invoice-factory-preview.js','invoice-factory-handoff.js','streaming-migration-preview.html','streaming-migration-preview.js','streaming-migration-preview.css','henry-finance-report.js','henry-finance.js','henry-finance.css','streaming-reminders.html','streaming-reminders.js','streaming-reminders.css','netflix-account-planner.js'])fs.copyFileSync(new URL(name,root),path.join(dest,name));
 // The standalone Finance screen is retired; retain its API and stored records for future redesign.
 fs.rmSync(path.join(dest,'henry-finance.html'),{force:true});
 const invoiceFactoryJs=path.join(dest,'invoice-factory-preview.js');
