@@ -92,11 +92,11 @@ export default async (req,context)=>{
   }
   // Owner-only AMC operational checklist. This never charges Netflix, sends a
   // message, updates customer billing, or creates accounting/supplier transactions.
-  if(['account_payment','account_updated'].includes(action)&&req.method==='POST'){
+  if(['account_payment','account_updated','set_account_date'].includes(action)&&req.method==='POST'){
     let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
     const subscriptionId=clean(body.subscriptionId,100);
     const expected=isoDate(body.accountDueDate);
-    if(!safeId(subscriptionId)||!expected)return json({error:'Choose a Netflix account with a valid update date.'},400);
+    if(!safeId(subscriptionId)||(action!=='set_account_date'&&!expected))return json({error:'Choose a Netflix account with a valid update date.'},400);
     const sub=await source.get('streaming/'+subscriptionId,{type:'json'}).catch(()=>null);
     if(!sub||String(sub.service||'Netflix').toLowerCase()!=='netflix'
       ||['paused','cancelled'].includes(String(sub.status||'').toLowerCase()))
@@ -108,7 +108,18 @@ export default async (req,context)=>{
     const now=new Date().toISOString();
     const note=clean(body.note,600);
     let item;
-    if(action==='account_payment'){
+    if(action==='set_account_date'){
+      if(body.confirmedReview!==true) return json({error:'Confirm you checked the actual provider renewal date.'},400);
+      if(prev?.paidAt) return json({error:'Provider payment was already confirmed for this cycle. Complete that update before changing the next date.'},409);
+      if(note.length<8)return json({error:'Add a short reason or source for correcting this date.'},400);
+      const corrected=isoDate(body.newAccountDueDate);
+      if(!corrected||corrected===expected)return json({error:'Choose a valid, different account payment date.'},400);
+      item={...prev,subscriptionId,currentDueDate:corrected,paidAt:'',
+        history:[...(Array.isArray(prev?.history)?prev.history:[]),{
+          type:'date_correction',previousDate:expected,nextDate:corrected,
+          note,updatedAt:now,confirmedBy:email}].slice(-24),
+        updatedAt:now,updatedBy:email};
+    }else if(action==='account_payment'){
       if(body.confirmedPaid!==true)return json({error:'Confirm you actually paid the provider before marking it paid.'},400);
       if(prev?.paidAt)return json({error:'Provider payment is already recorded for this account date.'},409);
       item={...prev,subscriptionId,currentDueDate:expected,
