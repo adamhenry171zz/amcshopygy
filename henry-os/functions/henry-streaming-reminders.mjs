@@ -155,7 +155,7 @@ export default async (req,context)=>{
         readStrict(finance,'finance/receipts/'),readStrict(source,'payments/')
       ]);
     }catch{return json({error:'Cannot verify existing payment references. Try again without recording a duplicate.'},503)}
-    const identical=p=>normalRef(p.reference)===canon;
+    const identical=p=>!!p&&normalRef(p.reference)===canon;
     const matches=existingFinance.filter(identical);
     const oldMatches=existingOld.filter(identical);
     const receiptKey='finance/receipts/streaming-'+crypto.createHash('sha256').update(canon).digest('hex').slice(0,40);
