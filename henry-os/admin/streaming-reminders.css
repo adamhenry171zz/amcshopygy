@@ -86,3 +86,25 @@
 .account-correct .account-form{margin-top:11px}
 @media(max-width:850px){.account-workspace .filter-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:550px){.planner-switch{display:grid;grid-template-columns:1fr}.planner-switch-button{text-align:center}.account-workspace .filter-grid{grid-template-columns:1fr}}
+
+
+/* Inline verified customer payment: separate from "reminder sent". */
+.customer-choice{flex-wrap:wrap;cursor:default}
+.customer-choice-main{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 220px;cursor:pointer}
+.customer-choice .customer-choice-main .tag{flex:none}
+.customer-choice:has(input:disabled){opacity:1;cursor:default}
+.customer-choice-main input:disabled{opacity:.5}
+.customer-choice .record-paid-button{flex:none;border:1px solid #3a966d;background:#174733;color:#d7ffea;
+ border-radius:8px;padding:9px 13px;font-size:12px;font-weight:800;cursor:pointer}
+.customer-choice .record-paid-button:hover{background:#215f43}
+.customer-choice .record-paid-button:disabled{opacity:.5;cursor:not-allowed}
+.customer-reason,.last-paid{display:block;line-height:1.45;margin-top:5px}
+.last-paid{color:#87e6bc;font-weight:700}
+.customer-payment-panel{margin:17px 0 20px;border-color:#3d8da0}
+.customer-paid-form{max-width:830px;margin-top:14px}
+.payment-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.payment-form-grid label{display:grid;gap:7px;min-width:0}
+.payment-form-grid input,.payment-form-grid select{min-width:0}
+.customer-paid-confirm{border:1px solid #418c72;border-radius:10px;background:#143d30;padding:12px}
+.customer-paid-confirm input{accent-color:#2ac48a}
+@media(max-width:650px){.payment-form-grid{grid-template-columns:1fr}.customer-choice-main{flex:1 1 100%}.customer-choice .record-paid-button{margin-left:auto}.customer-paid-form button[type=submit]{width:100%}}
