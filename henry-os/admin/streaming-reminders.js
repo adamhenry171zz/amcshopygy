@@ -29,7 +29,7 @@ const state={
  data:null,service:'Netflix',dateFilter:'today',statusFilter:'not_sent',search:'',
  specific:'',from:'',to:'',dates:new Set(),selected:new Set(),queue:[],index:0,
  drafts:new Map(),prepared:new Map(),includeUpdate:new Set(),consents:new Set(),
- followups:new Set(),sentChecked:new Set(),sentInQueue:new Set(),working:false
+ followups:new Set(),sentChecked:new Set(),sentInQueue:new Set(),paidEditingId:'',working:false
 };
 const isPreview=/(?:^deploy-preview-\d+--|^branch--)/.test(location.hostname);
 function flash(message,error=false){
@@ -84,6 +84,7 @@ function matchStatus(s){
  const attention=!s.stage||!isDate(s.dueDate)||!phone(s.whatsapp)||s.category==='inactive';
  if(state.statusFilter==='not_sent')return !sent&&!attention;
  if(state.statusFilter==='sent')return sent;
+ if(state.statusFilter==='recently_paid')return !!(s.lastPayment&&isDate(s.lastPayment.paidOn)&&s.lastPayment.paidOn>=plusDays(state.data.today,-30));
  if(state.statusFilter==='attention')return attention;
  return true;
 }
@@ -94,6 +95,7 @@ function filteredRows(){
  .sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||String(a.customer).localeCompare(String(b.customer)));
 }
 function labelFor(s){
+ if(s.lastPayment&&s.lastPayment.nextDueDate===s.dueDate&&s.dueDate>plusDays(state.data.today,6))return 'Paid ✓';
  if(currentStageLog(s))return 'Sent ✓';
  if(cycleLog(s))return 'Reminded earlier';
  if(!s.stage||!isDate(s.dueDate))return 'Date needed';
@@ -104,7 +106,7 @@ function reasonFor(s){
  if(!isDate(s.dueDate))return 'Renewal date missing. Fix in HENRY OS Streaming.';
  if(s.category==='inactive')return 'Paused or cancelled. Update status before reminders.';
  if(!phone(s.whatsapp))return 'No valid WhatsApp number. Fix in HENRY OS Streaming.';
- if(currentStageLog(s))return 'Already recorded sent at this reminder stage.';
+ if(currentStageLog(s))return 'Reminder sent. You can still record payment below.';
  return '';
 }
 function renderFilters(){
@@ -149,21 +151,91 @@ function selectionSummary(){
 }
 function renderList(){
  const rows=filteredRows();
- $('result-caption').textContent=rows.length+' matching record'+(rows.length===1?'':'s')+'. Eligible customers can be added to the queue.';
+ $('result-caption').textContent=rows.length+' matching record'+(rows.length===1?'':'s')+'. Select eligible reminders or click Record Paid directly.';
  $('customer-list').innerHTML=rows.map(s=>{
   const eligible=canPrepare(s),reason=reasonFor(s);
-  return '<label class="customer-choice '+(state.selected.has(s.id)?'selected':'')+'">'+
+  const canRecord=isDate(s.dueDate)&&s.category!=='inactive';
+  const previous=s.lastPayment;
+  return '<div class="customer-choice '+(state.selected.has(s.id)?'selected':'')+'">'+
+   '<label class="customer-choice-main">'+
    '<input type="checkbox" data-pick="'+esc(s.id)+'" '+(state.selected.has(s.id)?'checked':'')+(eligible?'':' disabled')+'>'+
    '<span class="customer-main"><strong>'+esc(s.customer||'(unnamed customer)')+'</strong><small>'+
-    esc(s.service||'Streaming')+' · '+esc(s.plan||'Plan not recorded')+' · '+esc(dateLabel(s.dueDate))+
-    (reason?'<br>'+esc(reason):'')+
-   '</small></span><span class="tag '+esc(s.category)+'">'+esc(labelFor(s))+'</span></label>';
+    esc(s.service||'Streaming')+' · '+esc(s.plan||'Plan not recorded')+' · Due '+esc(dateLabel(s.dueDate))+
+    (reason?'<span class="customer-reason">'+esc(reason)+'</span>':'')+
+    (previous?'<span class="last-paid">Last paid '+esc(dateLabel(previous.paidOn))+
+      ' · Next renewal '+esc(dateLabel(previous.nextDueDate))+'</span>':'')+
+   '</small></span><span class="tag '+esc(s.category)+'">'+esc(labelFor(s))+'</span></label>'+
+   '<button class="record-paid-button" type="button" data-record-paid="'+esc(s.id)+'" '+
+    (canRecord?'':' disabled title="Set a valid customer due date in Streaming first"')+'>Record Paid</button>'+
+   '</div>';
  }).join('')||'<div class="empty">No matching customers. Try another date or status filter.</div>';
  $('customer-list').querySelectorAll('[data-pick]').forEach(input=>input.addEventListener('change',e=>{
   if(e.target.checked)state.selected.add(e.target.dataset.pick);else state.selected.delete(e.target.dataset.pick);
   renderList();selectionSummary();
  }));
+ $('customer-list').querySelectorAll('[data-record-paid]').forEach(button=>button.addEventListener('click',()=>{
+  state.paidEditingId=button.dataset.recordPaid;
+  renderPaymentEditor();
+  $('customer-payment-panel')?.scrollIntoView({behavior:'smooth',block:'start'});
+ }));
  selectionSummary();
+}
+function renderPaymentEditor(){
+ const panel=$('customer-payment-panel'),body=$('customer-payment-body');
+ const s=getCustomer(state.paidEditingId);
+ if(!s||!isDate(s.dueDate)||s.category==='inactive'){
+  panel.classList.add('hidden');return;
+ }
+ panel.classList.remove('hidden');
+ $('customer-payment-heading').textContent='Record Paid — '+s.customer;
+ $('customer-payment-caption').textContent='Existing renewal: '+dateLabel(s.dueDate)+
+  ' · A reminder marked Sent does not mean paid. Enter the actual deposit and next customer due date.';
+ body.innerHTML='<form id="customer-paid-form" class="form customer-paid-form">'+
+  '<div class="payment-form-grid">'+
+   '<label>Amount received (GYD)<input name="amountGyd" type="number" min="0.01" step="0.01" value="'+
+    esc(String(s.amount||'').replace(/,/g,''))+'" required></label>'+
+   '<label>Date received<input name="receivedDate" type="date" value="'+esc(state.data.today)+'" max="'+
+    esc(state.data.today)+'" required></label>'+
+   '<label>Payment method<select name="method"><option value="MMG">MMG</option>'+
+    '<option value="Bank transfer">Bank transfer</option><option value="Cash">Cash</option>'+
+    '<option value="Other">Other</option></select></label>'+
+   '<label>Transaction / cash receipt reference<input name="reference" maxlength="120" minlength="4" '+
+     'placeholder="Actual unique reference" required></label>'+
+   '<label>Next customer payment due<input name="nextDueDate" type="date" min="'+
+    esc(plusDays(s.dueDate,1))+'" required></label>'+
+   '</div>'+
+   '<label>Optional note<textarea name="notes" rows="2" maxlength="700" '+
+     'placeholder="MMG statement checked; no passwords or card details"></textarea></label>'+
+   '<label class="checkbox"><input name="historical" type="checkbox"> This payment was received before HENRY OS financial go-live</label>'+
+   '<label class="checkbox customer-paid-confirm"><input name="confirmedReceived" type="checkbox" required>'+
+      ' I verified that AMC actually received this customer payment.</label>'+
+   '<p class="muted">This updates the customer renewal date and records one verified payment on your main dashboard. '+
+    'Your Netflix provider account payment date stays unchanged. No WhatsApp message will be sent.</p>'+
+   '<button type="submit" class="primary" '+(state.working?'disabled':'')+'>Confirm Paid &amp; Update Renewal</button>'+
+   '</form>';
+ $('customer-paid-form').addEventListener('submit',async e=>{
+  e.preventDefault();if(state.working)return;
+  const data=Object.fromEntries(new FormData(e.currentTarget).entries());
+  if(data.confirmedReceived!=='on'){flash('Confirm the actual payment received first.',true);return}
+  if(!confirm('Confirm payment from '+s.customer+' was received and verified?\\n\\n'+
+    'This records GYD '+data.amountGyd+' as collected and changes the next customer due date to '+data.nextDueDate+'.'))return;
+  state.working=true;
+  const submit=$('customer-paid-form button[type=submit]');
+  if(submit)submit.disabled=true;
+  try{
+   await api('record_customer_paid','POST',{
+    subscriptionId:s.id,previousDueDate:s.dueDate,nextDueDate:data.nextDueDate,
+    amountGyd:data.amountGyd,receivedDate:data.receivedDate,method:data.method,
+    reference:data.reference,historical:data.historical==='on',
+    notes:data.notes||'',confirmedReceived:true
+   });
+   state.paidEditingId='';
+   state.selected.delete(s.id);
+   await refresh();
+   flash('Payment recorded for '+s.customer+'. Next renewal updated to '+dateLabel(data.nextDueDate)+'.');
+  }catch(err){flash(err.message,true);if(submit)submit.disabled=false}
+  finally{state.working=false}
+ });
 }
 function queueItem(){
  const snap=state.queue[state.index];
@@ -324,7 +396,7 @@ function fillSettings(){
 }
 function render(){
  if(!state.data)return;
- renderFilters();renderStats();renderList();renderQueue();
+ renderFilters();renderStats();renderList();renderQueue();renderPaymentEditor();
 }
 async function refresh(){
  $('loading').classList.remove('hidden');
@@ -342,9 +414,10 @@ async function refresh(){
  finally{$('loading').classList.add('hidden')}
 }
 $('reload').addEventListener('click',refresh);
+$('close-customer-payment').addEventListener('click',()=>{state.paidEditingId='';renderPaymentEditor()});
 $('service-filter').addEventListener('change',e=>{state.service=e.target.value;render()});
 $('date-filter').addEventListener('change',e=>{state.dateFilter=e.target.value;render()});
-$('status-filter').addEventListener('change',e=>{state.statusFilter=e.target.value;render()});
+$('status-filter').addEventListener('change',e=>{state.statusFilter=e.target.value;if(e.target.value==='recently_paid')state.dateFilter='all';render()});
 $('customer-search').addEventListener('input',e=>{
  state.search=e.target.value;renderStats();renderList();
 });

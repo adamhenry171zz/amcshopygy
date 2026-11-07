@@ -223,3 +223,4 @@ function bindAccountPlanner(){
  void accountRefresh();
 }
 bindAccountPlanner();
+if(new URLSearchParams(location.search).get('view')==='customers')plannerMode('customers');
