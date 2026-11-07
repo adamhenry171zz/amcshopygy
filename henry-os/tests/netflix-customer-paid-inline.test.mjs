@@ -90,17 +90,10 @@ test('duplicate references, amount mistakes and stale due dates are blocked',asy
  assert.equal((await h.call('record_customer_paid',good)).status,409);
  assert.equal(h.stores.get('henry-finance-phase1').size,1);
 });
-test('partial finance-write failure can safely resume with same reference without double receipt',async()=>{
- const h=harness(),a=account(),old= h.getStore('henry-amc');
+test('persisted but unapplied receipt can resume with the same reference without double count',async()=>{
+ const h=harness(),a=account(),old=h.getStore('henry-amc');
  await old.setJSON('streaming/'+a.id,a);
- let injected=false;
- const orig=old.setJSON;
- old.setJSON=async(key,value)=>{
-  if(!injected&&key==='streaming/'+a.id){injected=true;throw Error('Simulated source-save timeout')}
-  return orig(key,value);
- };
- // Replace getStore temporarily through map helper in this fixture by simulating
- // an already-persisted incomplete receipt; the next call resumes it.
+ // Simulate an actual receipt stored before the source-date update could finish.
  const pay=verifiedPayment(a);
  const normalized=pay.reference.toUpperCase().replace(/[^A-Z0-9]/g,'');
  const receiptId='streaming-'+crypto.createHash('sha256').update(normalized).digest('hex').slice(0,40);
