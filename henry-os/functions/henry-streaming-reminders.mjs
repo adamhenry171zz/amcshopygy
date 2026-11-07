@@ -59,6 +59,24 @@ const providerState=(subscription,overlay)=>{
     status:inactive?'inactive':!date?'needs_date':overlay?.paidAt?'update_required':'payment_to_check',
     category:inactive?'inactive':classify(date,day())};
 };
+// Cash receipts are separate from reminders and Netflix supplier-account tasks.
+// This matches the original Finance Phase 1 verified-cash register so the
+// main HENRY OS monthly total reflects the payment exactly once.
+const normalRef=v=>String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+const validatedMoney=value=>{
+  const v=clean(value,40).replace(/,/g,'');
+  if(!/^\d+(?:\.\d{1,2})?$/.test(v))return '';
+  const n=Number(v);
+  return Number.isFinite(n)&&n>0&&n<=10000000?n.toFixed(2):'';
+};
+const readStrict=async(store,prefix)=>{
+  const {blobs}=await store.list({prefix});
+  return Promise.all(blobs.map(b=>store.get(b.key,{type:'json'})));
+};
+const candidatePayment=(p,s)=>{
+  return p&&p.relatedType==='streaming'&&p.streamingId===s.id&&
+    p.status==='verified'&&p.source==='reminder_inline_customer_paid'&&p.applied===true;
+};
 const settingsDefault={friendlyTemplate:'Hi {{firstName}} 👋, this is AMC Shopping. A quick reminder that your {{service}} subscription is scheduled to renew on {{dueDate}}. {{amountLine}}If you have already renewed, please let us know so we can update your record. Thank you for choosing AMC Shopping!','dayTemplate':'Hi {{firstName}}, your {{service}} subscription has its renewal date today ({{dueDate}}). {{amountLine}}Please let us know if you have already renewed. Thank you for shopping with AMC!','followupTemplate':'Hi {{firstName}}, we are following up on your {{service}} subscription. The renewal date we have on file is {{dueDate}}. If you already renewed, please tell us so we can correct our record. Thank you!','recommendedUpdate':''};
 
 export default async (req,context)=>{
@@ -72,16 +90,26 @@ export default async (req,context)=>{
   const source=getStore('henry-amc'),store=getStore('henry-streaming-reminders');
   const today=day();
   if(action==='overview'&&req.method==='GET'){
-    const [subscriptions,logs,settings,accountStates]=await Promise.all([
-      readAll(source,'streaming/'),readAll(store,'logs/'),store.get('settings/templates',{type:'json'}).catch(()=>null),readAll(store,'account-updates/')
+    const [subscriptions,logs,settings,accountStates,financeReceipts]=await Promise.all([
+      readAll(source,'streaming/'),readAll(store,'logs/'),store.get('settings/templates',{type:'json'}).catch(()=>null),readAll(store,'account-updates/'),readAll(getStore('henry-finance-phase1'),'finance/receipts/').catch(()=>[])
     ]);
+    const paidBySub=new Map();
+    for(const payment of financeReceipts){
+      if(!payment||payment.status!=='verified'||payment.relatedType!=='streaming'||payment.applied!==true||!payment.streamingId)continue;
+      const prior=paidBySub.get(payment.streamingId);
+      if(!prior||String(payment.decidedAt||payment.createdAt)>String(prior.decidedAt||prior.createdAt))paidBySub.set(payment.streamingId,payment);
+    }
     const rows=subscriptions.map(s=>{
       const dueDate=isoDate(s.dueDate);
       const inactive=['cancelled','paused'].includes(String(s.status||'').toLowerCase());
       const category=inactive?'inactive':classify(dueDate,today);
       const stage=stageFor(category);
       return {id:s.id,customer:s.customer||'',whatsapp:s.whatsapp||'',service:s.service||'Netflix',
-        plan:s.plan||'',amount:s.amount||'',dueDate,status:s.status||'',category,stage};
+        plan:s.plan||'',amount:s.amount||'',dueDate,status:s.status||'',category,stage,
+        lastPayment:(paidBySub.get(s.id)?.source==='reminder_inline_customer_paid')?{
+          paidOn:paidBySub.get(s.id).receivedDate,amount:paidBySub.get(s.id).amountGyd,
+          previousDueDate:paidBySub.get(s.id).previousDueDate,
+          nextDueDate:paidBySub.get(s.id).nextDueDate}:null};
     }).sort((a,b)=>(a.category==='due_today'?-1:a.category==='due_soon'?0:a.category==='past_date'?1:a.category==='needs_date'?3:2)-(b.category==='due_today'?-1:b.category==='due_soon'?0:b.category==='past_date'?1:b.category==='needs_date'?3:2)||String(a.dueDate).localeCompare(String(b.dueDate)));
     const accountsById=new Map(accountStates.map(x=>[x.subscriptionId,x]));
     const accountUpdates=subscriptions
@@ -89,6 +117,76 @@ export default async (req,context)=>{
       .map(s=>providerState(s,accountsById.get(s.id)))
       .sort((a,b)=>String(a.accountDueDate||'9999').localeCompare(String(b.accountDueDate||'9999'))||a.customer.localeCompare(b.customer));
     return json({today,subscriptions:rows,accountUpdates,logs:logs.map(l=>({id:l.id,subscriptionId:l.subscriptionId,dueDate:l.dueDate,stage:l.stage,sentAt:l.sentAt,marketingConsentConfirmed:!!l.marketingConsentConfirmed})),settings:{...settingsDefault,...(settings||{})}});
+  }
+  // Mark a customer renewal paid in-place, independently of "reminder sent".
+  // Two-step durable write: receipt first, then original subscription due date.
+  // If a source write fails, resubmitting the SAME reference safely resumes
+  // without creating a second cash receipt. No provider renewal is affected.
+  if(action==='record_customer_paid'&&req.method==='POST'){
+    let input;try{input=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    if(input.confirmedReceived!==true)return json({error:'Confirm that AMC actually received this payment.'},400);
+    const subscriptionId=clean(input.subscriptionId,100);
+    const previousDueDate=isoDate(input.previousDueDate);
+    const nextDueDate=isoDate(input.nextDueDate);
+    const receivedDate=isoDate(input.receivedDate);
+    const method=clean(input.method,40);
+    const reference=clean(input.reference,120),canon=normalRef(reference);
+    const historical=input.historical===true,notes=clean(input.notes,700);
+    const amt=validatedMoney(input.amountGyd);
+    if(!safeId(subscriptionId)||!previousDueDate)return json({error:'Choose a subscription with a valid current renewal date.'},400);
+    if(!receivedDate||receivedDate>today)return json({error:'Choose the actual date the money was received, not a future date.'},400);
+    if(!nextDueDate||nextDueDate<=previousDueDate||nextDueDate<=today)
+      return json({error:'Enter the correct next customer payment date after the existing due date. Do not guess a month.'},400);
+    if(!['MMG','Bank transfer','Cash','Other'].includes(method))
+      return json({error:'Select a payment method.'},400);
+    if(canon.length<4||['CASH','NONE','UNKNOWN','NORECEIPT','NOREF','NA','MMG','BANK'].includes(canon))
+      return json({error:'Enter the actual unique MMG, bank or cash receipt number (not a generic description).'},400);
+    if(!amt)return json({error:'Enter a valid GYD payment amount.'},400);
+    if(historical&&notes.length<8)return json({error:'Add a brief verification note for a pre-go-live payment.'},400);
+    const streamKey='streaming/'+subscriptionId;
+    const s=await source.get(streamKey,{type:'json'}).catch(()=>null);
+    if(!s||['paused','cancelled'].includes(String(s.status||'').toLowerCase()))
+      return json({error:'This subscription is missing or inactive. Refresh first.'},409);
+    const finance=getStore('henry-finance-phase1');
+    // Never silently undercount/duplicate if the two registers can't be read.
+    let existingFinance,existingOld;
+    try{
+      [existingFinance,existingOld]=await Promise.all([
+        readStrict(finance,'finance/receipts/'),readStrict(source,'payments/')
+      ]);
+    }catch{return json({error:'Cannot verify existing payment references. Try again without recording a duplicate.'},503)}
+    const identical=p=>normalRef(p.reference)===canon;
+    const matches=existingFinance.filter(identical);
+    const oldMatches=existingOld.filter(identical);
+    const receiptKey='finance/receipts/streaming-'+crypto.createHash('sha256').update(canon).digest('hex').slice(0,40);
+    const resumable=matches.length===1&&matches[0].source==='reminder_inline_customer_paid'&&
+      matches[0].streamingId===subscriptionId&&matches[0].previousDueDate===previousDueDate&&
+      matches[0].nextDueDate===nextDueDate&&matches[0].receivedDate===receivedDate&&
+      Number(matches[0].amountGyd)===Number(amt)&&matches[0].method===method&&
+      matches[0].status==='verified'&&!matches[0].applied;
+    if(oldMatches.length||matches.length&&!resumable)
+      return json({error:'This payment reference already exists in HENRY OS. Check the existing verified record; it was not counted again.'},409);
+    const currentDue=isoDate(s.dueDate);
+    if(currentDue!==previousDueDate&&!(resumable&&currentDue===nextDueDate))
+      return json({error:'This customer’s renewal date has changed. Refresh before confirming payment.'},409);
+    const storedAmount=validatedMoney(s.amount);
+    if(storedAmount&&Number(storedAmount)!==Number(amt))
+      return json({error:'The payment does not match the subscription amount on file. Review the amount in Streaming before marking a renewal fully paid.'},409);
+    const now=new Date().toISOString();
+    const receipt=resumable?matches[0]:{
+      id:receiptKey.split('/').at(-1),source:'reminder_inline_customer_paid',relatedType:'streaming',
+      streamingId:subscriptionId,customer:clean(s.customer,160),amountGyd:amt,
+      receivedDate,method,reference,previousDueDate,nextDueDate,
+      historical,status:'verified',applied:false,notes,
+      confirmedBy:email,decidedBy:email,decidedAt:now,verifiedAt:now,createdAt:now,updatedAt:now
+    };
+    if(!resumable)await finance.setJSON(receiptKey,receipt);
+    // Preserve all unrelated imported fields including provider date in notes.
+    // Record the future customer due date only; provider account date is separate.
+    if(currentDue===previousDueDate)
+      await source.setJSON(streamKey,{...s,dueDate:nextDueDate,updatedAt:now});
+    await finance.setJSON(receiptKey,{...receipt,applied:true,appliedAt:now,updatedAt:now});
+    return json({success:true,subscriptionId,previousDueDate,nextDueDate,receivedDate,amountGyd:amt},201);
   }
   // Owner-only AMC operational checklist. This never charges Netflix, sends a
   // message, updates customer billing, or creates accounting/supplier transactions.
