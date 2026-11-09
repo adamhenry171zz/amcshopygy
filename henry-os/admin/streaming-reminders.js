@@ -26,7 +26,7 @@ const labels={
  needs_date:'Date missing',upcoming:'Scheduled',inactive:'Paused / cancelled'
 };
 const state={
- data:null,service:'Netflix',dateFilter:'today',statusFilter:'not_sent',search:'',
+ data:null,service:'Netflix',dateFilter:'today',statusFilter:'not_sent',lifecycleFilter:'active',search:'',
  specific:'',from:'',to:'',dates:new Set(),selected:new Set(),queue:[],index:0,
  drafts:new Map(),prepared:new Map(),includeUpdate:new Set(),consents:new Set(),
  followups:new Set(),sentChecked:new Set(),sentInQueue:new Set(),paidEditingId:'',editorMode:'payment',working:false
@@ -81,20 +81,32 @@ function matchDate(s){
 }
 function matchStatus(s){
  const sent=!!cycleLog(s);
- const attention=!s.stage||!isDate(s.dueDate)||!phone(s.whatsapp)||s.category==='inactive';
+ const attention=!s.stage||!isDate(s.dueDate)||!phone(s.whatsapp)||s.customerStatus!=='active';
  if(state.statusFilter==='not_sent')return !sent&&!attention;
  if(state.statusFilter==='sent')return sent;
  if(state.statusFilter==='recently_paid')return !!(s.lastPayment&&isDate(s.lastPayment.paidOn)&&s.lastPayment.paidOn>=plusDays(state.data.today,-30));
  if(state.statusFilter==='attention')return attention;
  return true;
 }
+function matchLifecycle(s){
+ const status=s.customerStatus||'active';
+ switch(state.lifecycleFilter){
+  case 'active':return status==='active';
+  case 'inactive':return status==='inactive';
+  case 'archive_review':return status==='inactive'&&s.archiveSuggested===true;
+  case 'archived':return status==='archived';
+  default:return true;
+ }
+}
 function filteredRows(){
  const q=state.search.toLowerCase().trim();
- return state.data.subscriptions.filter(s=>matchService(s)&&matchDate(s)&&matchStatus(s)&&
+ return state.data.subscriptions.filter(s=>matchLifecycle(s)&&matchService(s)&&matchDate(s)&&matchStatus(s)&&
   (!q||[s.customer,s.plan,s.service,s.whatsapp].some(v=>String(v||'').toLowerCase().includes(q))))
  .sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999'))||String(a.customer).localeCompare(String(b.customer)));
 }
 function labelFor(s){
+ if(s.customerStatus==='archived')return 'Archived';
+ if(s.customerStatus==='inactive')return s.archiveSuggested?'Archive suggested':'Inactive';
  if(s.lastPayment&&s.lastPayment.nextDueDate===s.dueDate&&s.dueDate>plusDays(state.data.today,6))return 'Paid ✓';
  if(currentStageLog(s))return 'Sent ✓';
  if(cycleLog(s))return 'Reminded earlier';
@@ -103,8 +115,10 @@ function labelFor(s){
  return labels[s.category]||'Ready';
 }
 function reasonFor(s){
+ if(s.customerStatus==='archived')return 'Archived — history preserved. Restore to resume.';
+ if(s.customerStatus==='inactive')return s.archiveSuggested?'60+ days inactive — archive only with owner approval.':'Inactive — customer reminders are stopped.';
  if(!isDate(s.dueDate))return 'Renewal date missing. Use Edit Customer to set it here.';
- if(s.category==='inactive')return 'Paused or cancelled. Update status before reminders.';
+ if(s.customerStatus!=='active')return 'Customer is inactive or archived. Reactivate before reminders.';
  if(!phone(s.whatsapp))return 'No valid WhatsApp number. Fix in HENRY OS Streaming.';
  if(currentStageLog(s))return 'Reminder sent. You can still record payment below.';
  return '';
@@ -117,6 +131,7 @@ function renderFilters(){
  $('service-filter').value=state.service;
  $('date-filter').value=state.dateFilter;
  $('status-filter').value=state.statusFilter;
+ $('lifecycle-filter').value=state.lifecycleFilter;
  $('customer-search').value=state.search;
  $('specific-date').value=state.specific;
  $('date-from').value=state.from;
@@ -132,7 +147,7 @@ function renderFilters(){
  });
 }
 function renderStats(){
- const records=state.data.subscriptions.filter(s=>matchService(s)&&s.category!=='inactive');
+ const records=state.data.subscriptions.filter(s=>matchService(s)&&s.customerStatus==='active');
  const t=state.data.today;
  const stats=[
   ['Due today',records.filter(s=>s.dueDate===t).length,'Customers due today'],
@@ -154,7 +169,7 @@ function renderList(){
  $('result-caption').textContent=rows.length+' matching customer'+(rows.length===1?'':'s')+'. Edit details, fix renewal dates, or record verified payments here.';
  $('customer-list').innerHTML=rows.map(s=>{
   const eligible=canPrepare(s),reason=reasonFor(s);
-  const canRecord=s.category!=='inactive';
+  const canRecord=s.customerStatus==='active';
   const previous=s.lastPayment;
   return '<div class="customer-choice '+(state.selected.has(s.id)?'selected':'')+'">'+
    '<label class="customer-choice-main">'+
@@ -167,7 +182,12 @@ function renderList(){
    '</small></span><span class="tag '+esc(s.category)+'">'+esc(labelFor(s))+'</span></label>'+
    '<div class="customer-actions"><button class="edit-customer-button" type="button" data-edit-customer="'+esc(s.id)+'">Edit Customer</button>'+
    '<button class="record-paid-button" type="button" data-record-paid="'+esc(s.id)+'" '+
-    (canRecord?'':' disabled title="This subscription is paused or cancelled"')+'>Record Paid</button></div>'+
+    (canRecord?'':' disabled title="Reactivate the customer before recording a new renewal"')+'>Record Paid</button>'+
+    (s.customerStatus==='active'
+      ?'<button class="customer-status-button" type="button" data-customer-lifecycle="inactive" data-subscription-id="'+esc(s.id)+'">Mark Inactive</button>'
+      :'<button class="customer-status-button restore" type="button" data-customer-lifecycle="reactivate" data-subscription-id="'+esc(s.id)+'">Reactivate</button>')+
+    (s.archiveSuggested?'<button class="customer-status-button archive" type="button" data-customer-lifecycle="archive" data-subscription-id="'+esc(s.id)+'">Approve Archive</button>':'')+
+    '</div>'+
    '</div>';
  }).join('')||'<div class="empty">No matching customers. Try another date or status filter.</div>';
  $('customer-list').querySelectorAll('[data-pick]').forEach(input=>input.addEventListener('change',e=>{
@@ -178,6 +198,33 @@ function renderList(){
   state.paidEditingId=button.dataset.recordPaid;state.editorMode='payment';
   renderPaymentEditor();
   $('customer-payment-panel')?.scrollIntoView({behavior:'smooth',block:'start'});
+ }));
+ $('customer-list').querySelectorAll('[data-customer-lifecycle]').forEach(button=>button.addEventListener('click',async()=>{
+  if(state.working)return;
+  const s=getCustomer(button.dataset.subscriptionId),command=button.dataset.customerLifecycle;
+  if(!s)return;
+  const confirmText=command==='inactive'
+   ?'Mark '+s.customer+' INACTIVE? Customer reminders will stop. '+(s.possiblePaidThrough?'The renewal date on file is '+dateLabel(s.possiblePaidThrough)+'; paid service may remain. ':'')+'All payments and provider account dates stay preserved.'
+   :command==='archive'
+   ?'Archive '+s.customer+' after '+s.daysInactive+' days inactive? This hides the customer from active lists but keeps all history.'
+   :'Reactivate '+s.customer+'? Customer renewals and reminders will resume when a valid due date is available.';
+  if(!confirm(confirmText))return;
+  const note=command==='inactive'?prompt('Optional reason for inactivity (no passwords):','')||'':command==='archive'?'Owner approved archive after 60+ days': 'Customer returned to service';
+  // A future renewal date is an advisory warning, never proof of payment.
+  const confirmedPaidTime=command==='inactive'&&!!s.possiblePaidThrough;
+  state.working=true;
+  try{
+    await api('set_customer_status','POST',{
+      subscriptionId:s.id,revision:s.revision||'',command,confirmed:true,
+      acknowledgedPaidThrough:confirmedPaidTime,reason:note
+    });
+    state.selected.delete(s.id);state.paidEditingId='';
+    if(command!=='reactivate'){state.dateFilter='all';state.statusFilter='all';state.lifecycleFilter=command==='archive'?'archived':'inactive'}
+    else{state.dateFilter='all';state.statusFilter='all';state.lifecycleFilter='active'}
+    await refresh();
+    flash(s.customer+' '+(command==='inactive'?'marked inactive':command==='archive'?'archived with your approval':'reactivated')+'. Historical payments remain unchanged.');
+  }catch(err){flash(err.message,true)}
+  finally{state.working=false}
  }));
  $('customer-list').querySelectorAll('[data-edit-customer]').forEach(button=>button.addEventListener('click',()=>{
   state.paidEditingId=button.dataset.editCustomer;state.editorMode='details';
@@ -462,6 +509,7 @@ $('close-customer-payment').addEventListener('click',()=>{state.paidEditingId=''
 $('service-filter').addEventListener('change',e=>{state.service=e.target.value;render()});
 $('date-filter').addEventListener('change',e=>{state.dateFilter=e.target.value;render()});
 $('status-filter').addEventListener('change',e=>{state.statusFilter=e.target.value;if(e.target.value==='recently_paid')state.dateFilter='all';render()});
+$('lifecycle-filter').addEventListener('change',e=>{state.lifecycleFilter=e.target.value;state.dateFilter='all';state.statusFilter='all';render()});
 $('customer-search').addEventListener('input',e=>{
  state.search=e.target.value;renderStats();renderList();
 });
