@@ -183,9 +183,10 @@ function renderList(){
    '<div class="customer-actions"><button class="edit-customer-button" type="button" data-edit-customer="'+esc(s.id)+'">Edit Customer</button>'+
    '<button class="record-paid-button" type="button" data-record-paid="'+esc(s.id)+'" '+
     (canRecord?'':' disabled title="Reactivate the customer before recording a new renewal"')+'>Record Paid</button>'+
-    (s.customerStatus==='active'
-      ?'<button class="customer-status-button" type="button" data-customer-lifecycle="inactive" data-subscription-id="'+esc(s.id)+'">Mark Inactive</button>'
+    (s.customerStatus==='active'||s.customerStatus==='inactive'&&!s.inactiveSince
+      ?'<button class="customer-status-button" type="button" data-customer-lifecycle="inactive" data-subscription-id="'+esc(s.id)+'">'+(s.customerStatus==='inactive'?'Start 60-day review':'Mark Inactive')+'</button>'
       :'<button class="customer-status-button restore" type="button" data-customer-lifecycle="reactivate" data-subscription-id="'+esc(s.id)+'">Reactivate</button>')+
+    (s.customerStatus==='inactive'&&!s.inactiveSince?'<button class="customer-status-button restore" type="button" data-customer-lifecycle="reactivate" data-subscription-id="'+esc(s.id)+'">Reactivate</button>':'')+
     (s.archiveSuggested?'<button class="customer-status-button archive" type="button" data-customer-lifecycle="archive" data-subscription-id="'+esc(s.id)+'">Approve Archive</button>':'')+
     '</div>'+
    '</div>';
