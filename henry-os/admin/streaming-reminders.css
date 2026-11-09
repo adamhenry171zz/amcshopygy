@@ -108,3 +108,20 @@
 .customer-paid-confirm{border:1px solid #418c72;border-radius:10px;background:#143d30;padding:12px}
 .customer-paid-confirm input{accent-color:#2ac48a}
 @media(max-width:650px){.payment-form-grid{grid-template-columns:1fr}.customer-choice-main{flex:1 1 100%}.customer-choice .record-paid-button{margin-left:auto}.customer-paid-form button[type=submit]{width:100%}}
+
+
+/* Inline customer editing and payment controls, including missing-date records. */
+.customer-choice .customer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto}
+.customer-choice .edit-customer-button{border:1px solid #46718e;background:#19354d;color:#e0f3ff;border-radius:8px;
+ padding:9px 12px;font-size:12px;font-weight:800;cursor:pointer}
+.customer-choice .edit-customer-button:hover{background:#244862;border-color:#68c7e8}
+.customer-choice .edit-customer-button:focus-visible,.customer-choice .record-paid-button:focus-visible{
+ outline:2px solid #71d5ff;outline-offset:2px}
+.customer-payment-panel{margin-top:17px;background:#102b40}
+.customer-payment-panel .section-head{align-items:flex-start}
+.customer-payment-panel .customer-paid-form{width:100%;max-width:100%}
+.customer-payment-panel .payment-form-grid{grid-template-columns:minmax(0,1fr)}
+.customer-payment-panel input,.customer-payment-panel select{max-width:100%}
+@media(max-width:650px){.customer-choice .customer-actions{width:100%;justify-content:flex-end}
+ .customer-choice .edit-customer-button,.customer-choice .record-paid-button{min-height:42px}
+ .customer-payment-panel{padding:14px}}
