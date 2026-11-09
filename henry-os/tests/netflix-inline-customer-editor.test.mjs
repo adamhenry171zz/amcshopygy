@@ -87,7 +87,7 @@ test('date corrections cannot fabricate payment and a missing date never disable
  assert.ok(browser.includes('Confirm Paid &amp; Update Renewal'));
  assert.ok(page.indexOf('id="customer-list"')<page.indexOf('id="customer-payment-panel"'));
  assert.ok(page.indexOf('id="customer-payment-panel"')<page.indexOf('id="queue-title"'));
- assert.ok(page.includes('streaming-reminders.js?v=20261109k'));
+ assert.ok(page.includes('streaming-reminders.js?v=20261109n'));
  assert.ok(!browser.includes('if(!s||!isDate(s.dueDate)||'));
  assert.doesNotThrow(()=>new Function(browser));
  assert.doesNotThrow(()=>new Function(server));
