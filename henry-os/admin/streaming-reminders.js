@@ -153,10 +153,19 @@ function renderStats(){
   ['Due today',records.filter(s=>s.dueDate===t).length,'Customers due today'],
   ['Next 7 days',records.filter(s=>s.dueDate>=t&&s.dueDate<=plusDays(t,6)).length,'Includes today'],
   ['Past dates',records.filter(s=>isDate(s.dueDate)&&s.dueDate<t).length,'Review — not confirmed debts'],
-  ['Not yet reminded',records.filter(s=>s.stage&&!cycleLog(s)&&phone(s.whatsapp)).length,'Across all due dates']
+  ['Not yet reminded',records.filter(s=>s.stage&&!cycleLog(s)&&phone(s.whatsapp)).length,'Across all due dates'],
+  ['Archive suggestions',state.data.subscriptions.filter(s=>matchService(s)&&s.archiveSuggested).length,'60 days inactive · your approval required']
  ];
  $('stats').innerHTML=stats.map(([title,n,desc])=>
   '<article class="stat"><small>'+esc(title)+'</small><strong>'+n+'</strong><p>'+esc(desc)+'</p></article>').join('');
+ const suggestions=state.data.subscriptions.filter(s=>matchService(s)&&s.archiveSuggested).length;
+ $('archive-review-notice').innerHTML=suggestions?
+  '<strong>'+suggestions+' customer'+(suggestions===1?'':'s')+' ready for archive review.</strong> Nothing is archived automatically. '+
+  '<button type="button" class="light" id="open-archive-suggestions">Review suggestions</button>':'';
+ $('archive-review-notice').classList.toggle('hidden',suggestions===0);
+ const open=$('open-archive-suggestions');
+ if(open)open.onclick=()=>{state.lifecycleFilter='archive_review';state.dateFilter='all';state.statusFilter='all';render()};
+
 }
 function selectionSummary(){
  const count=state.selected.size;
@@ -179,6 +188,8 @@ function renderList(){
     (reason?'<span class="customer-reason">'+esc(reason)+'</span>':'')+
     (previous?'<span class="last-paid">Last paid '+esc(dateLabel(previous.paidOn))+
       ' · Next renewal '+esc(dateLabel(previous.nextDueDate))+'</span>':'')+
+    (s.customerStatus==='inactive'&&s.inactiveSince?
+      '<span class="customer-reason">Inactive since '+esc(dateLabel(s.inactiveSince))+' · '+esc(s.daysInactive||0)+' day(s)</span>':'')+
    '</small></span><span class="tag '+esc(s.category)+'">'+esc(labelFor(s))+'</span></label>'+
    '<div class="customer-actions"><button class="edit-customer-button" type="button" data-edit-customer="'+esc(s.id)+'">Edit Customer</button>'+
    '<button class="record-paid-button" type="button" data-record-paid="'+esc(s.id)+'" '+
@@ -207,12 +218,12 @@ function renderList(){
   const confirmText=command==='inactive'
    ?'Mark '+s.customer+' INACTIVE? Customer reminders will stop. '+(s.possiblePaidThrough?'The renewal date on file is '+dateLabel(s.possiblePaidThrough)+'; paid service may remain. ':'')+'All payments and provider account dates stay preserved.'
    :command==='archive'
-   ?'Archive '+s.customer+' after '+s.daysInactive+' days inactive? This hides the customer from active lists but keeps all history.'
+   ?'Archive '+s.customer+' after '+s.daysInactive+' days inactive? '+(s.possiblePaidThrough?'Their recorded renewal date is '+dateLabel(s.possiblePaidThrough)+'; some paid coverage may remain. ':'')+'This hides the customer from active lists but keeps all history.'
    :'Reactivate '+s.customer+'? Customer renewals and reminders will resume when a valid due date is available.';
   if(!confirm(confirmText))return;
   const note=command==='inactive'?prompt('Optional reason for inactivity (no passwords):','')||'':command==='archive'?'Owner approved archive after 60+ days': 'Customer returned to service';
   // A future renewal date is an advisory warning, never proof of payment.
-  const confirmedPaidTime=command==='inactive'&&!!s.possiblePaidThrough;
+  const confirmedPaidTime=['inactive','archive'].includes(command)&&!!s.possiblePaidThrough;
   state.working=true;
   try{
     await api('set_customer_status','POST',{
