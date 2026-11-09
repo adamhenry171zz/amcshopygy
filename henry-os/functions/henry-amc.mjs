@@ -139,6 +139,8 @@ export default async(req,context)=>{
   if(!adminEmail||sessionSecret.length<32)return json({error:'Henry OS is not configured'},503);
   if(!authenticated(req,sessionSecret,adminEmail))return json({error:'Unauthorized'},401);
   const url=new URL(req.url);const action=url.searchParams.get('action')||'bootstrap';
+  if(req.method==='POST'&&context?.deploy?.context!=='production')
+    return json({error:'Deployment previews are read-only. No AMC customer records were changed.'},403);
   const store=getStore('henry-amc');
 
   if(action==='bootstrap'&&req.method==='GET'){
@@ -179,7 +181,32 @@ export default async(req,context)=>{
       }
     }
     if(type==='deliveries'&&existing?.reference&&!cleaned.reference)cleaned.reference=existing.reference;
-    const record={id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now};
+    if(type==='streaming'){
+      const oldStatus=String(existing?.status||'').toLowerCase();
+      const newStatus=String(cleaned.status||'').toLowerCase();
+      // Lifecycle changes must pass the owner-confirmed 60-day archive manager.
+      if(oldStatus!==newStatus&&(['inactive','archived'].includes(oldStatus)||['inactive','archived'].includes(newStatus)))
+        return json({error:'Change Active/Inactive/Archived in Netflix Renewal Planner so 60-day approval and history are preserved.'},409);
+      if(!existing&&['inactive','archived'].includes(newStatus))
+        return json({error:'Create the subscription first, then mark it inactive from Netflix Renewal Planner.'},409);
+      const dateMarker=/Netflix provider-side account payment date:\s*\d{4}-\d{2}-\d{2}/i;
+      const savedMarker=String(existing?.notes||'').match(dateMarker)?.[0]||'';
+      if(savedMarker){
+        const incomingMarker=cleaned.notes.match(dateMarker)?.[0]||'';
+        if(incomingMarker&&incomingMarker.toLowerCase()!==savedMarker.toLowerCase())
+          return json({error:'The imported Netflix provider payment date cannot be overwritten in notes. Update the actual provider date in Netflix Renewal Planner.'},409);
+        if(!incomingMarker){
+          const protectedNotes=[cleaned.notes,savedMarker+' (not customer payment due).'].filter(Boolean).join('\n');
+          if(protectedNotes.length>4000)return json({error:'Notes are too long to preserve the original Netflix provider date.'},400);
+          cleaned.notes=protectedNotes;
+        }
+      }
+    }
+    // Preserve already-recorded streaming metadata (import provider date,
+    // inactivity history, immutable payment references) on routine edits.
+    const record=type==='streaming'
+      ?{...existing,id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now}
+      :{id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now};
     await store.setJSON(`${type}/${id}`,record);
     return json({item:record});
   }
@@ -187,6 +214,7 @@ export default async(req,context)=>{
   if(action==='delete'&&req.method==='POST'){
     let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
     const type=clean(body.type,40),id=clean(body.id,80);if(!TYPES.has(type)||!id)return json({error:'Invalid request'},400);
+    if(type==='streaming')return json({error:'Streaming customer records cannot be permanently deleted. Use Inactive or Archive in the Netflix Renewal Planner to preserve payment history.'},409);
     if(type==='streaming_services'){
       const target=await store.get(`${type}/${id}`,{type:'json'}).catch(()=>null);
       if(target?.name){

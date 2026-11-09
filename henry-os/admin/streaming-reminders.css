@@ -125,3 +125,22 @@
 @media(max-width:650px){.customer-choice .customer-actions{width:100%;justify-content:flex-end}
  .customer-choice .edit-customer-button,.customer-choice .record-paid-button{min-height:42px}
  .customer-payment-panel{padding:14px}}
+
+
+/* Streaming customer lifecycle — no automatic archive, no deletes. */
+.customer-status-button{border:1px solid #ac8447;border-radius:8px;background:#44351c;
+ color:#ffe6b1;padding:9px 12px;font-weight:800;font-size:12px;cursor:pointer}
+.customer-status-button.restore{background:#113d3c;border-color:#3e9e91;color:#c7fdf4}
+.customer-status-button.archive{background:#4c2635;border-color:#bd708f;color:#ffe5ec}
+.customer-status-button:hover{filter:brightness(1.12)}
+.customer-status-button:focus-visible{outline:2px solid #7fdcff;outline-offset:2px}
+.customer-choice:has(.customer-status-button.archive){border-color:#a77170}
+.account-integrity{display:grid;gap:4px;padding:13px 14px;margin:12px 0;border:1px solid #397391;
+ background:#113447;border-radius:10px;line-height:1.5}
+.account-integrity strong{color:#bfeeff;font-size:12px}
+.account-integrity small{color:#b3ccdf;font-size:11px}
+.account-integrity.needs-review{background:#483723;border-color:#b08c55}
+.account-integrity.needs-review strong{color:#ffdeaa}
+#provider-date-audit button{margin:8px 0 5px}
+@media(max-width:650px){.customer-choice .customer-actions{justify-content:stretch;gap:8px}
+.customer-choice .customer-actions>button{flex:1 1 auto;min-height:42px}}

@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import {getStore} from '@netlify/blobs';
 
-// Read existing HENRY OS Streaming records; never rewrite them.
-// Private reminders are WhatsApp drafts only. Sending is always owner-initiated.
+// Streaming data remains owner-private. Explicit owner actions may update
+// customer status or renewal fields but never delete history or move provider dates.
+// Reminders are WhatsApp drafts only and never send automatically.
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const clean=(v,max=2000)=>String(v??'').trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g,'').slice(0,max);
 const digest=v=>crypto.createHash('sha256').update(String(v||'')).digest();
@@ -44,9 +45,52 @@ const importedProviderDate=s=>{
   const match=/Netflix provider-side account payment date:\s*(\d{4}-\d{2}-\d{2})\b/i.exec(String(s.notes||''));
   return isoDate(match?.[1]);
 };
+const dayDiff=(later,earlier)=>{
+  if(!isoDate(later)||!isoDate(earlier))return 0;
+  return Math.max(0,Math.round((Date.parse(later+'T12:00:00Z')-Date.parse(earlier+'T12:00:00Z'))/86400000));
+};
+const lifecycle=(subscription,today)=>{
+  const raw=String(subscription.status||'active').toLowerCase();
+  const inactive=['inactive','paused','cancelled'].includes(raw);
+  const archived=raw==='archived';
+  const since=isoDate(subscription.inactiveSince||'');
+  const elapsed=since?dayDiff(today,since):0;
+  return {
+    customerStatus:archived?'archived':inactive?'inactive':'active',
+    inactiveSince:since,daysInactive:inactive?elapsed:0,
+    archiveSuggested:inactive&&!!since&&elapsed>=60,
+    archivedAt:subscription.archivedAt||'',
+    possiblePaidThrough:isoDate(subscription.dueDate)>today?isoDate(subscription.dueDate):'',
+    statusReason:clean(subscription.statusReason||'',300),
+    statusHistoryCount:Array.isArray(subscription.statusHistory)?subscription.statusHistory.length:0,
+    originalStatus:raw
+  };
+};
+const dateIntegrity=(subscription,overlay)=>{
+  // The original import stored provider ACCOUNT PAYMENT DATE in private notes.
+  // A different owner-confirmed overlay date is EXPECTED, not an automatic error.
+  const notes=String(subscription.notes||'');
+  const text=/Netflix provider-side account payment date:\s*(\S+)/i.exec(notes)?.[1]||'';
+  const noteDate=isoDate(text);
+  const directRaw=String(subscription.accountPaymentDate||'');
+  const direct=isoDate(directRaw);
+  const overrideRaw=String(overlay?.currentDueDate||'');
+  const override=isoDate(overrideRaw);
+  const original=direct||noteDate;
+  const current=override||original;
+  let status='ok';
+  if((text&&!noteDate)||(directRaw&&!direct)||(overrideRaw&&!override))status='invalid';
+  else if(direct&&noteDate&&direct!==noteDate)status='conflict';
+  else if(!current)status='missing';
+  else if(override&&original&&override!==original)status='owner_updated';
+  else if(override&&!original)status='needs_source_review';
+  return {status,current,original,sourceDate:noteDate,sourceFieldDate:direct,
+    ownerDate:override,needsReview:['invalid','conflict','missing','needs_source_review'].includes(status)};
+};
 const providerState=(subscription,overlay)=>{
-  const imported=importedProviderDate(subscription);
-  const date=isoDate(overlay?.currentDueDate)||imported;
+  const integrity=dateIntegrity(subscription,overlay);
+  const imported=integrity.original;
+  const date=integrity.current;
   const inactive=['cancelled','paused'].includes(String(subscription.status||'').toLowerCase());
   return {subscriptionId:subscription.id,customer:clean(subscription.customer,160),
     service:clean(subscription.service||'Netflix',90),plan:clean(subscription.plan,120),
@@ -57,7 +101,8 @@ const providerState=(subscription,overlay)=>{
     lastUpdatedAt:overlay?.lastUpdatedAt||'',lastCompletedDate:overlay?.lastCompletedDate||'',
     historyCount:Array.isArray(overlay?.history)?overlay.history.length:0,
     status:inactive?'inactive':!date?'needs_date':overlay?.paidAt?'update_required':'payment_to_check',
-    category:inactive?'inactive':classify(date,day())};
+    category:inactive?'inactive':classify(date,day()),dateIntegrity:integrity.status,
+    needsDateReview:integrity.needsReview,customerStatus:lifecycle(subscription,day()).customerStatus};
 };
 // Cash receipts are separate from reminders and Netflix supplier-account tasks.
 // This matches the original Finance Phase 1 verified-cash register so the
@@ -101,12 +146,13 @@ export default async (req,context)=>{
     }
     const rows=subscriptions.map(s=>{
       const dueDate=isoDate(s.dueDate);
-      const inactive=['cancelled','paused'].includes(String(s.status||'').toLowerCase());
+      const state=lifecycle(s,today);
+      const inactive=state.customerStatus!=='active';
       const category=inactive?'inactive':classify(dueDate,today);
       const stage=stageFor(category);
       return {id:s.id,customer:s.customer||'',whatsapp:s.whatsapp||'',service:s.service||'Netflix',
         plan:s.plan||'',amount:s.amount||'',dueDate,status:s.status||'',category,stage,
-        revision:s.updatedAt||s.createdAt||'',
+        revision:s.updatedAt||s.createdAt||'',...state,
         lastPayment:(paidBySub.get(s.id)?.source==='reminder_inline_customer_paid')?{
           paidOn:paidBySub.get(s.id).receivedDate,amount:paidBySub.get(s.id).amountGyd,
           previousDueDate:paidBySub.get(s.id).previousDueDate,
@@ -117,7 +163,60 @@ export default async (req,context)=>{
       .filter(s=>String(s.service||'Netflix').toLowerCase()==='netflix'&&safeId(s.id))
       .map(s=>providerState(s,accountsById.get(s.id)))
       .sort((a,b)=>String(a.accountDueDate||'9999').localeCompare(String(b.accountDueDate||'9999'))||a.customer.localeCompare(b.customer));
-    return json({today,subscriptions:rows,accountUpdates,logs:logs.map(l=>({id:l.id,subscriptionId:l.subscriptionId,dueDate:l.dueDate,stage:l.stage,sentAt:l.sentAt,marketingConsentConfirmed:!!l.marketingConsentConfirmed})),settings:{...settingsDefault,...(settings||{})}});
+    const dateAudit={
+      total:accountUpdates.length,
+      ok:accountUpdates.filter(a=>a.dateIntegrity==='ok').length,
+      ownerUpdated:accountUpdates.filter(a=>a.dateIntegrity==='owner_updated').length,
+      needsReview:accountUpdates.filter(a=>a.needsDateReview).length,
+      missing:accountUpdates.filter(a=>a.dateIntegrity==='missing').length,
+      conflicts:accountUpdates.filter(a=>a.dateIntegrity==='conflict').length,
+      invalid:accountUpdates.filter(a=>a.dateIntegrity==='invalid').length
+    };
+    return json({today,subscriptions:rows,accountUpdates,dateAudit,
+      logs:logs.map(l=>({id:l.id,subscriptionId:l.subscriptionId,dueDate:l.dueDate,stage:l.stage,sentAt:l.sentAt,marketingConsentConfirmed:!!l.marketingConsentConfirmed})),
+      settings:{...settingsDefault,...(settings||{})}});
+  }
+  // Customer lifecycle is OWNER-ONLY and never deletes subscriptions, money,
+  // reminder history or the Netflix provider-payment overlay.
+  if(action==='set_customer_status'&&req.method==='POST'){
+    let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    const id=clean(body.subscriptionId,100),cmd=clean(body.command,20);
+    if(!safeId(id)||!['inactive','archive','reactivate'].includes(cmd))
+      return json({error:'Choose a valid customer status action.'},400);
+    if(body.confirmed!==true)return json({error:'Please confirm the customer status change.'},400);
+    const subscription=await source.get('streaming/'+id,{type:'json'}).catch(()=>null);
+    if(!subscription)return json({error:'Customer not found. Refresh.'},404);
+    if(String(subscription.updatedAt||subscription.createdAt||'')!==String(body.revision||''))
+      return json({error:'This customer was updated elsewhere. Refresh and try again.'},409);
+    const before=lifecycle(subscription,today),note=clean(body.reason,300);
+    if(cmd==='inactive'&&String(subscription.status||'').toLowerCase()==='inactive'&&before.inactiveSince)
+      return json({error:'Customer is already inactive.'},409);
+    if(cmd==='inactive'&&before.customerStatus==='archived')
+      return json({error:'Restore this archived customer before changing status.'},409);
+    if(cmd==='archive'&&(!before.inactiveSince||before.customerStatus!=='inactive'||before.daysInactive<60))
+      return json({error:'Archiving requires at least 60 days since the customer was marked inactive and your approval.'},409);
+    if(cmd==='reactivate'&&before.customerStatus==='active')
+      return json({error:'This customer is already active.'},409);
+    if(['inactive','archive'].includes(cmd)&&before.possiblePaidThrough&&body.acknowledgedPaidThrough!==true)
+      return json({error:'The customer has a future renewal date. Acknowledge possible remaining paid service before changing their status.'},400);
+    const now=new Date().toISOString();
+    const record={
+      ...subscription,
+      status:cmd==='inactive'?'inactive':cmd==='archive'?'archived':'active',
+      inactiveSince:cmd==='inactive'?today:cmd==='reactivate'?'':before.inactiveSince,
+      archivedAt:cmd==='archive'?now:'',
+      statusReason:cmd==='reactivate'?'':note,
+      reactivatedAt:cmd==='reactivate'?now:subscription.reactivatedAt||'',
+      statusHistory:[
+        ...(Array.isArray(subscription.statusHistory)?subscription.statusHistory:[]),
+        {from:before.customerStatus,to:cmd==='archive'?'archived':cmd==='reactivate'?'active':'inactive',
+          date:today,at:now,reason:note,owner:email,
+          paidThroughWarning:!!(cmd==='inactive'&&before.possiblePaidThrough)}
+      ].slice(-40),
+      updatedAt:now
+    };
+    await source.setJSON('streaming/'+id,record);
+    return json({subscriptionId:id,lifecycle:lifecycle(record,today)},200);
   }
   // Change customer details in place, without claiming a payment was made.
   // The source subscription ID, imported Netflix provider date and old receipts
@@ -183,7 +282,7 @@ export default async (req,context)=>{
     if(historical&&notes.length<8)return json({error:'Add a brief verification note for a pre-go-live payment.'},400);
     const streamKey='streaming/'+subscriptionId;
     const s=await source.get(streamKey,{type:'json'}).catch(()=>null);
-    if(!s||['paused','cancelled'].includes(String(s.status||'').toLowerCase()))
+    if(!s||lifecycle(s,today).customerStatus!=='active')
       return json({error:'This subscription is missing or inactive. Refresh first.'},409);
     const finance=getStore('henry-finance-phase1');
     // Never silently undercount/duplicate if the two registers can't be read.
@@ -296,7 +395,7 @@ export default async (req,context)=>{
     if(!safeId(subscriptionId)||!['upcoming','due_today','follow_up'].includes(stage)||!dueDate)return json({error:'Invalid reminder details'},400);
     if(body.confirmedSent!==true)return json({error:'Confirm that you actually sent the WhatsApp message first'},400);
     const s=await source.get('streaming/'+subscriptionId,{type:'json'}).catch(()=>null);
-    if(!s||isoDate(s.dueDate)!==dueDate||['paused','cancelled'].includes(String(s.status||'').toLowerCase()))return json({error:'This renewal has changed. Refresh before recording a reminder.'},409);
+    if(!s||isoDate(s.dueDate)!==dueDate||lifecycle(s,today).customerStatus!=='active')return json({error:'This renewal has changed. Refresh before recording a reminder.'},409);
     if(stageFor(classify(dueDate,today))!==stage)return json({error:'Reminder stage has changed. Refresh and review the current due date.'},409);
     const message=clean(body.message,2300);
     if(message.length<10)return json({error:'Provide the message sent to the customer.'},400);
