@@ -1,8 +1,9 @@
 import crypto from 'node:crypto';
 import {getStore} from '@netlify/blobs';
 
-// Read existing HENRY OS Streaming records; never rewrite them.
-// Private reminders are WhatsApp drafts only. Sending is always owner-initiated.
+// Streaming data remains owner-private. Explicit owner actions may update
+// customer status or renewal fields but never delete history or move provider dates.
+// Reminders are WhatsApp drafts only and never send automatically.
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const clean=(v,max=2000)=>String(v??'').trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g,'').slice(0,max);
 const digest=v=>crypto.createHash('sha256').update(String(v||'')).digest();
@@ -188,7 +189,7 @@ export default async (req,context)=>{
     if(String(subscription.updatedAt||subscription.createdAt||'')!==String(body.revision||''))
       return json({error:'This customer was updated elsewhere. Refresh and try again.'},409);
     const before=lifecycle(subscription,today),note=clean(body.reason,300);
-    if(cmd==='inactive'&&subscription.status==='inactive'&&before.inactiveSince)
+    if(cmd==='inactive'&&String(subscription.status||'').toLowerCase()==='inactive'&&before.inactiveSince)
       return json({error:'Customer is already inactive.'},409);
     if(cmd==='inactive'&&before.customerStatus==='archived')
       return json({error:'Restore this archived customer before changing status.'},409);
@@ -196,8 +197,8 @@ export default async (req,context)=>{
       return json({error:'Archiving requires at least 60 days since the customer was marked inactive and your approval.'},409);
     if(cmd==='reactivate'&&before.customerStatus==='active')
       return json({error:'This customer is already active.'},409);
-    if(cmd==='inactive'&&before.possiblePaidThrough&&body.acknowledgedPaidThrough!==true)
-      return json({error:'The customer has a future renewal date. Acknowledge possible remaining paid service before marking inactive.'},400);
+    if(['inactive','archive'].includes(cmd)&&before.possiblePaidThrough&&body.acknowledgedPaidThrough!==true)
+      return json({error:'The customer has a future renewal date. Acknowledge possible remaining paid service before changing their status.'},400);
     const now=new Date().toISOString();
     const record={
       ...subscription,
