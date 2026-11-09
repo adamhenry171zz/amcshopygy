@@ -106,6 +106,7 @@ export default async (req,context)=>{
       const stage=stageFor(category);
       return {id:s.id,customer:s.customer||'',whatsapp:s.whatsapp||'',service:s.service||'Netflix',
         plan:s.plan||'',amount:s.amount||'',dueDate,status:s.status||'',category,stage,
+        revision:s.updatedAt||s.createdAt||'',
         lastPayment:(paidBySub.get(s.id)?.source==='reminder_inline_customer_paid')?{
           paidOn:paidBySub.get(s.id).receivedDate,amount:paidBySub.get(s.id).amountGyd,
           previousDueDate:paidBySub.get(s.id).previousDueDate,
@@ -117,6 +118,43 @@ export default async (req,context)=>{
       .map(s=>providerState(s,accountsById.get(s.id)))
       .sort((a,b)=>String(a.accountDueDate||'9999').localeCompare(String(b.accountDueDate||'9999'))||a.customer.localeCompare(b.customer));
     return json({today,subscriptions:rows,accountUpdates,logs:logs.map(l=>({id:l.id,subscriptionId:l.subscriptionId,dueDate:l.dueDate,stage:l.stage,sentAt:l.sentAt,marketingConsentConfirmed:!!l.marketingConsentConfirmed})),settings:{...settingsDefault,...(settings||{})}});
+  }
+  // Change customer details in place, without claiming a payment was made.
+  // The source subscription ID, imported Netflix provider date and old receipts
+  // remain unchanged. Require an expected date/version to prevent stale edits.
+  if(action==='edit_customer'&&req.method==='POST'){
+    let input;try{input=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    const id=clean(input.subscriptionId,100),expected=isoDate(input.expectedDueDate);
+    if(!safeId(id)||(input.expectedDueDate&&!expected))
+      return json({error:'Invalid customer or current renewal date.'},400);
+    const current=await source.get('streaming/'+id,{type:'json'}).catch(()=>null);
+    if(!current)return json({error:'Customer subscription not found. Refresh the list.'},404);
+    if(isoDate(current.dueDate)!==expected||
+      String(current.updatedAt||current.createdAt||'')!==String(input.revision||''))
+      return json({error:'This customer was changed elsewhere. Refresh before saving.'},409);
+    const customer=clean(input.customer,160);
+    const plan=clean(input.plan,120),whatsapp=clean(input.whatsapp,40);
+    const amount=validatedMoney(input.amount);
+    const dueDate=isoDate(input.dueDate);
+    if(!customer)return json({error:'Customer name cannot be blank.'},400);
+    if(!plan)return json({error:'Enter the customer service plan.'},400);
+    if(input.dueDate&&!dueDate)
+      return json({error:'Choose a valid renewal date.'},400);
+    if(expected&&!dueDate)
+      return json({error:'A recorded due date cannot be cleared accidentally. Choose a replacement date.'},400);
+    if(input.amount&&!amount)
+      return json({error:'Enter a valid GYD monthly amount.'},400);
+    // Keep the original WhatsApp if blank was never entered; owner may fix a missing number.
+    if(whatsapp&&!/^\+?[\d\s()\-]{7,24}$/.test(whatsapp))
+      return json({error:'Enter a valid contact number or leave it empty.'},400);
+    const now=new Date().toISOString();
+    const changed={...current,customer,plan,whatsapp,amount:amount||'',
+      dueDate:dueDate||'',updatedAt:now};
+    const changeFields=['customer','plan','whatsapp','amount','dueDate']
+      .filter(k=>String(current[k]||'')!==String(changed[k]||''));
+    if(!changeFields.length)return json({changed:false,subscriptionId:id},200);
+    await source.setJSON('streaming/'+id,changed);
+    return json({changed:true,subscriptionId:id,changedFields:changeFields},200);
   }
   // Mark a customer renewal paid in-place, independently of "reminder sent".
   // Two-step durable write: receipt first, then original subscription due date.
@@ -133,7 +171,7 @@ export default async (req,context)=>{
     const reference=clean(input.reference,120),canon=normalRef(reference);
     const historical=input.historical===true,notes=clean(input.notes,700);
     const amt=validatedMoney(input.amountGyd);
-    if(!safeId(subscriptionId)||!previousDueDate)return json({error:'Choose a subscription with a valid current renewal date.'},400);
+    if(!safeId(subscriptionId)||(input.previousDueDate&&!previousDueDate))return json({error:'Choose a valid subscription and existing due date, if known.'},400);
     if(!receivedDate||receivedDate>today)return json({error:'Choose the actual date the money was received, not a future date.'},400);
     if(!nextDueDate||nextDueDate<=previousDueDate||nextDueDate<=today)
       return json({error:'Enter the correct next customer payment date after the existing due date. Do not guess a month.'},400);
