@@ -16,7 +16,7 @@ const addDays=(s,n)=>{
 };
 const showDate=value=>validDay(value)?new Date(value+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}):'Not recorded';
 const modeState={view:'accounts',rows:[],today:'',dateFilter:'days7',statusFilter:'all',search:'',
- specific:'',from:'',to:'',selectedId:'',busy:false};
+ specific:'',from:'',to:'',selectedId:'',dateAudit:null,busy:false};
 function accountFlash(msg,error=false){
  const n=node('status');if(!n)return;
  n.textContent=msg;n.className='status'+(error?' error':'');
@@ -57,7 +57,7 @@ function filteredAccounts(){
  const q=modeState.search.toLowerCase().trim();
  return modeState.rows.filter(a=>
   matchAccountDate(a)&&
-  (modeState.statusFilter==='all'||(modeState.statusFilter==='updated_recently'?a.lastUpdatedAt&&Date.now()-Date.parse(a.lastUpdatedAt)<=7*86400000:a.status===modeState.statusFilter))&&
+  (modeState.statusFilter==='all'||(modeState.statusFilter==='updated_recently'?a.lastUpdatedAt&&Date.now()-Date.parse(a.lastUpdatedAt)<=7*86400000:modeState.statusFilter==='date_review'?a.needsDateReview:a.status===modeState.statusFilter))&&
   (!q||[a.customer,a.plan,a.service,a.subscriptionId].some(v=>String(v||'').toLowerCase().includes(q)))
  ).sort((a,b)=>String(a.accountDueDate||'9999').localeCompare(String(b.accountDueDate||'9999'))||a.customer.localeCompare(b.customer));
 }
@@ -78,7 +78,7 @@ function counters(){
   ['Provider dates today',today.length,'Check Netflix accounts'],
   ['Next 7 days',nDue.length,'Includes today'],
   ['Paid, update needed',ready.length,'Provider payment recorded'],
-  ['Past dates',past.length,'Verify before assuming unpaid']
+  ['Date integrity review',active.filter(x=>x.needsDateReview).length,'Missing, conflicting or invalid dates']
  ];
  node('account-stats').innerHTML=counts.map(([label,n,note])=>
   '<article class="stat"><small>'+htmlEscape(label)+'</small><strong>'+n+'</strong><p>'+htmlEscape(note)+'</p></article>').join('');
@@ -103,7 +103,10 @@ function renderAccountList(){
   return '<button class="account-row '+(selected?'selected':'')+'" type="button" data-provider-account="'+htmlEscape(a.subscriptionId)+'">'+
    '<span class="account-row-main"><strong>'+htmlEscape(a.customer||'Unnamed account')+'</strong>'+
    '<small>Provider payment: '+htmlEscape(showDate(date))+' · Customer renewal: '+htmlEscape(showDate(a.customerDueDate))+'</small>'+
-   '<small>'+htmlEscape(a.plan||'Netflix')+' · '+htmlEscape(statusText[a.status]||a.status)+(old?' · Past date — verify':'')+'</small></span>'+
+   '<small>'+htmlEscape(a.plan||'Netflix')+' · '+htmlEscape(statusText[a.status]||a.status)+
+    (a.needsDateReview?' · ⚠ Date needs review':a.dateIntegrity==='owner_updated'?' · Owner-updated date':'')+
+    (a.customerStatus&&a.customerStatus!=='active'?' · Customer '+htmlEscape(a.customerStatus):'')+
+    (old?' · Past date — verify':'')+'</small></span>'+
    '<span class="account-row-arrow">›</span></button>';
  }).join('')||'<div class="empty">No Netflix accounts match these filters. Try All accounts, or check another date.</div>';
  node('account-list').querySelectorAll('[data-provider-account]').forEach(button=>button.addEventListener('click',()=>{
@@ -121,11 +124,18 @@ function renderAccountEditor(){
  const paid=a.status==='update_required';
  const due=a.accountDueDate||'';
  const last=a.lastUpdatedAt?'<p class="muted">Last recorded update: '+htmlEscape(new Date(a.lastUpdatedAt).toLocaleDateString('en-US',{timeZone:'America/Guyana'}))+' · Previous date: '+htmlEscape(showDate(a.lastCompletedDate))+'</p>':'';
+ const dateLabels={ok:'Original date intact',owner_updated:'Owner-updated provider date retained',missing:'No original or current provider date found',
+    invalid:'Invalid stored provider date; review',conflict:'Original provider date fields conflict',needs_source_review:'Manually entered date; original import missing'};
+ const dateBanner='<div class="account-integrity '+(a.needsDateReview?'needs-review':'')+'"><strong>Provider date check: '+htmlEscape(dateLabels[a.dateIntegrity]||'Check required')+'</strong>'+
+   '<small>Imported: '+htmlEscape(showDate(a.importedAccountDate))+' · Current: '+htmlEscape(showDate(a.accountDueDate))+'</small>'+
+   (a.needsDateReview?'<small>Confirm the actual Netflix billing date before paying; the system has not changed it automatically.</small>':'')+'</div>';
  const needsDate=!validDay(due);
  const expectedDue=htmlEscape(due);
  const subId=htmlEscape(a.subscriptionId);
  const locked=modeState.busy?' disabled':'';
  node('account-editor').innerHTML=
+  dateBanner+
+  (a.customerStatus&&a.customerStatus!=='active'?'<div class="notice">Customer is '+htmlEscape(a.customerStatus)+'. Netflix provider obligations remain listed independently—do not assume a shared supplier account has been cancelled.</div>':'')+
   '<div class="account-person"><strong>'+htmlEscape(a.customer||'Netflix account')+'</strong>'+
     '<small>Customer renewal: '+htmlEscape(showDate(a.customerDueDate))+'</small>'+
     '<small>Netflix account payment: '+htmlEscape(showDate(due))+'</small>'+
@@ -196,6 +206,20 @@ async function accountRefresh(){
  try{
   const data=await accountApi('overview');
   modeState.rows=Array.isArray(data.accountUpdates)?data.accountUpdates:[];
+  modeState.dateAudit=data.dateAudit||null;
+  const audit=node('provider-date-audit');
+  if(audit){
+   const x=modeState.dateAudit||{};
+   audit.innerHTML='<strong>Netflix provider payment-date check:</strong> '+(x.total||0)+' account(s) checked in stored records. '+
+    '<strong>'+(x.needsReview||0)+' need review</strong> (missing, conflicting, or invalid). '+
+    (x.ownerUpdated||0)+' owner-updated date(s) preserved. '+
+    '<button type="button" class="light" id="show-date-audit">View dates to review</button>'+
+    '<p class="muted">This checks the saved import fields and later updates; it does not verify the live Netflix billing portal or alter any date.</p>';
+   node('show-date-audit').onclick=()=>{
+     modeState.statusFilter='date_review';modeState.dateFilter='all';
+     renderAccountPlanner();
+   };
+  }
   modeState.today=data.today;
   if(!modeState.specific)modeState.specific=data.today;
   if(!modeState.from)modeState.from=data.today;
@@ -211,7 +235,7 @@ function bindAccountPlanner(){
  node('account-date-filter').onchange=e=>{modeState.dateFilter=e.target.value;renderAccountPlanner()};
  node('account-status-filter').onchange=e=>{
   modeState.statusFilter=e.target.value;
-  if(['needs_date','update_required','updated_recently'].includes(e.target.value))modeState.dateFilter='all';
+  if(['needs_date','update_required','updated_recently','date_review'].includes(e.target.value))modeState.dateFilter='all';
   renderAccountPlanner();
  };
  node('account-search').oninput=e=>{modeState.search=e.target.value;renderAccountList()};
