@@ -139,6 +139,8 @@ export default async(req,context)=>{
   if(!adminEmail||sessionSecret.length<32)return json({error:'Henry OS is not configured'},503);
   if(!authenticated(req,sessionSecret,adminEmail))return json({error:'Unauthorized'},401);
   const url=new URL(req.url);const action=url.searchParams.get('action')||'bootstrap';
+  if(req.method==='POST'&&context?.deploy?.context!=='production')
+    return json({error:'Deployment previews are read-only. No AMC customer records were changed.'},403);
   const store=getStore('henry-amc');
 
   if(action==='bootstrap'&&req.method==='GET'){
