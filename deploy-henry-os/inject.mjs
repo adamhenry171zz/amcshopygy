@@ -5,7 +5,7 @@ if(!fs.existsSync(site))throw Error('Site directory not found');
 const root=new URL('../henry-os/admin/',import.meta.url);
 const dest=path.join(site,'admin');
 fs.mkdirSync(dest,{recursive:true});
-for(const name of ['index.html','styles.css','app.js','henry-live-sync.js','membership-tracker.js','membership-tracker.css','invoice-factory-preview.html','invoice-factory-preview.css','invoice-factory-workspace.css','invoice-factory-fixes.css','invoice-factory-preview.js','invoice-factory-handoff.js','streaming-migration-preview.html','streaming-migration-preview.js','streaming-migration-preview.css','henry-finance-report.js','henry-finance.js','henry-finance.css','streaming-reminders.html','streaming-reminders.js','streaming-reminders.css','netflix-account-planner.js'])fs.copyFileSync(new URL(name,root),path.join(dest,name));
+for(const name of ['index.html','styles.css','app.js','henry-live-sync.js','membership-tracker.js','membership-tracker.css','invoice-factory-preview.html','invoice-factory-preview.css','invoice-factory-workspace.css','invoice-factory-fixes.css','invoice-factory-preview.js','invoice-factory-handoff.js','streaming-migration-preview.html','streaming-migration-preview.js','streaming-migration-preview.css','henry-finance-report.js','henry-finance.js','henry-finance.css','streaming-reminders.html','streaming-reminders.js','streaming-reminders.css','netflix-account-planner.js','fragrance-manager.html','fragrance-manager.js','fragrance-manager.css'])fs.copyFileSync(new URL(name,root),path.join(dest,name));
 // The standalone Finance screen is retired; retain its API and stored records for future redesign.
 fs.rmSync(path.join(dest,'henry-finance.html'),{force:true});
 const invoiceFactoryJs=path.join(dest,'invoice-factory-preview.js');
@@ -13,6 +13,15 @@ if(fs.existsSync(invoiceFactoryJs))fs.writeFileSync(invoiceFactoryJs,fs.readFile
 const fnDir=path.resolve(site,'../netlify/functions');
 fs.mkdirSync(fnDir,{recursive:true});
 for(const name of ['henry-auth.mjs','henry-delivery-submit.mjs','henry-inquiry-submit.mjs','henry-track-status.mjs','henry-announcements.mjs','henry-invoice-batch.mjs','henry-membership.mjs','henry-streaming-reminders.mjs'])fs.copyFileSync(new URL('../henry-os/functions/'+name,import.meta.url),path.join(fnDir,name));
+// Keep pricing logic outside the publicly served website. Supplier SKU costs
+// are imported by the owner into Netlify Blobs, never checked into GitHub.
+const fragranceLibDir=path.resolve(site,'../netlify/henry-fragrance-lib');
+fs.mkdirSync(fragranceLibDir,{recursive:true});
+for(const name of ['henry-fragrance-logic.mjs'])
+  fs.copyFileSync(new URL('../henry-os/functions/'+name,import.meta.url),path.join(fragranceLibDir,name));
+let fragranceFn=fs.readFileSync(new URL('../henry-os/functions/henry-fragrance.mjs',import.meta.url),'utf8');
+fragranceFn=fragranceFn.replace("'./henry-fragrance-logic.mjs'","'../henry-fragrance-lib/henry-fragrance-logic.mjs'");
+fs.writeFileSync(path.join(fnDir,'henry-fragrance.mjs'),fragranceFn);
 fs.copyFileSync(new URL('../henry-os/functions/henry-amc.mjs',import.meta.url),path.join(fnDir,'henry-amc-core.mjs'));
 fs.copyFileSync(new URL('../henry-os/functions/henry-amc-wrapper.mjs',import.meta.url),path.join(fnDir,'henry-amc.mjs'));
 const financeLibraryDir=path.resolve(site,'../netlify/henry-finance-lib');
