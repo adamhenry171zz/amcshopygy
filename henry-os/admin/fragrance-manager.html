@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive"><meta name="theme-color" content="#071426">
+<meta name="description" content="Private HENRY OS fragrance product and pricing manager.">
+<title>AMC Fragrance Manager | HENRY OS</title>
+<link rel="stylesheet" href="/admin/fragrance-manager.css?v=20261110a">
+</head>
+<body>
+<div class="ambience"></div>
+<div class="shell">
+<header class="header"><a href="/admin/" class="back">← HENRY OS</a><div class="brand">HENRY <em>OS</em><small>AMC FRAGRANCE MANAGER</small></div><button type="button" id="reload" class="light">Refresh</button></header>
+<main>
+<div class="hero"><span class="eyebrow">AMC SHOPPING · PRIVATE PRODUCT WORKSPACE</span><h1>Fragrance products. <span>Every price under control.</span></h1>
+<p>Import your original Onarys CSV privately once, then manage 878 supplier SKUs as drafts, confirm landed costs and approve photos. Nothing on this page is published to customers.</p></div>
+<section id="login" class="panel hidden" role="alert"><h2>Owner sign-in required</h2><p>Sign in to your HENRY OS dashboard and reopen the Fragrance Manager.</p><a href="/admin/" class="primary anchor-button">Open HENRY OS sign-in</a></section>
+<section id="loading" class="panel" role="status">Opening your private Onarys catalogue…</section>
+<div id="workspace" class="hidden">
+<div class="notice"><strong>PRIVATE DRAFTS ONLY.</strong> Supplier USD costs, draft prices and product photographs aren't connected to the public fragrance page. No product can be published from this screen. Onarys-watermarked or unlicensed photos must not be uploaded.</div>
+<section id="import-section" class="panel import-panel hidden">
+  <h2>Import your Onarys supplier catalogue privately</h2>
+  <p>Choose the <strong>Onarys_878_Product_Master.csv</strong> file prepared from your supplier PDF. This one-time upload stores all 878 SKUs and supplier USD prices in HENRY OS private storage — not GitHub, and not the public fragrance website.</p>
+  <label>Supplier master CSV<input id="import-csv-file" type="file" accept=".csv,text/csv"></label>
+  <p class="small">Use the master CSV with 878 SKUs. Product photographs are deliberately not included and require separate permission checks.</p>
+  <button id="import-csv" type="button" class="primary">Import 878 private drafts</button>
+  <p id="import-status" class="muted" role="status"></p>
+</section>
+<div id="stats" class="stats" aria-live="polite"></div>
+<section id="catalog-panel" class="panel catalog-panel">
+ <div class="section-head"><div><h2>Product catalogue</h2><p id="catalog-subtitle">878 Onarys supplier SKUs · All private</p></div><span class="pill">No products published</span></div>
+ <div class="filters">
+  <label>Find a fragrance<input id="search" type="search" placeholder="Name, brand or supplier SKU" autocomplete="off"></label>
+  <label>Collection<select id="collection"><option value="all">All collections</option><option value="Arabian">Arabian</option><option value="Designer">Designer</option></select></label>
+  <label>Product status<select id="status-filter"><option value="all">All statuses</option><option value="draft">Draft</option><option value="in_stock">In Stock</option><option value="pre_order">Pre-Order</option><option value="check_availability">Check Availability</option><option value="sold_out">Sold Out</option><option value="coming_soon">Coming Soon</option></select></label>
+  <label>Review<select id="review-filter"><option value="all">All products</option><option value="needs_source_review">Supplier catalogue review</option><option value="needs_photo">No approved photograph</option><option value="no_cost">No verified landed cost</option><option value="wholesale_ready">Wholesale pricing ready</option><option value="edited">Edited in HENRY OS</option></select></label>
+ </div>
+ <div class="catalog-layout">
+  <div class="catalog-column">
+   <div class="list-heading"><strong id="result-count">Loading…</strong><div class="pager"><button id="previous" type="button" class="light" disabled>‹</button><span id="page-index">1 / 1</span><button id="next" type="button" class="light" disabled>›</button></div></div>
+   <div id="catalog-list" class="catalog-list" aria-live="polite"></div>
+  </div>
+  <section class="editor" id="editor" aria-label="Product details">
+   <div id="editor-empty" class="empty">Choose a fragrance to edit its details, costs, stock or photos.</div>
+   <div id="editor-content" class="hidden">
+    <div class="editor-header"><div><span id="edit-sku" class="eyebrow"></span><h2 id="edit-title"></h2><p id="edit-subtitle" class="muted"></p></div><span class="pill" id="edit-private">Private draft</span></div>
+    <div class="preview-area">
+      <div id="photo-holder" class="photo-holder"><span>IMAGE ON HOLD<br><small>Upload a commercially approved, watermark-free photo</small></span></div>
+      <div class="photo-controls"><strong>Approved product photograph</strong><p>No supplier photographs are published automatically. Upload your own or an authorized clean manufacturer image.</p><input type="file" id="photo-file" accept="image/jpeg,image/png,image/webp">
+      <label class="check"><input type="checkbox" id="photo-rights"> I have permission for commercial use</label>
+      <label class="check"><input type="checkbox" id="photo-no-watermark"> I checked that this photo has no Onarys watermark</label>
+      <div class="photo-actions"><button type="button" class="secondary" id="upload-photo">Save approved photo</button><button type="button" class="danger" id="remove-photo">Remove photo</button></div>
+      <p class="small">JPG / PNG / WebP · Maximum 1.5 MB · Stored privately</p></div>
+    </div>
+    <form id="product-form">
+     <fieldset><legend>Product information</legend>
+       <div class="fields two">
+        <label>Product name<input type="text" name="name" maxlength="220" required></label>
+        <label>Brand<input type="text" name="brand" maxlength="90" required></label>
+        <label>Collection<select name="collection"><option value="Arabian">Arabian</option><option value="Designer">Designer</option></select></label>
+        <label>Size<input type="text" name="size" maxlength="80" placeholder="100 ml"></label>
+        <label>Concentration<input type="text" name="concentration" maxlength="80"></label>
+        <label>Gender / audience<input type="text" name="gender" maxlength="30"></label>
+       </div>
+       <label>Product description<textarea name="description" rows="2" maxlength="1600" placeholder="Your approved product description; don't invent fragrance notes"></textarea></label>
+       <label>Resolve supplier description issue, if flagged<textarea name="reviewResolution" rows="2" maxlength="550" placeholder="Only after checking the correct name and size"></textarea></label>
+       <p id="source-review" class="source-review hidden"></p>
+     </fieldset>
+     <fieldset><legend>Actual landed cost and AMC pricing</legend>
+       <div class="supplier-pricing"><span>PRIVATE ONARYS COST</span><strong id="supplier-base"></strong><small id="supplier-tiers"></small></div>
+       <p class="small">Supplier discounts depend on your total Onarys purchase value. AMC wholesale eligibility is separately based on a customer's combined eligible bottle quantity.</p>
+       <div class="fields two">
+        <label>Supplier order tier<select name="supplierTier"><option value="base">Standard supplier USD</option><option value="usd350">Supplier order US$350+</option><option value="usd500">Supplier order US$500+</option><option value="usd1000">Supplier order US$1,000+</option><option value="usd1500">Supplier order US$1,500+</option></select></label>
+        <label>Costing method<select name="landedMode" id="landed-mode"><option value="verified_total">Verified forwarder-inclusive total</option><option value="components">Build from actual cost components</option></select></label>
+       </div>
+       <div id="verified-cost-section"><label>Verified landed cost per bottle (GYD)<input name="verifiedLandedGyd" type="number" min="0" step="0.01" placeholder="e.g. 10400"></label></div>
+       <div id="components-section" class="hidden">
+        <div class="fields two">
+         <label>Actual GYD per USD<input type="number" name="exchangeRate" min="0" step=".01" placeholder="Enter paid rate"></label>
+         <label>Supplier-to-forwarder shipping (GYD)<input type="number" name="supplierShippingGyd" min="0" step=".01"></label>
+         <label>Forwarder freight &amp; handling (GYD)<input type="number" name="forwarderFreightGyd" min="0" step=".01"></label>
+         <label>Import duty / taxes / clearance (GYD)<input type="number" name="importFeesGyd" min="0" step=".01"></label>
+         <label>Insurance (GYD)<input type="number" name="insuranceGyd" min="0" step=".01"></label>
+         <label>Packaging (GYD)<input type="number" name="packagingGyd" min="0" step=".01"></label>
+         <label>Other direct costs (GYD)<input type="number" name="otherDirectGyd" min="0" step=".01"></label>
+        </div>
+        <label class="check"><input type="checkbox" name="chargesConfirmed"> I verified these supplier, forwarder and import charges</label>
+       </div>
+       <label class="check"><input type="checkbox" name="supplierTierVerified"> I checked that my supplier order actually qualifies for the selected discount tier</label>
+       <label class="check"><input type="checkbox" name="costVerified"> I verified the landed cost using actual supplier/forwarder information</label>
+       <div class="fields two"><label>Retail price override (GYD)<input type="number" name="retailGyd" min="0" step=".01" placeholder="Blank = suggested"></label>
+        <label>Upfront supplier/shipping commitment per bottle (GYD)<input name="upfrontCommitmentGyd" type="number" min="0" step=".01"></label></div>
+       <label class="check"><input type="checkbox" name="wholesaleEligible"> Eligible for mixed wholesale orders (3+ eligible bottles)</label>
+       <div class="price-preview" id="price-preview" aria-live="polite"><p>Enter and verify landed costs to see recommended prices.</p></div>
+     </fieldset>
+     <fieldset><legend>Stock and pre-order availability</legend>
+       <div class="fields two">
+        <label>Availability label<select name="listingStatus"><option value="draft">Draft / Hold</option><option value="coming_soon">Coming Soon</option><option value="check_availability">Check Availability</option><option value="in_stock">In Stock</option><option value="pre_order">Pre-Order</option><option value="sold_out">Sold Out</option></select></label>
+        <label>Physical bottles on hand<input type="number" name="stockOnHand" min="0" step="1"></label>
+        <label>Reserved bottles<input type="number" name="stockReserved" min="0" step="1"></label>
+        <label>Incoming bottles<input type="number" name="stockIncoming" min="0" step="1"></label>
+        <label>Reorder alert level<input type="number" name="reorderLevel" min="0" step="1"></label>
+       </div>
+       <label class="check"><input type="checkbox" name="supplierAvailabilityConfirmed"> Supplier availability confirmed for pre-order</label>
+       <label class="check"><input type="checkbox" name="forwarderConfirmed"> My freight forwarder has accepted this shipment arrangement</label>
+       <label class="check"><input type="checkbox" name="authenticitySourceConfirmed"> Supplier provenance / authenticity evidence checked</label>
+       <label>Forwarder and shipping notes (private)<textarea name="forwarderNotes" rows="2" maxlength="500"></textarea></label>
+       <label>Other private notes<textarea name="internalNotes" rows="2" maxlength="1000"></textarea></label>
+     </fieldset>
+     <div class="editor-footer">
+      <div id="save-status" role="status" aria-live="polite">Private product · Not published</div>
+      <button id="save-product" type="submit" class="primary">Save product</button>
+     </div>
+    </form>
+   </div>
+  </section>
+ </div>
+</section>
+<div class="footer-note">AMC SHOPPING · HENRY OS · All product records, uploaded photos, purchase costs and profits are owner-private. Public fragrance site is unchanged.</div>
+</div>
+<p id="global-status" role="status" aria-live="polite"></p>
+</main>
+</div>
+<script src="/admin/fragrance-manager.js?v=20261110a" defer></script>
+</body></html>
