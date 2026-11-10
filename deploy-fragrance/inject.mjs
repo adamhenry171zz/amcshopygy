@@ -15,6 +15,18 @@ fs.mkdirSync(assets,{recursive:true});
 fs.rmSync(path.join(site,'course.html'),{force:true});
 fs.copyFileSync(path.join(root,'landing.html'),path.join(site,'fragrances.html'));
 fs.copyFileSync(path.join(root,'fragrance-promo.css'),path.join(assets,'fragrance-promo.css'));
+// Public browse assets contain product descriptions, SKU references and selected
+// low-resolution photos ONLY. No Onarys USD prices, margins, stock promises or
+// HENRY OS private product records are copied into the published website.
+const browseSrc=path.join(root,'public-catalog');
+const browseDest=path.join(assets,'fragrance');
+fs.mkdirSync(browseDest,{recursive:true});
+for(const file of fs.readdirSync(browseSrc).filter(n=>/^(catalog(?:-products|-photos-\d{2})?\.js|catalog\.css)$/.test(n))){
+ fs.copyFileSync(path.join(browseSrc,file),path.join(browseDest,file));
+}
+const needed=['catalog-products.js','catalog.js','catalog.css',...Array.from({length:14},(_,n)=>'catalog-photos-'+String(n).padStart(2,'0')+'.js')];
+for(const file of needed)if(!fs.existsSync(path.join(browseDest,file)))throw Error('Missing fragrance browse asset '+file);
+
 
 const banner='<div class="frag-site-banner"><div class="wrap"><strong>NEW AT AMC SHOPPING</strong><span>Authentic fragrances · Wholesale prices from 3 pieces</span><a href="fragrances">Explore fragrances →</a></div></div>';
 for(const filename of fs.readdirSync(site).filter(v=>v.endsWith('.html')&&v!=='fragrances.html')){
@@ -62,4 +74,4 @@ if(fs.existsSync(sitemapPath)){
  }
  fs.writeFileSync(sitemapPath,xml);
 }
-console.log('AMC Wholesale Fragrances preview installed; original course unpublished');
+console.log('AMC public fragrance catalogue installed; 835 enquiry-only listings, 530 curated photos, no supplier prices. Original Course unpublished.');

@@ -8,12 +8,13 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AMC Shopping">
 <meta property="og:title" content="Authentic Fragrances | Wholesale From 3 Pieces | AMC Shopping">
-<meta property="og:description" content="Original Arabian and designer fragrances, gift sets and wholesale enquiries. Wholesale pricing starts from 3 pieces. Request our catalogue.">
+<meta property="og:description" content="Original Arabian and designer fragrances, gift sets and wholesale enquiries. Wholesale pricing starts from 3 pieces. Browse our fragrance catalogue.">
 <meta property="og:url" content="https://amcshopping.com/fragrances">
 <link rel="canonical" href="https://amcshopping.com/fragrances">
 <link rel="icon" type="image/png" href="assets/amc-logo.png">
 <link rel="stylesheet" href="assets/styles.css">
 <link rel="stylesheet" href="assets/fragrance-promo.css">
+<link rel="stylesheet" href="/assets/fragrance/catalog.css?v=20261110a">
 <title>Wholesale Fragrances | AMC Shopping Guyana</title>
 </head>
 <body class="frag-body">
@@ -32,7 +33,7 @@
    <span class="frag-eyebrow"><span class="frag-dot"></span> AMC SHOPPING · WHOLESALE FRAGRANCES</span>
    <h1>Original scents.<br><em>Serious business.</em></h1>
    <p>Authentic Arabian fragrances, designer scents and perfume gift sets. Whether you're shopping for yourself, building a fragrance business or stocking your shelves, start your enquiry with AMC Shopping.</p>
-   <div class="frag-hero-actions"><a class="frag-btn primary" href="#fragrance-enquiry">Request fragrance details <span aria-hidden="true">↗</span></a><a class="frag-btn outline" href="#how-it-works">How wholesale works</a></div>
+   <div class="frag-hero-actions"><a class="frag-btn primary" href="#fragrance-catalog">Browse fragrances <span aria-hidden="true">↗</span></a><a class="frag-btn outline" href="#how-it-works">Wholesale information</a></div>
    <div class="frag-facts"><span><strong>100% original</strong><small>No replicas or counterfeits</small></span><span><strong>3+ pieces</strong><small>Wholesale pricing eligibility</small></span><span><strong>Guyana</strong><small>AMC Shopping enquiries</small></span></div>
   </div>
   <div class="frag-visual" aria-label="Wholesale fragrance launch announcement">
@@ -56,7 +57,7 @@
 </section>
 <section id="collection" class="frag-section">
  <div class="wrap">
-  <div class="frag-section-head"><div><span class="frag-kicker">WHAT WE'RE PREPARING</span><h2>A collection for every<br><em>kind of fragrance lover.</em></h2></div><p>Our catalogue is being prepared. These categories describe what you can enquire about; they are not a list of confirmed in-stock products.</p></div>
+  <div class="frag-section-head"><div><span class="frag-kicker">BROWSE BY CATEGORY</span><h2>A collection for every<br><em>kind of fragrance lover.</em></h2></div><p>Browse our fragrance sourcing catalogue below. Availability, authenticity documentation, prices and delivery arrangements are confirmed individually before ordering.</p></div>
   <div class="frag-grid">
    <article class="frag-category">
     <div class="frag-category-art arabian" aria-hidden="true"><span>01</span><div class="frag-glyph">✧</div></div>
@@ -73,6 +74,39 @@
   </div>
  </div>
 </section>
+
+<section id="fragrance-catalog" aria-labelledby="fragrance-catalog-heading">
+ <div class="wrap">
+  <div class="amc-catalog-hero">
+   <div><span class="frag-kicker">OUR FRAGRANCE SOURCING CATALOGUE</span>
+    <h2 id="fragrance-catalog-heading">Find your next<br><em>signature scent.</em></h2>
+    <p>Explore Arabian and designer fragrances, including gift sets and everyday favourites. Search by brand or name, build a mixed-product enquiry, and request current AMC pricing. Listings are subject to verification and are not confirmed in-stock inventory.</p></div>
+   <div class="amc-catalog-fact"><strong id="amc-total-listings">835</strong><span>fragrances available to enquire about</span></div>
+  </div>
+  <div class="amc-filterbar">
+   <label>Search fragrances<input id="amc-search" type="search" autocomplete="off" placeholder="Search perfume, brand, SKU…"></label>
+   <label>Collection<select id="amc-collection"><option value="all">All collections</option><option value="Arabian">Arabian perfumes</option><option value="Designer">Designer perfumes</option></select></label>
+   <label>Brand<select id="amc-brand"><option value="all">All brands</option></select></label>
+   <label>Type<select id="amc-type"><option value="all">All types</option><option value="Gift Sets">Gift sets</option><option value="Fragrances">Individual fragrances</option></select></label>
+   <label>Sort<select id="amc-sort"><option value="featured">Featured collection</option><option value="photo">Photographs first</option><option value="brand">Brand A–Z</option><option value="name">Product A–Z</option></select></label>
+  </div>
+  <div class="amc-toolbar"><strong id="amc-catalog-total">Loading fragrance catalogue…</strong><span id="amc-catalog-range"></span></div>
+  <div id="amc-catalog-grid" class="amc-grid" aria-live="polite"></div>
+  <div class="amc-pager" role="group" aria-label="Catalogue pages"><button id="amc-prev" type="button" disabled>Previous</button><span id="amc-page">Page 1</span><button id="amc-next" type="button">Next</button></div>
+  <div class="amc-catalog-disclosure"><strong>A note about this catalogue:</strong> All shown products are from a supplier sourcing list, not a confirmation of stock in Guyana. AMC prices, availability, provenance and delivery timelines are quoted on request. <strong>No unapproved Onarys-watermarked photos are used.</strong> Products without a cleared image display an illustration. Wholesale enquiries start at three mixed eligible bottles; eligibility is confirmed in your quote. No payment is accepted through this catalogue.</div>
+  <div id="amc-enquiry-panel" class="amc-enquiry-panel">
+   <div class="amc-enquiry-top"><div><span class="frag-kicker">AMC SHOPPING · BUILD YOUR ENQUIRY</span><h3>Your fragrance selection</h3><p>Choose different products and quantities, then send one enquiry to AMC Shopping on WhatsApp.</p></div>
+    <span class="amc-enquiry-count" id="amc-enquiry-count">0 bottles</span></div>
+   <p id="amc-cart-qualifier" class="amc-enquiry-qualifier">Mix any 3 eligible bottles to request wholesale pricing</p>
+   <div id="amc-enquiry-items" class="amc-enquiry-items"><p class="amc-basket-empty">Select a product above to begin.</p></div>
+   <div class="amc-enquiry-actions"><span id="amc-enquiry-item-count">0 fragrances</span>
+    <button type="button" id="amc-enquiry-clear" disabled>Clear selection</button>
+    <button type="button" id="amc-enquiry-send" disabled>Send enquiry on WhatsApp ↗</button></div>
+  </div>
+ </div>
+</section>
+<div id="amc-enquiry-floating" class="amc-floating-enquiry"><button id="amc-floating-open" type="button">View enquiry (<span id="amc-floating-count">0</span>)</button></div>
+
 <section class="frag-section frag-wholesale" id="how-it-works">
  <div class="wrap frag-wholesale-grid">
   <div><span class="frag-kicker">WHOLESALE WITH AMC SHOPPING</span><h2>Start small.<br><em>Build your stock.</em></h2><p>Wholesale pricing starts at <strong>3 pieces</strong>. Request products and quantities, and we'll confirm availability and give you a product-specific quotation. You can also enquire about individual retail purchases.</p><div class="frag-proof-note"><strong>Price clarity matters.</strong> Each fragrance is priced using its own purchase and landed costs. Final prices and delivery arrangements are confirmed before you pay.</div></div>
@@ -85,7 +119,7 @@
 </section>
 <section class="frag-section frag-enquire" id="fragrance-enquiry">
  <div class="wrap frag-enquire-grid">
-  <div><span class="frag-kicker">WHOLESALE &amp; RETAIL ENQUIRIES</span><h2>Want the first<br><em>fragrance updates?</em></h2><p>Our product catalogue is in preparation. Send your interests directly to AMC Shopping on WhatsApp so we can discuss options, quantities and pricing.</p><p class="frag-small">We're not publishing a final stock list, unverified product prices or guaranteed delivery dates until they're confirmed.</p></div>
+  <div><span class="frag-kicker">WHOLESALE &amp; RETAIL ENQUIRIES</span><h2>Want the first<br><em>fragrance updates?</em></h2><p>You can add fragrances to the enquiry basket above or contact AMC Shopping directly to discuss specific products, quantities and pricing.</p><p class="frag-small">We're not publishing a final stock list, unverified product prices or guaranteed delivery dates until they're confirmed.</p></div>
   <form id="frag-request" class="frag-form">
    <h3>Request fragrance details</h3>
    <label for="frag-name">Your name</label><input id="frag-name" name="name" maxlength="100" autocomplete="name" required placeholder="Full name">
@@ -131,5 +165,7 @@
  });
 })();
 </script>
+<script src="/assets/fragrance/catalog-products.js?v=20261110a" defer></script>
+<script src="/assets/fragrance/catalog.js?v=20261110a" defer></script>
 </body>
 </html>

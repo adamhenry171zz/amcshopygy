@@ -1,0 +1,73 @@
+/* Public AMC fragrance catalogue — curated photo assets, no supplier pricing */
+#fragrance-catalog{background:#f5f7f9;padding:85px 0 98px;scroll-margin-top:24px}
+#fragrance-catalog *{box-sizing:border-box}
+#fragrance-catalog h2,#fragrance-catalog h3{color:#132a40}
+.amc-catalog-hero{display:flex;gap:30px;align-items:end;justify-content:space-between;margin-bottom:26px}
+.amc-catalog-hero h2{font-size:clamp(34px,4.4vw,59px);font-weight:850;letter-spacing:-.055em;line-height:1.08;margin:11px 0 14px}
+.amc-catalog-hero h2 em{font-family:Georgia,serif;font-weight:400;color:#aa906f;letter-spacing:-.04em}
+.amc-catalog-hero p{font-size:13px;line-height:1.8;max-width:580px;color:#5e7183;margin:0}
+.amc-catalog-fact{background:white;border:1px solid #d6dfe7;border-radius:13px;padding:17px 21px;min-width:190px}
+.amc-catalog-fact strong{display:block;font-size:27px;line-height:1.1;color:#092f4b;letter-spacing:-.045em}
+.amc-catalog-fact span{display:block;color:#647a8e;font-size:11px;margin-top:6px}
+.amc-filterbar{display:grid;grid-template-columns:minmax(210px,2fr) repeat(3,minmax(140px,1fr)) minmax(120px,1fr);gap:10px;background:#fff;border:1px solid #dae3ea;border-radius:13px;padding:15px;margin-bottom:14px}
+.amc-filterbar label{display:grid;gap:6px;font-size:10px;font-weight:850;letter-spacing:.03em;color:#4d6578}
+.amc-filterbar input,.amc-filterbar select{width:100%;min-height:42px;background:#f8fafb;border:1px solid #cad5dd;border-radius:8px;color:#18364c;padding:9px 11px;font-size:12px;min-width:0}
+.amc-filterbar input:focus,.amc-filterbar select:focus{outline:2px solid #4cc0dd;outline-offset:1px}
+.amc-toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:19px 0 15px}
+.amc-toolbar strong{font-size:13px;color:#213d52}.amc-toolbar span{font-size:11px;color:#6b8194}
+.amc-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.amc-product-card{border:1px solid #d7e1e9;border-radius:12px;overflow:hidden;background:#fff;display:flex;flex-direction:column;box-shadow:0 5px 21px rgba(17,52,78,.035);transition:transform .15s,box-shadow .15s}
+.amc-product-card:hover{transform:translateY(-2px);box-shadow:0 13px 32px rgba(17,52,78,.11)}
+.amc-product-photo{height:240px;display:flex;align-items:center;justify-content:center;background:#fff;border-bottom:1px solid #eef2f5;overflow:hidden;padding:13px}
+.amc-product-photo img{width:100%;height:100%;object-fit:contain}
+.amc-product-placeholder{height:100%;width:100%;display:grid;align-content:center;justify-items:center;gap:0;color:#7d8b93;background:linear-gradient(150deg,#f9f8f7,#eee8e2)}
+.amc-product-placeholder svg{width:128px;height:143px;display:block}
+.amc-product-placeholder small{font-size:9px;letter-spacing:.13em;font-weight:850;color:#8d8a86}
+.amc-product-body{padding:16px;display:flex;flex-direction:column;flex:1}
+.amc-product-meta{display:flex;justify-content:space-between;gap:8px;align-items:start}
+.amc-product-meta span{font-size:9px;font-weight:850;color:#688295;text-transform:uppercase;letter-spacing:.06em}
+.amc-product-meta span:last-child{color:#0e88a1;text-align:right}
+.amc-product-body h3{font-size:15px;line-height:1.44;letter-spacing:-.017em;margin:10px 0 6px;min-height:43px;font-weight:760}
+.amc-product-size{color:#7b8b99;font-size:11px;margin:0 0 10px}
+.amc-product-pricing{font-size:11px;font-weight:760;color:#406578;margin:auto 0 13px}
+.amc-product-bottom{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:0;padding-top:12px;border-top:1px solid #edf1f4}
+.amc-product-sku{font-size:9px;color:#7c92a1;letter-spacing:.05em}
+.amc-product-add{border:0;background:#0a334e;color:white;border-radius:7px;font-size:11px;font-weight:800;padding:10px 12px;cursor:pointer}
+.amc-product-add:hover{background:#0c6a85}.amc-product-add.added{background:#e3f6f1;color:#0d6657}
+.amc-pager{display:flex;justify-content:center;gap:15px;align-items:center;margin:30px 0 0}
+.amc-pager button{min-width:95px;background:#fff;border:1px solid #cbd9e2;border-radius:7px;color:#17415b;padding:11px 17px;font-size:12px;font-weight:800}
+.amc-pager button:disabled{opacity:.35;cursor:not-allowed}
+.amc-pager span{font-size:12px;color:#587488}
+.amc-catalog-disclosure{padding:18px 20px;background:#e7edf2;border-left:3px solid #428da2;margin:27px 0 45px;border-radius:2px 9px 9px 2px;line-height:1.7;font-size:11px;color:#51687b}
+.amc-catalog-disclosure strong{color:#163d59}
+.amc-enquiry-panel{background:linear-gradient(124deg,#06192d,#123853);border-radius:18px;padding:clamp(19px,4vw,37px);color:#f3f9ff;scroll-margin-top:25px}
+.amc-enquiry-panel .amc-enquiry-top{display:flex;align-items:start;justify-content:space-between;gap:15px}
+.amc-enquiry-panel h3{font-size:clamp(23px,3vw,35px);letter-spacing:-.055em;color:#fff;margin:5px 0 8px}
+.amc-enquiry-panel p{font-size:12px;color:#afcada;line-height:1.65;margin:5px 0}
+.amc-enquiry-count{white-space:nowrap;color:#b7e9f6;background:#143e5b;padding:9px 12px;border-radius:100px;font-size:11px;font-weight:850}
+.amc-enquiry-items{display:grid;gap:10px;margin:20px 0}
+.amc-basket-row{background:#102f49;border:1px solid #2c5c78;border-radius:9px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+.amc-basket-row strong{display:block;color:#f1faff;font-size:12px;line-height:1.45;margin-bottom:4px}
+.amc-basket-row span{display:block;color:#a7c2d2;font-size:10px}
+.amc-basket-controls{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.amc-basket-controls button{width:31px;height:31px;border:1px solid #5d8ba0;border-radius:6px;color:#fff;background:#204a61;font-size:18px;line-height:1}
+.amc-basket-controls b{font-size:13px;min-width:18px;text-align:center}
+.amc-basket-empty{padding:16px 0}
+.amc-enquiry-actions{display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-top:16px}
+.amc-enquiry-actions button{border:1px solid #729cae;background:transparent;color:#f7fcff;padding:12px 18px;border-radius:7px;font-size:12px;font-weight:850;cursor:pointer}
+.amc-enquiry-actions #amc-enquiry-send{border-color:#92e4eb;background:#b7eff6;color:#032d3a}
+.amc-enquiry-actions button:disabled{opacity:.46;cursor:not-allowed}
+.amc-enquiry-qualifier{color:#e7cfa2!important;font-size:11px!important;font-weight:750}
+.amc-no-results{grid-column:1/-1;text-align:center;padding:55px 15px;background:white;border-radius:14px}
+.amc-no-results h3{font-size:23px}.amc-no-results p{font-size:13px;color:#6a7c8b}
+.amc-no-results button{background:#124463;color:#fff;border:0;border-radius:7px;padding:10px 16px}
+.amc-floating-enquiry{position:fixed;bottom:17px;right:17px;z-index:35;display:none}
+.amc-floating-enquiry.is-visible{display:block}
+.amc-floating-enquiry button{border:2px solid #fff;background:#073b59;border-radius:100px;padding:13px 19px;color:#fff;font-size:12px;font-weight:850;box-shadow:0 8px 25px #0515284d}
+@media(max-width:1150px){.amc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.amc-filterbar{grid-template-columns:repeat(3,minmax(0,1fr))}.amc-filterbar label:first-child{grid-column:span 2}}
+@media(max-width:790px){#fragrance-catalog{padding:62px 0 72px}.amc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.amc-product-photo{height:220px}.amc-catalog-hero{display:block}.amc-catalog-fact{display:inline-block;margin-top:18px}.amc-filterbar{grid-template-columns:repeat(2,minmax(0,1fr))}.amc-filterbar label:first-child{grid-column:span 2}}
+@media(max-width:500px){#fragrance-catalog{padding:53px 0 65px}.amc-catalog-hero h2{font-size:39px}.amc-catalog-hero p{font-size:12px}.amc-filterbar{padding:11px;gap:8px}.amc-filterbar label{font-size:10px}.amc-filterbar label:first-child{grid-column:span 2}
+.amc-grid{gap:9px}.amc-product-photo{height:166px;padding:5px}.amc-product-body{padding:11px}.amc-product-body h3{font-size:12px;min-height:49px;margin:7px 0}.amc-product-meta span{font-size:8px}.amc-product-size,.amc-product-pricing{font-size:10px}.amc-product-pricing{margin:6px 0 11px}.amc-product-bottom{display:block}.amc-product-sku{display:block;margin-bottom:9px}.amc-product-add{width:100%;padding:10px;font-size:10px}
+.amc-pager{gap:9px}.amc-pager button{min-width:75px}.amc-enquiry-panel .amc-enquiry-top{display:block}.amc-enquiry-count{display:inline-block;margin-top:9px}.amc-basket-row{gap:9px;padding:10px}
+.amc-enquiry-actions button{flex:1 1 auto}.amc-floating-enquiry{bottom:12px;right:12px}}
+@media(prefers-reduced-motion:reduce){.amc-product-card{transition:none}.amc-product-card:hover{transform:none}}
