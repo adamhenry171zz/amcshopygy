@@ -84,3 +84,8 @@ test('site injector copies 14 lazy image bundles and route remains /fragrances',
   assert.ok(fs.readFileSync(path.join(scratch,'_redirects'),'utf8').includes('/fragrances /fragrances.html 200'));
  }finally{fs.rmSync(scratch,{recursive:true,force:true})}
 });
+
+test('optional photo count cannot block first catalogue render',()=>{
+ assert.ok(!html.includes('id="amc-photo-listings"'));
+ assert.match(app,/const photoCount=\$\('amc-photo-listings'\);\s*if\(photoCount\)photoCount\.textContent=/);
+});
