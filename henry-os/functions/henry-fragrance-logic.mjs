@@ -41,7 +41,7 @@ export function calculateFragrance(seed,record={}){
  const tiers=Object.fromEntries(TIER_RULES.map(rule=>[rule.key,record.wholesaleEligible===true?
   calcTier(retail,adjustedLanded,rule):null]));
  const hasMargin=retail&&retailMargin>=.21;
- const eligible=record.wholesaleEligible===true&&adjustedLanded!==null&&!!hasMargin;
+ const eligible=record.wholesaleEligible===true&&adjustedLanded!==null&&!!hasMargin&&tiers.three?.eligible===true;
  const warnings=[];
  if(record.costVerified!==true)warnings.push('Landed costs unverified');
  if(mode==='components'&&!componentsReady)warnings.push('Complete FX, supplier tier and freight cost confirmations');
