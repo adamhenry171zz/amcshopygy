@@ -93,3 +93,12 @@ legend{padding:0 8px;color:#d9f1fb;font-size:13px;font-weight:850}
 .fields.two{grid-template-columns:1fr}.price-preview .price-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.editor-footer{bottom:-12px}
 #save-product{min-width:110px}
 }
+
+
+.import-panel{border-color:#488575;background:linear-gradient(145deg,#092a35,#0c3540);margin:17px 0}
+.import-panel h2{margin:0 0 7px;font-size:21px;letter-spacing:-.025em}
+.import-panel p{font-size:12px;line-height:1.7;color:#b3d0df;max-width:800px}
+.import-panel label{margin:18px 0 12px}
+.import-panel input[type=file]{padding:15px;border:1px dashed #5896a2;border-radius:10px;background:#071f2d}
+.import-panel #import-csv{margin-top:14px}
+.import-panel #import-status{color:#a5f1d4;font-weight:750}
