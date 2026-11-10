@@ -157,7 +157,8 @@ function whatsapp(){
 const brands=[...new Set(products.map(x=>x.b))].sort((a,b)=>a.localeCompare(b));
 $('amc-brand').innerHTML='<option value="all">All brands</option>'+brands.map(b=>'<option value="'+esc(b)+'">'+esc(b)+'</option>').join('');
 $('amc-total-listings').textContent=data.published.toLocaleString();
-$('amc-photo-listings').textContent=data.photosCurated.toLocaleString();
+const photoCount=$('amc-photo-listings');
+if(photoCount)photoCount.textContent=data.photosCurated.toLocaleString();
 $('amc-search').oninput=e=>{state.search=e.target.value;state.page=0;draw()};
 $('amc-collection').onchange=e=>{state.collection=e.target.value;state.page=0;draw()};
 $('amc-brand').onchange=e=>{state.brand=e.target.value;state.page=0;draw()};
