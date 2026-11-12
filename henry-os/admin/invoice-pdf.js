@@ -7,6 +7,12 @@ const num=v=>{const n=Number(String(v??'').replace(/,/g,''));return Number.isFin
 const money=v=>'GYD $'+num(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const date=v=>/^\d{4}-\d{2}-\d{2}/.test(String(v||''))?String(v).slice(0,10):'';
 const cleanName=v=>String(v||'Invoice').replace(/[^a-z0-9_-]+/gi,'_').slice(0,90);
+
+const DESIGN_DEFAULTS=Object.freeze({version:'amc-premium-v1',festive:false,promoEnabled:true,preset:'members',title:'Save More With AMC Members Club',text:'Lower eligible shipping rates, waived package fees and member benefits.',cta:'amcshopping.com/members'});
+function designSettings(v={}){return {version:DESIGN_DEFAULTS.version,festive:v.festive===true,promoEnabled:v.promoEnabled!==false,preset:v.preset||'members',title:String(v.title||DESIGN_DEFAULTS.title).slice(0,100),text:String(v.text||DESIGN_DEFAULTS.text).slice(0,280),cta:String(v.cta||DESIGN_DEFAULTS.cta).slice(0,90)};}
+async function getDesign(){const r=await fetch('/.netlify/functions/henry-amc?action=invoice_design',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('Could not retrieve invoice design settings. Sign in and retry.');const d=await r.json();return designSettings(d.settings);}
+async function saveDesign(v){const r=await fetch('/.netlify/functions/henry-amc?action=invoice_design',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(designSettings(v))});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not save invoice design');return designSettings(d.settings);}
+
 const standardCharge=w=>{const bill=Math.max(1,num(w));if(bill<=2)return 2800;return Math.round(bill*(bill<=10?1500:bill<=25?1300:bill<=55?1200:bill<100?1100:1050)*100)/100;};
 const lb=v=>num(v).toFixed(2)+' lb';
 async function memberUsage(id){if(!id)throw Error('Save the member invoice before retrieving its monthly allowance.');const r=await fetch('/.netlify/functions/henry-membership?action=invoice_usage&id='+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});let d={};try{d=await r.json()}catch{}if(!r.ok||!d.usage)throw Error(d.error||'Could not verify monthly membership usage.');return d.usage;}
@@ -28,89 +34,96 @@ function source(r,packages=[],customers=[]){
  const calc={...(snap.calculation||{})};if(member&&calc.weight===undefined&&legacyWeight>0)calc.weight=legacyWeight;
  if(member&&calc.standardEquivalent===undefined&&calc.weight>0){const exactNormal=notes.match(/regular equivalent GYD \$([\d,.]+)/i)?.[1];const adj=num(notes.match(/Manual adjustment:\s*GYD \$(-?[\d,.]+)/i)?.[1]);calc.standardEquivalent=exactNormal?num(exactNormal):Math.round((standardCharge(calc.weight)+adj)*100)/100;calc.comparisonEstimated=!exactNormal;}
 
- return {id:r.id,invoiceNo,customer:r.customer||'',whatsapp:r.whatsapp||exact?.whatsapp||'',mailbox:snap.mailboxCode||notes.match(/(?:Mailbox|Customer code):\s*(AMC\d+)/i)?.[1]||exact?.mailboxCode||'',
+ return {id:r.id,design:snap.design||null,invoiceNo,customer:r.customer||'',whatsapp:r.whatsapp||exact?.whatsapp||'',mailbox:snap.mailboxCode||notes.match(/(?:Mailbox|Customer code):\s*(AMC\d+)/i)?.[1]||exact?.mailboxCode||'',
   issued,due:date(r.dueDate),rows,member,amount:num(r.amount),balance:r.balance===''||r.balance==null?num(r.amount):num(r.balance),
   status:r.status||'draft',calc,description:r.description||'',billing:notes.match(/Billing:\s*([^.\n]+)/i)?.[1]||''};
 }
 function build(d,logo=null){
- const W=612,H=792,navy='0.035 0.10 0.22',blue='0.05 0.34 0.68',ink='0.10 0.16 0.25',muted='0.33 0.40 0.50',pale='0.94 0.96 0.99',white='1 1 1',red='0.69 0.13 0.15';
+ const W=612,H=792,navy='0.027 0.078 0.165',blue='0.055 0.28 0.56',ink='0.09 0.14 0.23',muted='0.34 0.41 0.51',pale='0.946 0.962 0.983',white='1 1 1',red='0.69 0.13 0.15',gold='0.82 0.65 0.31',green='0.08 0.39 0.28';
+ const design=designSettings(d.design||{}),festive=design.festive,accent=festive?gold:'0.31 0.61 0.91',season=festive?green:blue;
  const pages=[];let ops=[];
  const rect=(x,y,w,h,c)=>ops.push(c+' rg '+x+' '+(H-y-h)+' '+w+' '+h+' re f');
  const text=(x,y,v,size=10,bold=false,c=ink)=>ops.push('BT /'+(bold?'F2':'F1')+' '+size+' Tf '+c+' rg 1 0 0 1 '+x+' '+(H-y)+' Tm ('+pdfText(v)+') Tj ET');
- const line=(x,y,w)=>{rect(x,y,w,0.7,'0.81 0.85 0.90')};
  const wrap=(v,max=88)=>{let s=ascii(v),out=[];while(s.length>max){let at=s.lastIndexOf(' ',max);if(at<1)at=max;out.push(s.slice(0,at));s=s.slice(at).trimStart()}if(s)out.push(s);return out};
- const block=(x,y,v,max=88,size=10,c=ink)=>{for(const t of wrap(v,max)){text(x,y,t,size,false,c);y+=size+5}return y};
- const finish=()=>{text(36,760,'AMC SHOPPING  |  amcshopping.com  |  +592 604-2826',9,true,muted);text(540,760,'Page '+(pages.length+1),9,false,muted);pages.push(ops.join('\n'));ops=[]};
+ const block=(x,y,v,max=88,size=10,c=ink,bold=false)=>{for(const t of wrap(v,max)){text(x,y,t,size,bold,c);y+=size+4}return y};
+ const label=(x,y,v)=>text(x,y,v,9,true,muted);
+ const finish=()=>{rect(36,743,540,0.7,'0.82 0.86 0.91');text(36,760,'AMC SHOPPING  |  amcshopping.com  |  +592 604-2826',8,true,muted);text(532,760,'Page '+(pages.length+1),8,false,muted);pages.push(ops.join('\n'));ops=[]};
  const header=(subtitle)=>{
-  rect(0,0,W,116,navy);rect(0,112,W,4,blue);
-  if(logo){const h=54,w=Math.min(110,h*logo.w/logo.h);ops.push('q '+w+' 0 0 '+h+' 32 '+(H-78)+' cm /Logo Do Q');}
-  const left=logo?150:36;
-  text(left,42,'A.M.C SHOPPING',19,true,white);text(left,62,'Your Package. Our Priority. Always.',10,false,white);text(left,89,subtitle,12,true,'0.55 0.81 1');
-  text(442,39,'INVOICE #',9,true,white);text(442,61,d.invoiceNo,15,true,white);text(442,86,'Issued: '+(d.issued||'Not recorded'),9,false,white);
+  rect(0,0,W,113,navy);rect(0,109,W,4,accent);
+  if(logo){const h=Math.min(57,95*logo.h/logo.w),w=h*logo.w/logo.h;ops.push('q '+w+' 0 0 '+h+' 36 '+(H-81)+' cm /Logo Do Q');}
+  const left=logo?146:36;
+  text(left,36,'A.M.C SHOPPING',17,true,white);text(left,54,'Your Package. Our Priority. Always.',9,false,'0.76 0.84 0.93');text(left,83,subtitle,12,true,'0.85 0.91 0.98');
+  if(festive){text(left,99,"SEASON'S GREETINGS",8,true,gold);rect(388,23,1,67,gold);}
+  text(412,31,'INVOICE NUMBER',8,true,'0.76 0.84 0.93');text(412,50,d.invoiceNo,16,true,white);
+  text(412,73,'ISSUED  '+(d.issued||'Not recorded'),8,true,'0.76 0.84 0.93');
+  text(412,91,'DUE  '+(d.due||'Not assigned'),9,true,white);
  };
  const table=(rows,start,y)=>{
-  rect(36,y,540,25,navy);text(44,y+16,'#',9,true,white);text(72,y+16,'TRACKING NUMBER',9,true,white);text(392,y+16,'WEIGHT (LB)',9,true,white);text(480,y+16,'CARRIER / REF',9,true,white);y+=25;
-  rows.forEach((p,i)=>{const track=wrap(p.tracking,49),carrier=wrap(p.carrier||'-',15),h=Math.max(25,Math.max(track.length,carrier.length)*12+10);if(i%2===0)rect(36,y,540,h,pale);text(44,y+16,start+i+1,9);track.forEach((v,j)=>text(72,y+16+j*12,v,9));text(392,y+16,p.weight===null||p.weight===''||p.weight===undefined?'Not recorded':num(p.weight).toFixed(2),9);carrier.forEach((v,j)=>text(480,y+16+j*12,v,9));y+=h;});
-  return y;
+  rect(36,y,540,24,navy);text(44,y+16,'#',8,true,white);text(68,y+16,'TRACKING NUMBER',8,true,white);text(377,y+16,'WEIGHT (LB)',8,true,white);text(472,y+16,'CARRIER / REF',8,true,white);y+=24;
+  rows.forEach((p,i)=>{const track=wrap(p.tracking,48),carrier=wrap(p.carrier||'-',17),h=Math.max(24,Math.max(track.length,carrier.length)*11+9);if(i%2===0)rect(36,y,540,h,pale);text(44,y+15,start+i+1,9);track.forEach((v,j)=>text(68,y+15+j*11,v,8.5));text(377,y+15,p.weight===null||p.weight===''||p.weight===undefined?'Not recorded':num(p.weight).toFixed(2),9);carrier.forEach((v,j)=>text(472,y+15+j*11,v,8));rect(36,y+h-0.5,540,0.5,'0.88 0.90 0.93');y+=h;});return y;
+ };
+ const card=(x,y,w,labelText,value,note='',color=ink)=>{rect(x,y,w,78,pale);rect(x,y,3,78,season);label(x+12,y+18,labelText);text(x+12,y+43,value,value.length>18?14:18,true,color);if(note)text(x+12,y+62,note,8,false,muted);};
+ const promo=(y)=>{
+  if(!design.promoEnabled)return;
+  rect(36,y,540,116,navy);rect(36,y,4,116,festive?gold:accent);
+  text(50,y+17,'AMC PROMOTION',8,true,festive?gold:'0.56 0.78 1');
+  let yy=block(50,y+34,design.title,68,11,white,true);
+  yy=block(50,yy+1,design.text,94,9,'0.86 0.91 0.97');
+  block(50,Math.min(yy+4,y+96),design.cta,90,9,festive?gold:'0.67 0.84 1',true);
  };
  header(d.member?'MEMBERS CLUB SHIPPING INVOICE':'SHIPPING INVOICE');
- text(36,143,'BILL TO',10,true,blue);let y=block(36,165,d.customer,54,13);
- if(d.mailbox){text(36,y,'Mailbox: '+d.mailbox,10);y+=16;}
- if(d.whatsapp){text(36,y,'WhatsApp: '+d.whatsapp,10);y+=16;}
- rect(350,132,226,90,pale);text(364,151,'BALANCE DUE',10,true,muted);text(364,178,money(d.balance),22,true,red);
- text(364,203,'PAYMENT DUE: '+(d.due||'Not yet assigned'),10,true,ink);
- y=Math.max(244,y+16);
- text(36,y,'SHIPMENT DETAILS',11,true,blue);y+=17;
+ label(36,136,'BILL TO');let y=block(36,157,d.customer,43,14,ink,true);
+ if(d.mailbox){text(36,y,'Mailbox: '+d.mailbox,9);y+=15;}
+ if(d.whatsapp){text(36,y,'WhatsApp: '+d.whatsapp,9);y+=15;}
+ rect(343,126,233,94,pale);rect(343,126,4,94,season);label(358,145,'AMOUNT DUE');text(358,173,money(d.balance),money(d.balance).length>19?18:23,true,red);
+ text(358,194,'PAYMENT DUE',8,true,muted);text(358,209,d.due||'Not yet assigned',11,true,ink);
+ y=Math.max(239,y+8);text(36,y,'01  SHIPMENT DETAILS',10,true,season);y+=14;
  const chunks=[];let chunk=[],height=0;
- for(const p of d.rows){const h=Math.max(25,Math.max(wrap(p.tracking,49).length,wrap(p.carrier||'-',15).length)*12+10);
-  const max=chunks.length===0?165:480;
-  if(chunk.length&&(height+h>max)){chunks.push(chunk);chunk=[];height=0;}chunk.push(p);height+=h;
- }
+ for(const p of d.rows){const h=Math.max(24,Math.max(wrap(p.tracking,48).length,wrap(p.carrier||'-',17).length)*11+9);const max=chunks.length===0?144:495;if(chunk.length&&(height+h>max)){chunks.push(chunk);chunk=[];height=0;}chunk.push(p);height+=h;}
  if(chunk.length)chunks.push(chunk);
- if(chunks.length)y=table(chunks[0],0,y);
- else y=block(36,y,'Package details were not retained in this record. Contact AMC Shopping if you need the original shipment breakdown.',83,10,muted);
- y+=17;
- if(d.calc.weight!==undefined)text(36,y,'Combined weight: '+num(d.calc.weight).toFixed(2)+' lb',10,true);
- else text(36,y,d.rows.length?'Listed packages: '+d.rows.length:'Invoice summary',10,true);
- y+=17;
- y=block(36,y,d.calc.rateLabel||d.billing||d.description,86,10,muted);
- if(d.calc.shipping!==undefined){text(36,y,'Shipping charge: '+money(d.calc.shipping),10);y+=15;}
- if(d.calc.adjustment){text(36,y,'Adjustment: '+money(d.calc.adjustment),10);y+=15;}
- y+=3;line(36,y,540);y+=19;text(36,y,'INVOICE TOTAL: '+money(d.amount),12,true);text(350,y,'BALANCE: '+money(d.balance),12,true,red);y+=25;
- text(36,y,'HOW TO PAY',11,true,blue);y+=18;text(36,y,'MMG Pay Merchant: AMC SHOPPING / m742288',10,true);y+=15;text(36,y,'Send payment confirmation to +592 604-2826.',10);y+=15;
- y=block(36,y,'Payment must be cleared before release. Storage: GYD $500/day after 7 days from notice.',85,9,muted);
+ if(chunks.length)y=table(chunks[0],0,y);else y=block(36,y+10,'Package details were not retained in this record. Contact AMC for the original shipment breakdown.',84,10,muted);
+ y+=20;text(36,y,'02  BILLING SUMMARY',10,true,season);y+=18;
+ const calc=d.calc||{};
+ if(calc.weight!==undefined){text(36,y,'Combined shipment weight: '+num(calc.weight).toFixed(2)+' lb',10,true);y+=16;}
+ y=block(36,y,calc.rateLabel||d.billing||d.description,86,9,muted);
+ if(calc.shipping!==undefined){text(36,y,'Shipping charge: '+money(calc.shipping),9);y+=14;}
+ if(calc.adjustment){text(36,y,'Adjustment: '+money(calc.adjustment),9);y+=14;}
+ y+=4;rect(36,y,540,42,pale);text(48,y+16,'INVOICE TOTAL',8,true,muted);text(48,y+33,money(d.amount),13,true);text(336,y+16,'BALANCE DUE',8,true,muted);text(336,y+33,money(d.balance),15,true,red);y+=63;
+ text(36,y,'03  PAYMENT & RELEASE',10,true,season);y+=17;
+ text(36,y,'MMG Pay Merchant: AMC SHOPPING / m742288',10,true);y+=14;text(36,y,'Send payment confirmation to +592 604-2826.',9);y+=16;
+ block(36,y,'Payment must be cleared before release. Storage: GYD $500/day after 7 days from notice.',92,8,muted);
  finish();
  let offset=chunks[0]?.length||0;
- for(let i=1;i<chunks.length;i++){header('PACKAGE CONTINUATION');text(36,146,d.customer,13,true);text(36,166,'Continuation of '+d.invoiceNo,10,false,muted);table(chunks[i],offset,190);offset+=chunks[i].length;finish();}
- header(d.member?'MEMBERS CLUB SUMMARY':'SAVE MORE WITH AMC');
- text(36,150,d.member?'Your Members Club shipment':'Explore the AMC Members Club',22,true,ink);
+ for(let i=1;i<chunks.length;i++){header('PACKAGE CONTINUATION');text(36,143,d.customer,13,true);text(36,162,'Continuation of '+d.invoiceNo,9,false,muted);table(chunks[i],offset,182);offset+=chunks[i].length;finish();}
+ header(d.member?'MEMBERS CLUB SUMMARY':'MEMBERS CLUB BENEFITS');
+ text(36,143,d.member?'Your membership value':'Discover the AMC Members Club',20,true);
  if(d.member){
-  text(36,182,'MEMBER TOTAL',10,true,blue);text(36,210,money(d.amount),22,true);
-  const u=d.usage;
-  if(d.calc.standardEquivalent!==undefined){text(36,252,(d.calc.comparisonEstimated?'Regular equivalent (estimate): ':'Regular customer equivalent: ')+money(d.calc.standardEquivalent),12);const diff=num(d.calc.standardEquivalent)-d.amount;text(36,277,(diff>=0?'Shipment savings: ':'Extra cost vs regular: ')+money(Math.abs(diff)),13,true,blue);}
+  const u=d.usage,normal=calc.standardEquivalent,diff=normal===undefined?null:num(normal)-d.amount;
+  card(36,161,174,'MEMBER TOTAL',money(d.amount),'Current shipment');
+  card(219,161,174,calc.comparisonEstimated?'REGULAR (EST.)':'REGULAR TOTAL',normal===undefined?'Not recorded':money(normal),'Same shipment');
+  card(402,161,174,diff!==null&&diff<0?'EXTRA COST':'YOUR SAVINGS',diff===null?'Not recorded':money(Math.abs(diff)),'Shipping-rate difference',diff!==null&&diff<0?red:green);
   if(u){
-   rect(36,304,540,224,pale);text(50,327,'MONTHLY SHIPPING ALLOWANCE | '+u.month,12,true,navy);
-   text(50,349,(u.planName||'Member plan')+' - '+lb(u.baseAllowanceLb)+' base allowance',10,false);
-   text(50,370,'Extra allowance (missed shipment): '+lb(u.adjustmentLb),11,true,blue);
-   text(50,393,'Total available: '+lb(u.allowanceLb),11,true);
-   text(50,415,'Used before this shipment: '+lb(u.usedBeforeLb),10);
-   text(50,436,'This shipment: '+lb(u.shipmentLb),10,true);
-   text(50,457,'Used through this invoice: '+lb(u.usedThroughLb),11,true,navy);
-   text(50,478,'Remaining: '+lb(u.remainingLb),11,true,blue);
-   text(310,478,'Above allowance: '+lb(u.overageLb),11,true,u.overageLb>0?red:muted);
-   text(50,507,'Usage based on recorded member invoices through this invoice.',9,false,muted);
-   if(u.adjustmentLb>0)block(36,552,'Extra pounds are a one-time adjustment for a missed or delayed shipment; they do not change your regular plan.',88,10);
-   block(36,594,'Monthly allowances reset. Unused pounds do not roll over unless AMC approves a missed-shipment or delay adjustment.',87,10);
-  }else{
-   block(36,334,'Monthly allowance could not be verified. Please contact AMC Shopping for your recorded usage.',84,11);
-  }
+   rect(36,257,540,217,pale);text(49,279,'MONTHLY SHIPPING ALLOWANCE  |  '+u.month,11,true,navy);
+   text(49,298,(u.planName||'Member plan')+' - '+lb(u.baseAllowanceLb)+' base allowance',10,true);
+   const values=[['MISSED-SHIPMENT CREDIT','+'+lb(u.adjustmentLb)],['TOTAL AVAILABLE',lb(u.allowanceLb)],['USED BEFORE',lb(u.usedBeforeLb)],['THIS SHIPMENT',lb(u.shipmentLb)],['USED THROUGH THIS INVOICE',lb(u.usedThroughLb)],['REMAINING',lb(u.remainingLb)]];
+   values.forEach(([labelText,value],i)=>{const x=49+(i%3)*174,yy=311+Math.floor(i/3)*51;rect(x,yy,163,44,white);label(x+8,yy+14,labelText);text(x+8,yy+34,value,15,true,ink);});
+   const pct=u.allowanceLb>0?Math.min(1,u.usedThroughLb/u.allowanceLb):0;rect(49,419,514,6,'0.84 0.88 0.93');rect(49,419,514*pct,6,u.overageLb>0?red:season);
+   text(49,442,'Above allowance: '+lb(u.overageLb),10,true,u.overageLb>0?red:muted);text(49,459,'Recorded usage through this invoice.',8,false,muted);
+   let yy=491;yy=block(36,yy,'Monthly allowances reset. Unused pounds do not roll over unless AMC approves a missed or delayed shipment adjustment.',96,9,muted);
+   if(u.adjustmentLb>0)block(36,yy+2,'Extra pounds apply to the approved month only and do not permanently change your plan.',96,9,muted);
+  }else block(36,274,'Monthly usage was not verified. Contact AMC Shopping for the recorded allowance.',90,10,muted);
+  promo(607);
  }else{
-  block(36,184,'Save on eligible shipments with lower member shipping rates, waived package fees and priority processing.',75,13);
-  const plans=[['Starter','20 lbs'],['Small Business','50 lbs'],['Business Pro','100 lbs'],['Enterprise','220 lbs']];
-  plans.forEach((p,i)=>{const x=36+(i%2)*278,yy=252+Math.floor(i/2)*94;rect(x,yy,262,78,pale);text(x+14,yy+27,p[0],13,true,blue);text(x+14,yy+53,p[1],17,true);});
+  block(36,171,'Lower eligible shipping rates, waived package fees and priority processing for members.',85,12,muted);
+  const weight=num(calc.weight),adj=num(calc.adjustment),estimate=weight>0?Math.round((Math.max(1,weight)*950+adj)*100)/100:null;
+  if(estimate!==null){card(36,211,174,'REGULAR TOTAL',money(d.amount),'Current shipment');card(219,211,174,'MEMBER RATE EST.',money(estimate),'Before plan conditions');card(402,211,174,'RATE DIFFERENCE',money(Math.max(0,d.amount-estimate)),'Potential savings',green);}
+  const plans=[['Starter','20 lb'],['Small Business','50 lb'],['Business Pro','100 lb'],['Enterprise','220 lb']];
+  plans.forEach((p,i)=>{const x=36+(i%2)*274,yy=309+Math.floor(i/2)*70;rect(x,yy,266,62,pale);text(x+12,yy+20,p[0],10,true,season);text(x+12,yy+44,p[1],19,true);});
+  text(36,472,'Explore plans: amcshopping.com/members',11,true,blue);
+  promo(515);
  }
- text(36,d.member?676:482,'Learn more: amcshopping.com/members',12,true,blue);
- text(36,d.member?706:512,'Thank you for choosing A.M.C Shopping.',12);
+ if(!design.promoEnabled)text(36,704,'Thank you for choosing A.M.C Shopping.',10,true,season);
+ else if(!d.member)text(36,704,'Thank you for choosing A.M.C Shopping.',10,true,season);
  finish();
  const objs=[null,'<< /Type /Catalog /Pages 2 0 R >>','', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>'];
  let imageId=0;
@@ -123,9 +136,9 @@ function build(d,logo=null){
 }
 let logoPromise;
 function getLogo(){if(logoPromise)return logoPromise;logoPromise=new Promise(resolve=>{const img=new Image();img.onload=()=>{try{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const ctx=c.getContext('2d');ctx.fillStyle='#091a38';ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(img,0,0);const bytes=atob(c.toDataURL('image/jpeg',0.9).split(',')[1]);resolve({w:c.width,h:c.height,hex:Array.from(bytes,ch=>ch.charCodeAt(0).toString(16).padStart(2,'0')).join('')});}catch{resolve(null)}};img.onerror=()=>resolve(null);img.src='/assets/amc-logo.png';});return logoPromise;}
-async function makeFile(d){if(d.member&&!d.usage)d=await hydrateMember(d);const logo=await getLogo();return new File([build(d,logo)],'AMC_'+cleanName(d.invoiceNo)+'_'+cleanName(d.customer)+'.pdf',{type:'application/pdf'});}
+async function makeFile(d){if(!d.design)d={...d,design:await getDesign()};if(d.member&&!d.usage)d=await hydrateMember(d);const logo=await getLogo();return new File([build(d,logo)],'AMC_'+cleanName(d.invoiceNo)+'_'+cleanName(d.customer)+'.pdf',{type:'application/pdf'});}
 function download(file){const a=document.createElement('a'),url=URL.createObjectURL(file);a.href=url;a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 const phone=v=>{let s=String(v||'').replace(/\D/g,'');if(s.length===7)s='592'+s;return s.length>=10&&s.length<=15?s:''};
 const message=d=>'Hello '+d.customer+', your AMC Shopping invoice '+d.invoiceNo+' is ready. Total: '+money(d.amount)+'. Balance due: '+money(d.balance)+'. Payment due: '+(d.due||'please confirm with AMC')+'. Please see the attached PDF invoice for your shipment details and payment instructions. Thank you for choosing AMC Shopping!';
-window.HenryInvoicePDF={source,build,makeFile,download,phone,message,dayPlus,money,memberUsage,hydrateMember};
+window.HenryInvoicePDF={source,build,makeFile,download,phone,message,dayPlus,money,memberUsage,hydrateMember,designSettings,getDesign,saveDesign,DESIGN_DEFAULTS};
 })();
