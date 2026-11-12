@@ -14,6 +14,7 @@ const round4=v=>Math.round((Number(v)||0)*10000)/10000;
 const safeId=v=>clean(v,140).toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120);
 const hash=v=>crypto.createHash('sha256').update(String(v)).digest('hex');
 const readType=async(store,type)=>{const {blobs}=await store.list({prefix:`${type}/`});const rows=await Promise.all(blobs.map(async b=>{try{return await store.get(b.key,{type:'json'})}catch{return null}}));return rows.filter(Boolean)};
+const plusFive=value=>{const d=new Date(value+'T12:00:00Z');if(!Number.isFinite(d.getTime()))throw Error('Invalid invoice date');d.setUTCDate(d.getUTCDate()+5);return d.toISOString().slice(0,10)};
 const isMember=v=>/member/i.test(String(v||''));
 
 function standardCharge(weight){
@@ -59,12 +60,13 @@ function validateCustomers(input){
   return '';
 }
 
-export default async req=>{
+export default async (req,context)=>{
   const adminEmail=clean(process.env.HENRY_ADMIN_EMAIL,180).toLowerCase();
   const sessionSecret=String(process.env.HENRY_SESSION_SECRET||'');
   if(!adminEmail||sessionSecret.length<32)return json({error:'Henry OS is not configured'},503);
   if(!authenticated(req,sessionSecret,adminEmail))return json({error:'Unauthorized'},401);
   if(req.method!=='POST')return json({error:'Method not allowed'},405);
+  if(context?.deploy?.context!=='production')return json({error:'Deployment previews are read-only.'},403);
 
   let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
   const customers=Array.isArray(body.customers)?body.customers:[];
@@ -72,6 +74,7 @@ export default async req=>{
   const rawBatchId=clean(body.batchId,140)||`shipment-${new Date().toISOString().replace(/[:.]/g,'-')}`;
   const batchKey=safeId(rawBatchId);if(!batchKey)return json({error:'Invalid batch ID'},400);
   const invoiceDate=/^\d{4}-\d{2}-\d{2}$/.test(clean(body.invoiceDate,20))?clean(body.invoiceDate,20):new Date().toISOString().slice(0,10);
+  const dueDate=plusFive(invoiceDate);
   const canonical={batchId:batchKey,invoiceDate,customers:customers.map(c=>({name:clean(c.name,200),whatsapp:clean(c.whatsapp,80),mailboxCode:clean(c.mailboxCode,80),customerType:clean(c.customerType,40),notes:clean(c.notes,1800),adjustment:round2(num(c.adjustment)),packages:c.packages.map(p=>({tracking:clean(p.tracking,220),carrier:clean(p.carrier,120),sourceWeight:clean(p.sourceWeight,120),weightLb:round4(num(p.weightLb)),ref:clean(p.ref,120),status:clean(p.status,40)}))}))};
   const inputHash=hash(JSON.stringify(canonical));
   const store=getStore('henry-amc');
@@ -109,7 +112,7 @@ export default async req=>{
 
     const adjustmentText=calc.adjustment?` Manual adjustment: GYD $${calc.adjustment.toFixed(2)}.`:'';
     const invoiceNotes=`Invoice Factory batch ${batchKey}. Invoice date: ${invoiceDate}. ${c.mailboxCode?`Mailbox: ${c.mailboxCode}. `:''}${calc.member?'AMC Members Club pricing applied; package fees waived.':'Regular AMC customer; package fee GYD $0.'} Combined weight: ${calc.weight.toFixed(4)} lb. Billing: ${calc.rateLabel}.${adjustmentText} Tracking: ${trackingList}`.slice(0,4000);
-    const invoiceRecord={id:item.invoiceId,type:'invoices',invoiceNo:item.invoiceNo,customer:c.name,whatsapp:c.whatsapp,amount:calc.total.toFixed(2),balance:calc.total.toFixed(2),status:'sent',dueDate:'',description:`${calc.member?'Members Club Shipping Invoice':'Shipping Invoice'} · ${c.packages.length} package${c.packages.length===1?'':'s'} · ${calc.weight.toFixed(4)} lb`,notes:invoiceNotes,createdAt:now,updatedAt:now};
+    const invoiceRecord={id:item.invoiceId,type:'invoices',invoiceNo:item.invoiceNo,customer:c.name,whatsapp:customerRecord.whatsapp,amount:calc.total.toFixed(2),balance:calc.total.toFixed(2),status:'draft',invoiceDate,dueDate,sentAt:'',dispatchPreparedAt:'',invoiceSnapshot:{mailboxCode:c.mailboxCode||customerRecord.mailboxCode,customerType:calc.member?'member':'regular',packages:c.packages,calculation:calc},description:`${calc.member?'Members Club Shipping Invoice':'Shipping Invoice'} · ${c.packages.length} package${c.packages.length===1?'':'s'} · ${calc.weight.toFixed(4)} lb`,notes:invoiceNotes,createdAt:now,updatedAt:now};
     await store.setJSON(`invoices/${item.invoiceId}`,invoiceRecord);
 
     for(let pIndex=0;pIndex<c.packages.length;pIndex++){
@@ -117,7 +120,7 @@ export default async req=>{
       const packageRecord={id:packageId,type:'packages',customer:c.name,whatsapp:c.whatsapp,tracking:p.tracking,carrier:p.carrier||p.ref||'',weight:round4(p.weightLb).toFixed(4),packageCount:'1',status:p.status||'ready',arrivalDate:invoiceDate,amountDue:'',notes:`Invoice ${item.invoiceNo}. Invoice Factory batch ${batchKey}.${p.sourceWeight?` Source weight: ${p.sourceWeight}.`:''}${p.ref?` Ref: ${p.ref}.`:''}`.slice(0,4000),createdAt:now,updatedAt:now};
       await store.setJSON(`packages/${packageId}`,packageRecord);
     }
-    results.push({invoiceNo:item.invoiceNo,invoiceId:item.invoiceId,customer:c.name,customerId:item.customerId,customerType:calc.member?'member':'regular',amount:calc.total.toFixed(2),weight:calc.weight.toFixed(4),standardEquivalent:calc.standardEquivalent.toFixed(2),savings:calc.member?round2(calc.standardEquivalent-calc.total).toFixed(2):'0.00',packageCount:c.packages.length,packageIds:item.packageIds});
+    results.push({invoiceNo:item.invoiceNo,invoiceId:item.invoiceId,invoiceDate,dueDate,status:'draft',whatsapp:customerRecord.whatsapp,customer:c.name,customerId:item.customerId,customerType:calc.member?'member':'regular',amount:calc.total.toFixed(2),weight:calc.weight.toFixed(4),standardEquivalent:calc.standardEquivalent.toFixed(2),savings:calc.member?round2(calc.standardEquivalent-calc.total).toFixed(2):'0.00',packageCount:c.packages.length,packageIds:item.packageIds});
   }
 
   marker={...marker,status:'done',done:true,inputHash,invoiceDate,results,completedAt:now,updatedAt:now};
