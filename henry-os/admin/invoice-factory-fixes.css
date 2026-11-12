@@ -1,1 +1,38 @@
 .validationWide{grid-column:1/-1}.savedLink{margin-top:8px}.primaryBtn:disabled{opacity:.45;cursor:not-allowed}.nav-item{ text-decoration:none }
+
+
+/* AMC Premium Invoice v1: fixed brand system, independent seasonal overlay. */
+.invoiceDesignControls .designSwitches{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
+.designSwitch{display:flex!important;align-items:center;gap:12px;padding:14px;border:1px solid #284766;border-radius:12px;background:#102944;cursor:pointer}
+.designSwitch input{width:20px!important;height:20px!important;accent-color:#49b7ff;flex:0 0 auto}
+.designSwitch span{display:flex;flex-direction:column;gap:5px}.designSwitch b{color:#eef7ff;font-size:14px}.designSwitch small,.designHint{color:#91abc5;font-size:12px;line-height:1.5}
+.invoiceDesignControls .promoControls{grid-template-columns:minmax(145px,1fr) minmax(180px,1.4fr) minmax(220px,2fr) minmax(150px,1fr) auto;align-items:center}
+.invoiceDesignControls textarea{resize:vertical;min-height:46px;background:#091a2d;color:#eef7ff;border:1px solid #284766;border-radius:9px;padding:10px;font:inherit}
+.amcPremiumInvoice{--invoice-navy:#07142a;--invoice-royal:#0e478f;--invoice-accent:#4f9ce8;--invoice-ink:#17243a;--invoice-muted:#586c82;--invoice-paper:#f3f7fb;--invoice-season:#0e478f;color:var(--invoice-ink);background:white;border-radius:8px}
+.amcPremiumInvoice.festiveInvoice{--invoice-accent:#d1a64f;--invoice-season:#14654a}
+.amcPremiumInvoice .sheet{position:relative;display:flex;flex-direction:column;min-height:790px;background:#fff}
+.amcPremiumInvoice .header{background:var(--invoice-navy);color:#fff;border-bottom:5px solid var(--invoice-accent);height:auto;min-height:136px;padding:23px 42px;gap:18px;flex-shrink:0}
+.amcPremiumInvoice .logo{width:100px;height:90px;flex-shrink:0}
+.amcPremiumInvoice .brand{gap:16px}.amcPremiumInvoice .brand h2{font-size:24px;letter-spacing:.3px;color:white;margin:0 0 5px}.amcPremiumInvoice .brand h3{font-size:19px;line-height:1.15;color:#dceaff;margin:0 0 8px;font-weight:650}.amcPremiumInvoice .brand p{font-size:11px;color:#c4d4e8;margin:0}
+.amcPremiumInvoice.festiveInvoice .brand p::after{content:"SEASON'S GREETINGS";display:block;color:#e6c477;font-size:10px;letter-spacing:1.3px;font-weight:800;margin-top:6px}
+.amcPremiumInvoice .meta{border-left:1px solid #435771;padding-left:18px;min-width:175px}.amcPremiumInvoice.festiveInvoice .meta{border-color:#b89755}
+.amcPremiumInvoice .meta span{font-size:10px;color:#b7c9dd}.amcPremiumInvoice .meta b{color:#fff;font-size:12px}
+.amcPremiumInvoice .content{padding:23px 42px 18px;flex:1;min-width:0}
+.amcPremiumInvoice .summary,.amcPremiumInvoice .memberSummary,.amcPremiumInvoice .promoStats{gap:12px}
+.amcPremiumInvoice .card{background:var(--invoice-paper);border:0;border-left:4px solid var(--invoice-season);border-radius:10px;padding:13px 15px;min-height:110px;box-shadow:none}
+.amcPremiumInvoice .card h4,.amcPremiumInvoice .panel h4{color:var(--invoice-season);font-size:12px;letter-spacing:.35px;margin:0 0 9px}.amcPremiumInvoice .card .row{font-size:12px;margin:7px 0}
+.amcPremiumInvoice .total strong{font-size:28px;margin:10px 0 7px;color:#b3212a}.amcPremiumInvoice .total small,.amcPremiumInvoice .card small{font-size:11px;color:var(--invoice-muted)}
+.amcPremiumInvoice .table{margin-top:17px;border:1px solid #d7e1ed;border-radius:8px;overflow:hidden}.amcPremiumInvoice .tr.head{background:var(--invoice-navy);color:#fff;font-weight:700;letter-spacing:.25px}.amcPremiumInvoice .tr:not(.head):nth-child(even){background:var(--invoice-paper)}.amcPremiumInvoice .tr:not(.head){border-color:#e1e7ef}
+.amcPremiumInvoice .note{background:#f3f7fb;color:#344b66;border-color:#d9e3ef;margin:13px 0;padding:10px 13px;border-radius:8px;font-size:11px}
+.amcPremiumInvoice .panel{border:1px solid #dae3ee;border-radius:9px;overflow:hidden}.amcPremiumInvoice .panel h4{background:var(--invoice-navy);color:#fff;padding:10px 12px;margin:0}.amcPremiumInvoice .inside{padding:12px 14px}.amcPremiumInvoice .grand{background:var(--invoice-paper);color:#b3212a}
+.amcPremiumInvoice .free{margin:12px 0}.amcPremiumInvoice .promoHero{margin:5px 0 16px}.amcPremiumInvoice .promoHero h2{font-size:24px;color:var(--invoice-ink)}.amcPremiumInvoice .promoHero p{font-size:12px}
+.amcPremiumInvoice .plans{gap:10px;margin-top:15px}.amcPremiumInvoice .plan{background:var(--invoice-paper);border:0;border-radius:8px;padding:10px}.amcPremiumInvoice .plan h5{color:var(--invoice-season)}
+.amcPremiumInvoice .invoiceMemberUsage{margin-top:12px;padding:10px 13px}.amcPremiumInvoice .invoiceMemberUsage h4{color:var(--invoice-season)}.amcPremiumInvoice .invoiceMemberUsageGrid{gap:5px 10px}.amcPremiumInvoice .invoiceMemberUsageGrid>div{padding:4px 8px}.amcPremiumInvoice .invoiceMemberPay{margin-top:9px}
+.amcPremiumInvoice .memberSummary .card,.amcPremiumInvoice .promoStats .card{min-height:85px}.amcPremiumInvoice .memberSummary strong,.amcPremiumInvoice .promoStats strong{font-size:21px;margin:6px 0}
+.amcPremiumInvoice .promoSlot{position:static;margin:0 42px 14px;background:var(--invoice-navy);border-left:5px solid var(--invoice-accent);border-radius:9px;padding:12px 14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(110px,200px);gap:12px;align-items:center;overflow-wrap:anywhere}
+.amcPremiumInvoice .promoSlot h4{font-size:14px;color:#fff}.amcPremiumInvoice .promoSlot p{font-size:11px;line-height:1.35;color:#dce8f3}.amcPremiumInvoice .promoSlot .promoCta{background:var(--invoice-accent);color:#07142a;white-space:normal;text-align:center;font-size:11px;overflow-wrap:anywhere}
+.amcPremiumInvoice .footer{position:static;left:auto;right:auto;bottom:auto;margin:0 42px 13px;border-top:1px solid #dce5ee;padding:9px 0 0;color:var(--invoice-muted);font-size:10px;text-align:left}
+.amcPremiumInvoice.noPromotion .promoSlot{display:none}
+@media(max-width:1050px){.invoiceDesignControls .promoControls{grid-template-columns:repeat(2,minmax(0,1fr))}.invoiceDesignControls textarea{grid-column:1/-1}}
+@media(max-width:650px){.invoiceDesignControls .designSwitches,.invoiceDesignControls .promoControls{grid-template-columns:1fr}}
+@media print{.printArea .amcPremiumInvoice{width:100%;min-height:0;overflow:visible;margin:0;border-radius:0;print-color-adjust:exact;-webkit-print-color-adjust:exact}.printArea .amcPremiumInvoice .sheet{min-height:0;break-inside:avoid}.printArea .amcPremiumInvoice .header{min-height:28mm;height:auto;padding:4mm 9mm}.printArea .amcPremiumInvoice .content{padding:4mm 9mm 3mm}.printArea .amcPremiumInvoice .logo{width:23mm;height:21mm}.printArea .amcPremiumInvoice .promoSlot{margin:0 9mm 3mm;padding:2mm 3mm;position:static}.printArea .amcPremiumInvoice .footer{position:static;margin:0 9mm 2mm;padding-top:2mm}.printArea .amcPremiumInvoice .memberSummary .card,.printArea .amcPremiumInvoice .promoStats .card{min-height:0}.printArea .amcPremiumInvoice .invoiceMemberUsage{margin-top:2mm;padding:2mm 3mm}.printArea .amcPremiumInvoice .invoiceMemberUsageGrid{gap:3px 7px}.printArea .amcPremiumInvoice .brand h2{font-size:21px}.printArea .amcPremiumInvoice .brand h3{font-size:16px}.printArea .amcPremiumInvoice .plans{margin-top:2mm}}
