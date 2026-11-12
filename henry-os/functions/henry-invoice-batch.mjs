@@ -78,6 +78,7 @@ export default async (req,context)=>{
   const canonical={batchId:batchKey,invoiceDate,customers:customers.map(c=>({name:clean(c.name,200),whatsapp:clean(c.whatsapp,80),mailboxCode:clean(c.mailboxCode,80),customerType:clean(c.customerType,40),notes:clean(c.notes,1800),adjustment:round2(num(c.adjustment)),packages:c.packages.map(p=>({tracking:clean(p.tracking,220),carrier:clean(p.carrier,120),sourceWeight:clean(p.sourceWeight,120),weightLb:round4(num(p.weightLb)),ref:clean(p.ref,120),status:clean(p.status,40)}))}))};
   const inputHash=hash(JSON.stringify(canonical));
   const store=getStore('henry-amc');
+  const design=await store.get('settings/invoice-design-v1',{type:'json'}).catch(()=>null)||{version:'amc-premium-v1',festive:false,promoEnabled:true,preset:'members',title:'Save More With AMC Members Club',text:'Lower eligible shipping rates, waived package fees and member benefits.',cta:'amcshopping.com/members'};
   const markerKey=`invoice-batches/${batchKey}`;
   let marker=await store.get(markerKey,{type:'json'}).catch(()=>null);
   if(marker?.done){
@@ -112,7 +113,7 @@ export default async (req,context)=>{
 
     const adjustmentText=calc.adjustment?` Manual adjustment: GYD $${calc.adjustment.toFixed(2)}.`:'';
     const invoiceNotes=`Invoice Factory batch ${batchKey}. Invoice date: ${invoiceDate}. ${c.mailboxCode?`Mailbox: ${c.mailboxCode}. `:''}${calc.member?'AMC Members Club pricing applied; package fees waived.':'Regular AMC customer; package fee GYD $0.'} Combined weight: ${calc.weight.toFixed(4)} lb. Billing: ${calc.rateLabel}.${adjustmentText} Tracking: ${trackingList}`.slice(0,4000);
-    const invoiceRecord={id:item.invoiceId,type:'invoices',invoiceNo:item.invoiceNo,customer:c.name,whatsapp:customerRecord.whatsapp,amount:calc.total.toFixed(2),balance:calc.total.toFixed(2),status:'draft',invoiceDate,dueDate,sentAt:'',dispatchPreparedAt:'',invoiceSnapshot:{mailboxCode:c.mailboxCode||customerRecord.mailboxCode,customerType:calc.member?'member':'regular',packages:c.packages,calculation:calc},description:`${calc.member?'Members Club Shipping Invoice':'Shipping Invoice'} · ${c.packages.length} package${c.packages.length===1?'':'s'} · ${calc.weight.toFixed(4)} lb`,notes:invoiceNotes,createdAt:now,updatedAt:now};
+    const invoiceRecord={id:item.invoiceId,type:'invoices',invoiceNo:item.invoiceNo,customer:c.name,whatsapp:customerRecord.whatsapp,amount:calc.total.toFixed(2),balance:calc.total.toFixed(2),status:'draft',invoiceDate,dueDate,sentAt:'',dispatchPreparedAt:'',invoiceSnapshot:{design,mailboxCode:c.mailboxCode||customerRecord.mailboxCode,customerType:calc.member?'member':'regular',packages:c.packages,calculation:calc},description:`${calc.member?'Members Club Shipping Invoice':'Shipping Invoice'} · ${c.packages.length} package${c.packages.length===1?'':'s'} · ${calc.weight.toFixed(4)} lb`,notes:invoiceNotes,createdAt:now,updatedAt:now};
     await store.setJSON(`invoices/${item.invoiceId}`,invoiceRecord);
 
     for(let pIndex=0;pIndex<c.packages.length;pIndex++){
@@ -120,7 +121,7 @@ export default async (req,context)=>{
       const packageRecord={id:packageId,type:'packages',customer:c.name,whatsapp:c.whatsapp,tracking:p.tracking,carrier:p.carrier||p.ref||'',weight:round4(p.weightLb).toFixed(4),packageCount:'1',status:p.status||'ready',arrivalDate:invoiceDate,amountDue:'',notes:`Invoice ${item.invoiceNo}. Invoice Factory batch ${batchKey}.${p.sourceWeight?` Source weight: ${p.sourceWeight}.`:''}${p.ref?` Ref: ${p.ref}.`:''}`.slice(0,4000),createdAt:now,updatedAt:now};
       await store.setJSON(`packages/${packageId}`,packageRecord);
     }
-    results.push({invoiceNo:item.invoiceNo,invoiceId:item.invoiceId,invoiceDate,dueDate,status:'draft',whatsapp:customerRecord.whatsapp,customer:c.name,customerId:item.customerId,customerType:calc.member?'member':'regular',amount:calc.total.toFixed(2),weight:calc.weight.toFixed(4),standardEquivalent:calc.standardEquivalent.toFixed(2),savings:calc.member?round2(calc.standardEquivalent-calc.total).toFixed(2):'0.00',packageCount:c.packages.length,packageIds:item.packageIds});
+    results.push({design,invoiceNo:item.invoiceNo,invoiceId:item.invoiceId,invoiceDate,dueDate,status:'draft',whatsapp:customerRecord.whatsapp,customer:c.name,customerId:item.customerId,customerType:calc.member?'member':'regular',amount:calc.total.toFixed(2),weight:calc.weight.toFixed(4),standardEquivalent:calc.standardEquivalent.toFixed(2),savings:calc.member?round2(calc.standardEquivalent-calc.total).toFixed(2):'0.00',packageCount:c.packages.length,packageIds:item.packageIds});
   }
 
   marker={...marker,status:'done',done:true,inputHash,invoiceDate,results,completedAt:now,updatedAt:now};
