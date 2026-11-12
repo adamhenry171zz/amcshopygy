@@ -6,11 +6,11 @@
 <meta name="robots" content="noindex,nofollow,noarchive">
 <meta name="theme-color" content="#071426">
 <title>HENRY OS · Invoice Factory</title>
-<link rel="stylesheet" href="/admin/invoice-factory-preview.css?v=20261111b">
+<link rel="stylesheet" href="/admin/invoice-factory-preview.css?v=20261111c">
 <link rel="stylesheet" href="/admin/invoice-factory-workspace.css">
 <link rel="stylesheet" href="/admin/invoice-factory-fixes.css">
-<script src="/admin/invoice-pdf.js?v=20261111b" defer></script>
-<script src="/admin/invoice-factory-preview.js?v=20261111b" defer></script>
+<script src="/admin/invoice-pdf.js?v=20261111c" defer></script>
+<script src="/admin/invoice-factory-preview.js?v=20261111c" defer></script>
 <script src="/admin/invoice-factory-handoff.js" defer></script>
 </head>
 <body>
@@ -35,6 +35,18 @@
     <label class="pasteLabel">AMC_INVOICE_FACTORY_V1 data<textarea id="importBox" spellcheck="false" placeholder='Paste JSON here, then select “Import & Review”.'></textarea></label>
     <div class="actionRow"><button id="importBtn" class="primaryBtn" type="button">Import & Review →</button><button id="clearBtn" class="outlineBtn" type="button">Clear</button></div>
     <div id="importStatus" class="statusLine" role="status" aria-live="polite"></div>
+  </section>
+
+
+  <section class="workCard invoiceDesignControls">
+    <div class="sectionHead"><div><span class="step">PERMANENT TEMPLATE · AMC PREMIUM V1</span><h2>Invoice design &amp; promotions</h2><p>Save these settings in HENRY OS for future invoices. Seasonal styling is independent of promotions; customer charges and billing terms never change.</p></div><a class="ghostBtn" href="/admin/#invoices">Back to invoices</a></div>
+    <div class="designSwitches">
+      <label class="designSwitch"><input id="festiveMode" type="checkbox"><span><b>Festive mode</b><small>Seasonal greeting, gold accent and evergreen details</small></span></label>
+      <label class="designSwitch"><input id="promoEnabled" type="checkbox" checked><span><b>Promotion area</b><small>Include the saved offer on regular and member invoices</small></span></label>
+    </div>
+    <div class="promoControls"><select id="promoPreset" aria-label="Promotion preset"><option value="members">Members Club</option><option value="streaming">Streaming Services</option><option value="mailbox">AMC Mailbox</option><option value="fragrances">AMC Fragrances</option><option value="custom">Custom</option></select><input id="promoTitle" maxlength="100" placeholder="Promotion title"><textarea id="promoText" maxlength="280" rows="2" placeholder="Promotion message"></textarea><input id="promoCta" maxlength="90" placeholder="CTA / link text"><button id="savePromoBtn" class="primaryBtn" type="button">Save invoice settings</button></div>
+    <p id="designStatus" class="statusLine" role="status" aria-live="polite">Loading saved settings…</p>
+    <p class="designHint">The design is locked. Edit the switches or promotion, then save before generating a new batch. Existing invoices retain their saved settings.</p>
   </section>
 
   <section id="reviewArea" class="reviewArea hidden">
@@ -66,14 +78,8 @@
     </section>
 
     <section class="workCard previewControls">
-      <div class="sectionHead compact"><div><span class="step">STEP 4</span><h2>Locked invoice preview</h2><p>The invoice design is locked. Only customer/shipment data and the AMC promotion change.</p></div><div class="previewNav"><button id="prevCustomerBtn" class="ghostBtn" type="button">←</button><span id="previewCount">1 / 1</span><button id="nextCustomerBtn" class="ghostBtn" type="button">→</button></div></div>
-      <div class="promoControls">
-        <select id="promoPreset" aria-label="Promotion preset"><option value="members">Members Club</option><option value="course">AMC Courses</option><option value="streaming">Streaming Services</option><option value="mailbox">AMC Mailbox</option><option value="custom">Custom</option></select>
-        <input id="promoTitle" placeholder="Promotion title">
-        <input id="promoText" placeholder="Promotion message">
-        <input id="promoCta" placeholder="CTA / link text">
-        <button id="savePromoBtn" class="ghostBtn" type="button">Save Promo</button>
-      </div>
+      <div class="sectionHead compact"><div><span class="step">STEP 4</span><h2>Locked invoice preview</h2><p>The premium design is permanent. Set seasonal styling and promotions above before generating. Saved invoices retain their selected settings.</p></div><div class="previewNav"><button id="prevCustomerBtn" class="ghostBtn" type="button">←</button><span id="previewCount">1 / 1</span><button id="nextCustomerBtn" class="ghostBtn" type="button">→</button></div></div>
+
     </section>
 
     <section id="invoicePreview" class="invoicePreview"></section>
