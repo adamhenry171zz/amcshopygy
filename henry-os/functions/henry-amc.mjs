@@ -160,6 +160,40 @@ export default async(req,context)=>{
     return json({items:await readType(store,type)});
   }
 
+
+  if(action==='invoice_dispatch'&&req.method==='POST'){
+    let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    const id=clean(body.id,220),command=clean(body.command,30);
+    if(!/^[a-zA-Z0-9_-]+$/.test(id)||!['prepare','confirm','reset'].includes(command))return json({error:'Invalid invoice dispatch request'},400);
+    const old=await store.get('invoices/'+id,{type:'json'}).catch(()=>null);
+    if(!old)return json({error:'Invoice not found'},404);
+    if(['paid','cancelled','part_paid','overdue'].includes(old.status))return json({error:'This invoice is not an unsent draft. Its payment history will not be changed.'},409);
+    const now=new Date().toISOString();
+    const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+    const today=['year','month','day'].map(k=>day.find(v=>v.type===k).value).join('-');
+    const future=new Date(today+'T12:00:00Z');future.setUTCDate(future.getUTCDate()+5);
+    const fiveDays=future.toISOString().slice(0,10);
+    const next={...old,updatedAt:now};
+    if(command==='reset'){
+      if(old.status!=='sent'||old.dueDate||old.sentAt||!String(old.id).startsWith('factory-'))return json({error:'Only legacy factory invoices with no due date or recorded dispatch can be reset here.'},409);
+      next.status='draft';next.sentAt='';next.dueDate=fiveDays;next.dispatchPreparedAt='';
+    }else if(command==='prepare'){
+      if(old.status!=='draft')return json({error:'Only an unsent draft can be prepared.'},409);
+      const phone=clean(body.whatsapp||old.whatsapp,80);
+      const digits=phone.replace(/\D/g,'');
+      if(!digits||digits.length<7||digits.length>15)return json({error:'Enter a valid WhatsApp number, including country code if outside Guyana.'},400);
+      next.whatsapp=phone;
+      if(!old.dispatchPreparedAt){next.dueDate=fiveDays;next.dispatchPreparedAt=now;}
+      if(!next.dueDate)next.dueDate=fiveDays;
+    }else{
+      if(old.status!=='draft')return json({error:'Only a draft can be confirmed sent.'},409);
+      if(!old.dispatchPreparedAt)return json({error:'Prepare the invoice for dispatch before confirming it was sent.'},409);
+      next.status='sent';next.sentAt=now;next.dueDate=old.dueDate||fiveDays;
+    }
+    await store.setJSON('invoices/'+id,next);
+    return json({item:next});
+  }
+
   if(action==='save'&&req.method==='POST'){
     let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
     const type=clean(body.type,40);if(!TYPES.has(type))return json({error:'Invalid type'},400);
@@ -204,7 +238,7 @@ export default async(req,context)=>{
     }
     // Preserve already-recorded streaming metadata (import provider date,
     // inactivity history, immutable payment references) on routine edits.
-    const record=type==='streaming'
+    const record=(type==='streaming'||type==='invoices')
       ?{...existing,id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now}
       :{id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now};
     await store.setJSON(`${type}/${id}`,record);
