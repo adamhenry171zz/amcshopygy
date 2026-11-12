@@ -78,9 +78,10 @@ export default async (req,context)=>{
   const canonical={batchId:batchKey,invoiceDate,customers:customers.map(c=>({name:clean(c.name,200),whatsapp:clean(c.whatsapp,80),mailboxCode:clean(c.mailboxCode,80),customerType:clean(c.customerType,40),notes:clean(c.notes,1800),adjustment:round2(num(c.adjustment)),packages:c.packages.map(p=>({tracking:clean(p.tracking,220),carrier:clean(p.carrier,120),sourceWeight:clean(p.sourceWeight,120),weightLb:round4(num(p.weightLb)),ref:clean(p.ref,120),status:clean(p.status,40)}))}))};
   const inputHash=hash(JSON.stringify(canonical));
   const store=getStore('henry-amc');
-  const design=await store.get('settings/invoice-design-v1',{type:'json'}).catch(()=>null)||{version:'amc-premium-v1',festive:false,promoEnabled:true,preset:'members',title:'Save More With AMC Members Club',text:'Lower eligible shipping rates, waived package fees and member benefits.',cta:'amcshopping.com/members'};
+  let design=await store.get('settings/invoice-design-v1',{type:'json'}).catch(()=>null)||{version:'amc-premium-v1',festive:false,promoEnabled:true,preset:'members',title:'Save More With AMC Members Club',text:'Lower eligible shipping rates, waived package fees and member benefits.',cta:'amcshopping.com/members'};
   const markerKey=`invoice-batches/${batchKey}`;
   let marker=await store.get(markerKey,{type:'json'}).catch(()=>null);
+  if(marker?.design)design=marker.design;
   if(marker?.done){
     if(marker.inputHash&&marker.inputHash!==inputHash)return json({error:'This batch ID was already used for different data. Use a new batch ID.'},409);
     return json({ok:true,reused:true,batchId:batchKey,invoiceDate:marker.invoiceDate||invoiceDate,results:marker.results||[]});
@@ -99,7 +100,7 @@ export default async (req,context)=>{
       const customerId=existing?.id||`factory-customer-${safeId(c.mailboxCode||c.name)||hash(c.name).slice(0,14)}`;
       return {index,invoiceNo,invoiceId:`factory-${batchKey}-${invoiceNo.toLowerCase()}`,customerId,existingCustomerId:existing?.id||'',packageIds:c.packages.map(p=>`factory-package-${hash(`${batchKey}|${p.tracking.toUpperCase()}`).slice(0,24)}`)};
     });
-    marker={id:batchKey,type:'invoice_batch',status:'pending',done:false,inputHash,invoiceDate,plan,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+    marker={id:batchKey,type:'invoice_batch',status:'pending',done:false,inputHash,invoiceDate,design,plan,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     await store.setJSON(markerKey,marker);
   }
 
