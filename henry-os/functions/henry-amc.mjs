@@ -23,6 +23,9 @@ const sign=(payload,secret)=>crypto.createHmac('sha256',secret).update(payload).
 const parseCookies=s=>Object.fromEntries(String(s||'').split(';').map(v=>v.trim()).filter(Boolean).map(v=>{const i=v.indexOf('=');return i<0?[v,'']:[v.slice(0,i),decodeURIComponent(v.slice(i+1))]}));
 const authenticated=(req,secret,email)=>{const token=parseCookies(req.headers.get('cookie')).henry_session;if(!token)return false;const [payload,sig]=token.split('.');if(!payload||!sig||!safeEq(sign(payload,secret),sig))return false;try{const data=JSON.parse(Buffer.from(payload,'base64url').toString('utf8'));return data.email===email&&Number(data.exp)>Date.now()}catch{return false}};
 const clean=(v,max=1200)=>String(v??'').trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').slice(0,max);
+const INVOICE_DESIGN_KEY='settings/invoice-design-v1';
+const INVOICE_DESIGN_DEFAULTS={version:'amc-premium-v1',festive:false,promoEnabled:true,preset:'members',title:'Save More With AMC Members Club',text:'Lower eligible shipping rates, waived package fees and member benefits.',cta:'amcshopping.com/members'};
+function normalizeInvoiceDesign(v={}){return {version:'amc-premium-v1',festive:v.festive===true,promoEnabled:v.promoEnabled!==false,preset:['members','streaming','mailbox','fragrances','custom'].includes(v.preset)?v.preset:'custom',title:clean(v.title,100)||INVOICE_DESIGN_DEFAULTS.title,text:clean(v.text,280)||INVOICE_DESIGN_DEFAULTS.text,cta:clean(v.cta,90)||INVOICE_DESIGN_DEFAULTS.cta};}
 const cleanRecord=(type,input={})=>{const out={};for(const field of FIELDS[type]||[])out[field]=clean(input[field],field==='notes'||field==='message'||field==='body'?4000:800);return out};
 const readType=async(store,type)=>{const {blobs}=await store.list({prefix:`${type}/`});const rows=await Promise.all(blobs.map(async b=>{try{return await store.get(b.key,{type:'json'})}catch{return null}}));return rows.filter(Boolean).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')))};
 const readMailboxes=async()=>{const store=getStore('amc-mailboxes');const {blobs}=await store.list({prefix:'mailboxes/'});const rows=await Promise.all(blobs.map(async b=>{try{return await store.get(b.key,{type:'json'})}catch{return null}}));return rows.filter(Boolean).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))};
@@ -142,6 +145,19 @@ export default async(req,context)=>{
   if(req.method==='POST'&&context?.deploy?.context!=='production')
     return json({error:'Deployment previews are read-only. No AMC customer records were changed.'},403);
   const store=getStore('henry-amc');
+
+
+  if(action==='invoice_design'&&req.method==='GET'){
+    const saved=await store.get(INVOICE_DESIGN_KEY,{type:'json'}).catch(()=>null);
+    return json({settings:saved?normalizeInvoiceDesign(saved):INVOICE_DESIGN_DEFAULTS});
+  }
+  if(action==='invoice_design'&&req.method==='POST'){
+    let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    if(!body||typeof body.festive!=='boolean'||typeof body.promoEnabled!=='boolean')return json({error:'Invalid invoice design settings'},400);
+    const settings=normalizeInvoiceDesign(body);
+    await store.setJSON(INVOICE_DESIGN_KEY,{...settings,updatedAt:new Date().toISOString()});
+    return json({settings});
+  }
 
   if(action==='bootstrap'&&req.method==='GET'){
     if(context?.deploy?.context==='production'){
