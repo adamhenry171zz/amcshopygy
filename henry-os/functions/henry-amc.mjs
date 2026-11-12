@@ -164,6 +164,15 @@ export default async(req,context)=>{
   if(action==='invoice_dispatch'&&req.method==='POST'){
     let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
     const id=clean(body.id,220),command=clean(body.command,30);
+    if(command==='reset_today'){
+      if(body.confirmed!==true)return json({error:'Confirm these invoices were not actually sent.'},400);
+      const localDay=value=>{const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));return ['year','month','day'].map(k=>parts.find(v=>v.type===k).value).join('-')};
+      const now=new Date().toISOString(),day=localDay(now),future=new Date(day+'T12:00:00Z');future.setUTCDate(future.getUTCDate()+5);
+      const due=future.toISOString().slice(0,10),items=await readType(store,'invoices');let count=0;
+      for(const r of items){if(r.status!=='sent'||r.dueDate||r.sentAt||!String(r.id).startsWith('factory-')||!Number.isFinite(Date.parse(r.createdAt))||localDay(r.createdAt)!==day)continue;
+        await store.setJSON('invoices/'+r.id,{...r,status:'draft',dueDate:due,sentAt:'',dispatchPreparedAt:'',updatedAt:now});count++;}
+      return json({ok:true,count,dueDate:due});
+    }
     if(!/^[a-zA-Z0-9_-]+$/.test(id)||!['prepare','confirm','reset'].includes(command))return json({error:'Invalid invoice dispatch request'},400);
     const old=await store.get('invoices/'+id,{type:'json'}).catch(()=>null);
     if(!old)return json({error:'Invoice not found'},404);
