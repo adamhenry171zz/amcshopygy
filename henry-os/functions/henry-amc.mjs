@@ -266,6 +266,10 @@ export default async(req,context)=>{
     const record=(type==='streaming'||type==='invoices')
       ?{...existing,id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now}
       :{id,type,...cleaned,createdAt:existing?.createdAt||now,updatedAt:now};
+    if(type==='invoices'&&!existing){
+      const design=await store.get(INVOICE_DESIGN_KEY,{type:'json'}).catch(()=>null);
+      record.invoiceSnapshot={design:design?normalizeInvoiceDesign(design):INVOICE_DESIGN_DEFAULTS};
+    }
     await store.setJSON(`${type}/${id}`,record);
     return json({item:record});
   }
