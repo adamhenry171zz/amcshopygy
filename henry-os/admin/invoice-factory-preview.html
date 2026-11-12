@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="/admin/invoice-factory-preview.css">
 <link rel="stylesheet" href="/admin/invoice-factory-workspace.css">
 <link rel="stylesheet" href="/admin/invoice-factory-fixes.css">
-<script src="/admin/invoice-factory-preview.js" defer></script>
+<script src="/admin/invoice-pdf.js?v=20261111a" defer></script>
+<script src="/admin/invoice-factory-preview.js?v=20261111a" defer></script>
 <script src="/admin/invoice-factory-handoff.js" defer></script>
 </head>
 <body>
@@ -29,7 +30,7 @@
     </div>
     <div class="batchMeta">
       <label>Batch ID<input id="batchId" type="text" placeholder="e.g. shipment-2026-11-01-a"></label>
-      <label>Invoice date<input id="invoiceDate" type="date"></label>
+      <label>Invoice date<input id="invoiceDate" type="date"></label><label>Payment due (five days)<input id="invoiceDueDate" type="date" readonly></label>
     </div>
     <label class="pasteLabel">AMC_INVOICE_FACTORY_V1 data<textarea id="importBox" spellcheck="false" placeholder='Paste JSON here, then select “Import & Review”.'></textarea></label>
     <div class="actionRow"><button id="importBtn" class="primaryBtn" type="button">Import & Review →</button><button id="clearBtn" class="outlineBtn" type="button">Clear</button></div>
@@ -78,8 +79,8 @@
     <section id="invoicePreview" class="invoicePreview"></section>
 
     <section class="commitBar workCard">
-      <div><span class="step">STEP 5</span><h2>Generate & pass to HENRY OS</h2><p>Saving creates the customers, packages and outstanding invoices inside HENRY OS. Reusing the same Batch ID will not duplicate the batch.</p></div>
-      <div class="commitActions"><button id="printSelectedBtn" class="outlineBtn" type="button">Print selected / Save PDF</button><button id="printAllBtn" class="outlineBtn" type="button">Print whole batch / Save PDF</button><button id="commitBtn" class="primaryBtn" type="button">Generate & Save to HENRY OS →</button></div>
+      <div><span class="step">STEP 5</span><h2>Generate & pass to HENRY OS</h2><p>Saving creates draft invoices, customers and package records. Download the saved PDF, then use the HENRY OS Invoices screen to prepare WhatsApp dispatch and confirm sent. Reusing a Batch ID will not duplicate the batch.</p></div>
+      <div class="commitActions"><button id="downloadSavedBtn" class="primaryBtn" type="button" disabled>Download selected saved PDF</button><button id="printSelectedBtn" class="outlineBtn" type="button">Print selected / Save PDF</button><button id="printAllBtn" class="outlineBtn" type="button">Print whole batch / Save PDF</button><button id="commitBtn" class="primaryBtn" type="button">Generate & Save to HENRY OS →</button></div>
       <div id="commitStatus" class="statusLine" role="status" aria-live="polite"></div>
     </section>
   </section>
