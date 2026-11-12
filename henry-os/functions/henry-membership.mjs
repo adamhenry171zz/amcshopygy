@@ -18,7 +18,7 @@ const num=v=>Number(String(v??'').replace(/,/g,''))||0;
 const norm=v=>clean(v,240).toLowerCase().replace(/\s+/g,' ');
 const readAll=async(store,prefix)=>{const {blobs}=await store.list({prefix});const rows=await Promise.all(blobs.map(async b=>{try{return await store.get(b.key,{type:'json'})}catch{return null}}));return rows.filter(Boolean)};
 const invoiceDate=i=>{const explicit=clean(i.invoiceDate,20);if(/^\d{4}-\d{2}-\d{2}$/.test(explicit))return explicit;const note=String(i.notes||'').match(/Invoice date:\s*(\d{4}-\d{2}-\d{2})/i);if(note)return note[1];const d=String(i.createdAt||i.updatedAt||'');return /^\d{4}-\d{2}-\d{2}/.test(d)?d.slice(0,10):''};
-const invoiceWeight=i=>{const direct=num(i.shipmentWeight);if(direct>0)return direct;const d=String(i.description||'').match(/([\d.]+)\s*lb\b/i);if(d)return num(d[1]);const n=String(i.notes||'').match(/Combined weight:\s*([\d.]+)\s*lb\b/i);return n?num(n[1]):0};
+const invoiceWeight=i=>{const direct=num(i.invoiceSnapshot?.calculation?.weight??i.shipmentWeight);if(direct>0)return direct;const d=String(i.description||'').match(/([\d.]+)\s*lb\b/i);if(d)return num(d[1]);const n=String(i.notes||'').match(/Combined weight:\s*([\d.]+)\s*lb\b/i);return n?num(n[1]):0};
 const isCancelled=i=>String(i.status||'').toLowerCase()==='cancelled';
 
 
@@ -76,7 +76,10 @@ export default async (req,context)=>{
     const customer=clean(body.customer,200),mailboxCode=clean(body.mailboxCode,80),planId=clean(body.planId,40);
     if(!customer)return json({error:'Customer name is required'},400);
     const plan=PLANS[planId];if(!plan)return json({error:'Invalid membership plan'},400);
-    const id=clean(body.id,120)||`${norm(mailboxCode||customer).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}`;
+    const all=await readAll(membershipStore,'members/');
+    const matched=all.filter(m=>mailboxCode?norm(m.mailboxCode)===norm(mailboxCode):norm(m.customer)===norm(customer));
+    if(matched.length>1)return json({error:'Duplicate member records found. Resolve the member identity before editing.'},409);
+    const id=clean(body.id,120)||matched[0]?.id||norm(mailboxCode||customer).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
     const key=`members/${id}`;const existing=await membershipStore.get(key,{type:'json'}).catch(()=>null);const now=new Date().toISOString();
     const item={id,customer,mailboxCode,planId:plan.id,planName:plan.name,monthlyFee:String(plan.fee),allowanceLb:String(plan.allowanceLb),status:clean(body.status,30)||'active',notes:clean(body.notes,1600),createdAt:existing?.createdAt||now,updatedAt:now};
     await membershipStore.setJSON(key,item);return json({item});
