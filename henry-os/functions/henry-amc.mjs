@@ -136,6 +136,29 @@ async function applyOct30CustomerMigration(store){
   await store.setJSON(markerKey,{done:true,completedAt:now,customers:OCT30_CUSTOMERS.map(x=>x.name)});
 }
 
+
+async function publishCurrentWeeklyArrival(store){
+ const marker='migrations/weekly-arrival-2026-11-18-v1';
+ const done=await store.get(marker,{type:'json'}).catch(()=>null);
+ if(done?.done)return;
+ const id='amc-shipment-arrived-2026-11-18',existing=await store.get('announcements/'+id,{type:'json'}).catch(()=>null);
+ const now=new Date().toISOString();
+ if(!existing)await store.setJSON('announcements/'+id,{
+   id,type:'announcements',title:'This Week’s Shipment Has Arrived — Invoices Issued',
+   body:'Great news! This week’s AMC Shopping air shipment has arrived in Guyana and customer invoices have been issued. Please review your invoice, payment deadline and balance, and send your MMG payment confirmation. Delivery and collection information will follow as packages are processed and ready. Black Friday is underway: five eligible customers can win 50% off qualifying shipping charges. Regular customers qualify with 20 lb or more, Members Club with 50 lb or more. Entries close November 27; the live TikTok winner selection is scheduled for November 28 at 7:30 PM Guyana time. Full terms: amcshopping.com/black-friday.',
+   status:'live',publishDate:'2026-11-18',notes:'Owner-approved November 18 arrival and Black Friday announcement.',createdAt:now,updatedAt:now
+ });
+ const announcements=await readType(store,'announcements');
+ for(const a of announcements){
+   if(a.id===id||a.status!=='live')continue;
+   const old=String(a.title||'')+' '+String(a.body||'');
+   const dated=String(a.publishDate||'')<'2026-11-18';
+   if(dated&&/(flight delay|mechanical issues|revised arrival|invoices coming shortly)/i.test(old))
+     await store.setJSON('announcements/'+a.id,{...a,status:'archived',updatedAt:now});
+ }
+ await store.setJSON(marker,{done:true,at:now});
+}
+
 export default async(req,context)=>{
   const adminEmail=clean(process.env.HENRY_ADMIN_EMAIL,180).toLowerCase();
   const sessionSecret=String(process.env.HENRY_SESSION_SECRET||'');
@@ -161,6 +184,7 @@ export default async(req,context)=>{
 
   if(action==='bootstrap'&&req.method==='GET'){
     if(context?.deploy?.context==='production'){
+      await publishCurrentWeeklyArrival(store);
       await applyOct30InvoiceMigration(store);
       await applyOct30CustomerMigration(store);
     }
