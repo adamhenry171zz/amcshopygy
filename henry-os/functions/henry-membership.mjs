@@ -44,7 +44,7 @@ function usageForMember(m,month,invoices,credits){
  const ordered=invoices.filter(i=>!isCancelled(i)&&isMemberInvoice(i)&&invoiceDate(i).slice(0,7)===month&&matchesMember(i,m))
  .sort((a,b)=>invoiceDate(a).localeCompare(invoiceDate(b))||String(a.invoiceNo||'').localeCompare(String(b.invoiceNo||''),undefined,{numeric:true})||String(a.id||'').localeCompare(String(b.id||'')));
  const seen=new Set();let used=0;
- const rows=[];for(const i of ordered){const key=norm(i.invoiceNo)||i.id;if(seen.has(key))continue;seen.add(key);const before=used,weight=roundLb(invoiceWeight(i));used=roundLb(used+weight);rows.push({id:i.id,invoiceNo:i.invoiceNo||'',date:invoiceDate(i),weightLb:weight,usedBeforeLb:before,usedThroughLb:used,remainingLb:roundLb(Math.max(0,allowance-used)),overageLb:roundLb(Math.max(0,used-allowance)),status:i.status||''});}
+ const rows=[];for(const i of ordered){const key=norm(i.invoiceNo)||i.id;if(seen.has(key))continue;seen.add(key);const before=used,weight=roundLb(invoiceWeight(i));used=roundLb(used+weight);rows.push({id:i.id,invoiceNo:i.invoiceNo||'',date:invoiceDate(i),weightLb:weight,sentAt:i.sentAt||'',usedBeforeLb:before,usedThroughLb:used,remainingLb:roundLb(Math.max(0,allowance-used)),overageLb:roundLb(Math.max(0,used-allowance)),status:i.status||''});}
  return {...m,month,baseAllowanceLb:base,adjustmentLb:adjustment,allowanceLb:allowance,credits:applicable.map(c=>({pounds:c.pounds,reason:c.reason,month:c.month})),usedLb:used,remainingLb:roundLb(Math.max(0,allowance-used)),overageLb:roundLb(Math.max(0,used-allowance)),percent:allowance?Math.round(used/allowance*1000)/10:0,invoiceCount:rows.length,invoices:rows};
 }
 
