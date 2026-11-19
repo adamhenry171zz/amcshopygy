@@ -86,7 +86,12 @@ function build(d,logo=null){
  const calc=d.calc||{};
  if(calc.weight!==undefined){text(36,y,'Combined shipment weight: '+num(calc.weight).toFixed(2)+' lb',10,true);y+=16;}
  y=block(36,y,calc.rateLabel||d.billing||d.description,86,9,muted);
- if(calc.shipping!==undefined){text(36,y,'Shipping charge: '+money(calc.shipping),9);y+=14;}
+ if(d.member&&calc.memberLb!==undefined){
+  text(36,y,'Member-rate weight: '+lb(calc.memberLb)+' at GYD $950/lb = '+money(calc.memberCharge),9);y+=14;
+  text(36,y,'Regular-rate excess: '+lb(calc.excessLb)+' at GYD $'+num(calc.regularOverageRate).toFixed(0)+'/lb = '+money(calc.overageCharge),9,true,calc.excessLb>0?red:muted);y+=14;
+  text(36,y,'Monthly allowance: '+lb(calc.allowanceLb)+'; used before: '+lb(calc.usedBeforeLb),8,false,muted);y+=14;
+}
+if(calc.shipping!==undefined){text(36,y,'Shipping charge: '+money(calc.shipping),9);y+=14;}
  if(calc.adjustment){text(36,y,'Adjustment: '+money(calc.adjustment),9);y+=14;}
  y+=4;rect(36,y,540,42,pale);text(48,y+16,'INVOICE TOTAL',8,true,muted);text(48,y+33,money(d.amount),13,true);text(336,y+16,'BALANCE DUE',8,true,muted);text(336,y+33,money(d.balance),15,true,red);y+=63;
  text(36,y,'03  PAYMENT & RELEASE',10,true,season);y+=17;
@@ -108,7 +113,7 @@ function build(d,logo=null){
    const values=[['MISSED-SHIPMENT CREDIT','+'+lb(u.adjustmentLb)],['TOTAL AVAILABLE',lb(u.allowanceLb)],['USED BEFORE',lb(u.usedBeforeLb)],['THIS SHIPMENT',lb(u.shipmentLb)],['USED THROUGH THIS INVOICE',lb(u.usedThroughLb)],['REMAINING',lb(u.remainingLb)]];
    values.forEach(([labelText,value],i)=>{const x=49+(i%3)*174,yy=311+Math.floor(i/3)*51;rect(x,yy,163,44,white);label(x+8,yy+14,labelText);text(x+8,yy+34,value,15,true,ink);});
    const pct=u.allowanceLb>0?Math.min(1,u.usedThroughLb/u.allowanceLb):0;rect(49,419,514,6,'0.84 0.88 0.93');rect(49,419,514*pct,6,u.overageLb>0?red:season);
-   text(49,442,'Above allowance: '+lb(u.overageLb),10,true,u.overageLb>0?red:muted);text(49,459,'Recorded usage through this invoice.',8,false,muted);
+   text(49,442,'Above allowance: '+lb(u.overageLb),10,true,u.overageLb>0?red:muted);if(calc.excessLb>0)text(310,442,'Regular-rate overage: '+lb(calc.excessLb),10,true,red);text(49,459,'Recorded usage through this invoice.',8,false,muted);
    let yy=491;yy=block(36,yy,'Monthly allowances reset. Unused pounds do not roll over unless AMC approves a missed or delayed shipment adjustment.',96,9,muted);
    if(u.adjustmentLb>0)block(36,yy+2,'Extra pounds apply to the approved month only and do not permanently change your plan.',96,9,muted);
   }else block(36,274,'Monthly usage was not verified. Contact AMC Shopping for the recorded allowance.',90,10,muted);
