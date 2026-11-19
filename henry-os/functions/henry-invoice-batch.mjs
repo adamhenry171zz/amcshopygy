@@ -111,7 +111,7 @@ export default async (req,context)=>{
     readType(membershipStore,`allowance-credits/${invoiceDate.slice(0,7)}/`),
     readType(store,'invoices')
   ]);
-  const pendingWeights=new Map(),resolved=new Map();
+  const pendingWeights=new Map(),resolved=new Map(),batchInvoiceIds=new Set(plan.map(x=>x.invoiceId));
   // Check the whole batch before touching customer and package records.
   for(const item of plan){
     const customer=canonical.customers[item.index];
@@ -128,7 +128,7 @@ export default async (req,context)=>{
     const c=canonical.customers[item.index];let calc=calculateCustomer(c);
     const memberRecord=resolved.get(item.invoiceId);
     if(memberRecord){
-      const previous=usageBefore(priorInvoices,memberRecord,invoiceDate.slice(0,7),new Set([item.invoiceId]));
+      const previous=usageBefore(priorInvoices,memberRecord,invoiceDate.slice(0,7),batchInvoiceIds);
       const staged=pendingWeights.get(memberRecord.id)||0;
       const credit=approvedCreditLb(credits,memberRecord,invoiceDate.slice(0,7))+(memberRecord.id==='leah-casimero-amc203'&&invoiceDate.slice(0,7)==='2026-11'&&!credits.some(c=>c.memberId===memberRecord.id&&c.id==='missed-shipment-2026-11-amc203')?20:0);
       calc=applyQuota(calc,memberRecord,round4(previous+staged),credit);
