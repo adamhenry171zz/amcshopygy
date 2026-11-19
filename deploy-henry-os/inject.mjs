@@ -12,7 +12,7 @@ const invoiceFactoryJs=path.join(dest,'invoice-factory-preview.js');
 if(fs.existsSync(invoiceFactoryJs))fs.writeFileSync(invoiceFactoryJs,fs.readFileSync(invoiceFactoryJs,'utf8').replace(/300 lbs/g,'220 lbs'));
 const fnDir=path.resolve(site,'../netlify/functions');
 fs.mkdirSync(fnDir,{recursive:true});
-for(const name of ['henry-auth.mjs','henry-delivery-submit.mjs','henry-inquiry-submit.mjs','henry-track-status.mjs','henry-announcements.mjs','henry-invoice-batch.mjs','henry-membership.mjs','henry-streaming-reminders.mjs'])fs.copyFileSync(new URL('../henry-os/functions/'+name,import.meta.url),path.join(fnDir,name));
+for(const name of ['henry-auth.mjs','henry-delivery-submit.mjs','henry-inquiry-submit.mjs','henry-track-status.mjs','henry-announcements.mjs','henry-invoice-batch.mjs','henry-membership.mjs','henry-membership-pricing.mjs','henry-streaming-reminders.mjs'])fs.copyFileSync(new URL('../henry-os/functions/'+name,import.meta.url),path.join(fnDir,name));
 // Keep pricing logic outside the publicly served website. Supplier SKU costs
 // are imported by the owner into Netlify Blobs, never checked into GitHub.
 const fragranceLibDir=path.resolve(site,'../netlify/henry-fragrance-lib');
