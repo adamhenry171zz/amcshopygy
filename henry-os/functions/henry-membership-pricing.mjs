@@ -20,7 +20,7 @@ export function memberForCustomer(c,members){
  const matches=members.filter(m=>{
   if(String(m.status||'active')!=='active')return false;
   if(mailbox&&norm(m.mailboxCode))return norm(m.mailboxCode)===mailbox;
-  return norm(m.customer)===name||(mailbox==='amc203'&&norm(m.mailboxCode)==='amc203');
+  return norm(m.customer)===name||((mailbox==='amc203'||['leah casimir','leah casimero'].includes(name))&&norm(m.mailboxCode)==='amc203');
  });
  return matches.length===1?matches[0]:null;
 }
