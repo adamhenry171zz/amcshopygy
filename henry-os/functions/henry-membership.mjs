@@ -100,6 +100,29 @@ export default async (req,context)=>{
     await membershipStore.setJSON(key,record);return json({item:record},201);
   }
 
+
+  if(action==='reprice_draft'&&req.method==='POST'){
+    let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    const invoiceId=clean(body.invoiceId,180),memberId=clean(body.memberId,120);
+    if(!/^[a-z0-9_-]+$/i.test(invoiceId)||!/^[a-z0-9_-]+$/i.test(memberId)||body.confirmed!==true)return json({error:'Confirm the member draft and invoice for repricing.'},400);
+    const invoice=await amcStore.get('invoices/'+invoiceId,{type:'json'}).catch(()=>null);
+    const member=await membershipStore.get('members/'+memberId,{type:'json'}).catch(()=>null);
+    if(!invoice||!member||!matchesMember(invoice,member)||!isMemberInvoice(invoice))return json({error:'Member and invoice do not match'},404);
+    if(invoice.status!=='draft'||invoice.sentAt||invoice.upgradeId)return json({error:'Only an unsent member draft without an existing plan upgrade can be repriced.'},409);
+    const calc=invoice.invoiceSnapshot?.calculation;
+    if(!calc||!Number.isFinite(Number(calc.weight))||!Number.isFinite(Number(calc.adjustment)))return json({error:'Invoice calculation not available for automatic repricing. Manual review required.'},409);
+    const month=invoiceDate(invoice).slice(0,7);
+    const all=await readAll(amcStore,'invoices/');
+    const prior=usageBefore(all,member,month,new Set([invoice.id]));
+    const bonus=roundLb((await creditsFor(month)).filter(c=>c.memberId===member.id&&c.type==='missed_shipment'&&c.approvedByOwner).reduce((a,c)=>a+num(c.pounds),0));
+    const updatedCalc=applyQuota(calc,member,prior,bonus);
+    const priorAmount=num(invoice.amount),newAmount=updatedCalc.total;
+    if(Math.abs(num(invoice.balance)-priorAmount)>0.009)return json({error:'This invoice already has a recorded balance change; manual review is required.'},409);
+    const record={...invoice,amount:newAmount.toFixed(2),balance:newAmount.toFixed(2),invoiceSnapshot:{...invoice.invoiceSnapshot,calculation:{...updatedCalc,planName:member.planName,memberId:member.id,extraAllowanceLb:bonus}},notes:(String(invoice.notes||'')+' Member monthly allowance and regular-rate overage confirmed.').slice(0,4000),updatedAt:new Date().toISOString()};
+    await amcStore.setJSON('invoices/'+invoice.id,record);
+    return json({invoice:record,previousAmount:priorAmount,newAmount,memberLb:updatedCalc.memberLb,excessLb:updatedCalc.excessLb});
+  }
+
   if((action==='upgrade_quote'||action==='upgrade_confirm')&&req.method==='POST'){
     let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
     const memberId=clean(body.memberId,120),invoiceId=clean(body.invoiceId,180),targetId=clean(body.planId,40);
