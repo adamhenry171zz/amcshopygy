@@ -181,7 +181,14 @@ export default async (req,context)=>{
     if(matching.length!==1)return json({error:'Link this invoice to exactly one Members Club record (mailbox code or customer name) before downloading the member invoice.'},409);
     const u=usageForMember(matching[0],month,invoices,credits),row=u.invoices.find(i=>i.id===id)||u.invoices.find(i=>i.invoiceNo===invoice.invoiceNo);
     if(!row||!(row.weightLb>0))return json({error:'Member shipment weight could not be verified. Correct the invoice record before sending.'},409);
-    return json({usage:{month,planName:u.planName,baseAllowanceLb:u.baseAllowanceLb,adjustmentLb:u.adjustmentLb,allowanceLb:u.allowanceLb,credits:u.credits,shipmentLb:row.weightLb,usedBeforeLb:row.usedBeforeLb,usedThroughLb:row.usedThroughLb,remainingLb:row.remainingLb,overageLb:row.overageLb,invoiceCount:u.invoiceCount,policy:'No automatic rollover. Additional pounds only by AMC approval for missed or delayed shipments.'}});
+    // Preserve the allowance and plan that were in effect for this invoice.
+    // A later plan upgrade must not silently restate earlier PDF allowances.
+    const calc=invoice.invoiceSnapshot?.calculation||{};
+    const hasSnapshot=Number.isFinite(Number(calc.allowanceLb))&&num(calc.allowanceLb)>0;
+    const allowance=hasSnapshot?num(calc.allowanceLb):u.allowanceLb;
+    const bonus=hasSnapshot?num(calc.extraAllowanceLb):u.adjustmentLb;
+    const historicBase=roundLb(Math.max(0,allowance-bonus));
+    return json({usage:{month,planName:calc.planName||u.planName,baseAllowanceLb:historicBase,adjustmentLb:bonus,allowanceLb:allowance,credits:u.credits,shipmentLb:row.weightLb,usedBeforeLb:row.usedBeforeLb,usedThroughLb:row.usedThroughLb,remainingLb:roundLb(Math.max(0,allowance-row.usedThroughLb)),overageLb:roundLb(Math.max(0,row.usedThroughLb-allowance)),invoiceCount:u.invoiceCount,policy:'No automatic rollover. Additional pounds only by AMC approval for missed or delayed shipments.'}});
   }
 
   return json({error:'Not found'},404);
