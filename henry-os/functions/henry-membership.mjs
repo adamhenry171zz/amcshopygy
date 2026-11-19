@@ -137,6 +137,7 @@ export default async (req,context)=>{
     const today=day(new Date());
     if(!Number.isFinite(issued.getTime())||day(issued)!==today||invoice.status!=='sent')return json({error:'Upgrade available only until 11:59 PM Guyana time on the calendar day the invoice was actually sent.'},409);
     if(invoice.upgradeId)return json({error:'This invoice has already been upgraded.'},409);
+    if(Math.abs(num(invoice.balance)-num(invoice.amount))>0.009)return json({error:'A payment or balance adjustment is already recorded on this shipping invoice. Manual review is required before changing the total.'},409);
     const calc=invoice.invoiceSnapshot?.calculation;
     if(!calc||!Number.isFinite(Number(calc.weight))||!Number.isFinite(Number(calc.adjustment)))return json({error:'Invoice billing snapshot missing; manual review required.'},409);
     const month=invoiceDate(invoice).slice(0,7);
@@ -154,12 +155,12 @@ export default async (req,context)=>{
     const recorded=await amcStore.get('payments/'+upgradeId,{type:'json'}).catch(()=>null);
     if(recorded)return json({error:'This upgrade payment has already been recorded'},409);
     const now=new Date().toISOString();
-    const updatedInvoice={...invoice,amount:newAmount.toFixed(2),balance:roundLb(num(invoice.balance)+(newAmount-oldAmount)).toFixed(2),invoiceSnapshot:{...invoice.invoiceSnapshot,calculation:{...repriced,planName:target.name,memberId:old.id,extraAllowanceLb:bonus}},upgradeId,updatedAt:now,notes:(String(invoice.notes||'')+' Membership upgraded on invoice issue day from '+old.planName+' to '+target.name+'; overage repriced.').slice(0,4000)};
+    const updatedInvoice={...invoice,status:'draft',originalSentAt:invoice.sentAt,sentAt:'',dispatchPreparedAt:'',amount:newAmount.toFixed(2),balance:newAmount.toFixed(2),invoiceSnapshot:{...invoice.invoiceSnapshot,calculation:{...repriced,planName:target.name,memberId:old.id,extraAllowanceLb:bonus}},upgradeId,updatedAt:now,notes:(String(invoice.notes||'')+' Membership upgraded on invoice issue day from '+old.planName+' to '+target.name+'; overage repriced.').slice(0,4000)};
     const updatedMember={...old,planId:target.id,planName:target.name,monthlyFee:String(target.fee),allowanceLb:String(target.allowanceLb),updatedAt:now};
     await membershipStore.setJSON('members/'+old.id,updatedMember);
     await amcStore.setJSON('invoices/'+invoice.id,updatedInvoice);
     await amcStore.setJSON('payments/'+upgradeId,{id:upgradeId,type:'payments',customer:old.customer,whatsapp:invoice.whatsapp||'',amount:feeDifference.toFixed(2),method:'Other',reference:clean(body.paymentReference,160),status:'verified',paymentDate:today,relatedType:'membership_upgrade',relatedId:invoice.invoiceNo,notes:'Owner-confirmed membership upgrade fee difference. This does not count as an invoice payment.',createdAt:now,updatedAt:now});
-    return json({upgraded:true,quote,invoice:updatedInvoice});
+    return json({upgraded:true,requiresResend:true,quote,invoice:updatedInvoice});
   }
 
   if(action==='summary'&&req.method==='GET'){
