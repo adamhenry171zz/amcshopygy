@@ -49,11 +49,14 @@ if(fs.existsSync(home)){
  html=html.replace(/<main\b[^>]*>/i,m=>m+news);
  fs.writeFileSync(home,html);
 }
+const bfPage=path.join(site,'black-friday.html');
+if(fs.existsSync(bfPage)){let html=fs.readFileSync(bfPage,'utf8');html=html.replace(/<div class="amc-current-arrival-notice"[^>]*>[\s\S]*?<\/div>/gi,'');fs.writeFileSync(bfPage,html);}
 const announcementPath=path.join(site,'announcement.html');
 if(fs.existsSync(announcementPath)){
  let html=fs.readFileSync(announcementPath,'utf8');
  html=html.replace(/<div class="amc-current-arrival-notice"[^>]*>[\s\S]*?<\/div>/gi,'');
- html=html.replace(/<\/head>/i,()=>link+'</head>');
+ html=html.replace(/<section class="page-hero announcement-current-hero">[\s\S]*?<\/section>/gi,'');
+  html=html.replace(/<\/head>/i,()=>link+'</head>');
  const main='<main><section class="amc-current-announcement"><article><div class="amc-current-announcement-header"><span>AMC SHOPPING · SHIPMENT ARRIVAL UPDATE · NOVEMBER 18, 2026</span><h1>This week’s shipment has arrived!</h1><p>Good news: our weekly air-freight shipment has arrived in Guyana, and customer invoices have been issued.</p></div><div class="amc-current-announcement-body"><h2>Check your invoice</h2><p>Please review your shipping invoice, amount due and payment deadline. Remember to send your payment confirmation through AMC Shopping. We will coordinate delivery and collection once your package has cleared the necessary processing steps.</p><h2>Members Club reminder</h2><p>Your monthly shipping pounds are tracked in HENRY OS. Excess weight beyond your remaining monthly allowance is billed at the regular customer per-pound rate. If you want to upgrade, contact AMC on the same calendar day your invoice is sent and pay the plan difference after AMC confirms the amount.</p><h2>Black Friday is here!</h2><p>Take advantage of the AMC Black Friday Shipping Giveaway. Five eligible customers will each win 50% off shipping on a qualifying invoice. Regular customers qualify at 20 lb or more, while Members Club customers qualify at 50 lb or more. Entries close November 27, with the live TikTok draw scheduled for November 28 at 7:30 PM Guyana time.</p><a class="amc-news-cta" href="/black-friday">Explore the Black Friday giveaway →</a><p>Thank you for trusting AMC Shopping. Your Package. Our Priority. Always.</p></div></article></section><section id="henry-live-announcements" style="padding:20px 0 50px"></section></main>';
  html=html.replace(/<main\b[^>]*>[\s\S]*?<\/main>/i,()=>main);
  html=html.replace(/<title>[\s\S]*?<\/title>/i,'<title>Weekly Shipment Arrived · Invoices Issued | AMC Shopping</title>');
