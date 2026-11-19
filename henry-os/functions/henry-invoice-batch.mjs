@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { getStore } from '@netlify/blobs';
-import { approvedCreditLb,usageBefore,applyQuota } from './henry-membership-pricing.mjs';
+import { approvedCreditLb,usageBefore,applyQuota,memberForCustomer } from './henry-membership-pricing.mjs';
 
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const digest=v=>crypto.createHash('sha256').update(String(v||'')).digest();
@@ -116,12 +116,9 @@ export default async (req,context)=>{
   for(const item of plan){
     const customer=canonical.customers[item.index];
     if(!isMember(customer.customerType))continue;
-    const matches=members.filter(m=>String(m.status||'active')==='active'&&(
-      (customer.mailboxCode&&String(m.mailboxCode||'').toLowerCase()===customer.mailboxCode.toLowerCase())
-      ||String(m.customer||'').toLowerCase()===customer.name.toLowerCase()
-      ||(customer.mailboxCode.toUpperCase()==='AMC203'&&String(m.mailboxCode||'').toUpperCase()==='AMC203')));
-    if(matches.length!==1)return json({error:`${customer.name}: Members Club account not uniquely matched. Confirm their member name and mailbox before generating the invoice.`},409);
-    resolved.set(item.invoiceId,matches[0]);
+    const matched=memberForCustomer(customer,members);
+    if(!matched)return json({error:`${customer.name}: Members Club account not uniquely matched. Confirm the customer mailbox in HENRY OS before generating this invoice.`},409);
+    resolved.set(item.invoiceId,matched);
   }
   const now=new Date().toISOString();const results=[];
   for(const item of plan){
