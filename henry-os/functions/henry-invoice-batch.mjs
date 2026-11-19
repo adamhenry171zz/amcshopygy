@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { getStore } from '@netlify/blobs';
+import { approvedCreditLb,usageBefore,applyQuota } from './henry-membership-pricing.mjs';
 
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const digest=v=>crypto.createHash('sha256').update(String(v||'')).digest();
@@ -104,9 +105,39 @@ export default async (req,context)=>{
     await store.setJSON(markerKey,marker);
   }
 
+  const membershipStore=getStore('henry-memberships');
+  const [members,credits,priorInvoices]=await Promise.all([
+    readType(membershipStore,'members/'),
+    readType(membershipStore,`allowance-credits/${invoiceDate.slice(0,7)}/`),
+    readType(store,'invoices')
+  ]);
+  const pendingWeights=new Map(),resolved=new Map();
+  // Check the whole batch before touching customer and package records.
+  for(const item of plan){
+    const customer=canonical.customers[item.index];
+    if(!isMember(customer.customerType))continue;
+    const matches=members.filter(m=>String(m.status||'active')==='active'&&(
+      (customer.mailboxCode&&String(m.mailboxCode||'').toLowerCase()===customer.mailboxCode.toLowerCase())
+      ||String(m.customer||'').toLowerCase()===customer.name.toLowerCase()
+      ||(customer.mailboxCode.toUpperCase()==='AMC203'&&String(m.mailboxCode||'').toUpperCase()==='AMC203')));
+    if(matches.length!==1)return json({error:`${customer.name}: Members Club account not uniquely matched. Confirm their member name and mailbox before generating the invoice.`},409);
+    resolved.set(item.invoiceId,matches[0]);
+  }
   const now=new Date().toISOString();const results=[];
   for(const item of plan){
-    const c=canonical.customers[item.index];const calc=calculateCustomer(c);const trackingList=c.packages.map(p=>p.tracking).join('; ');
+    const c=canonical.customers[item.index];let calc=calculateCustomer(c);
+    const memberRecord=resolved.get(item.invoiceId);
+    if(memberRecord){
+      const previous=usageBefore(priorInvoices,memberRecord,invoiceDate.slice(0,7),new Set([item.invoiceId]));
+      const staged=pendingWeights.get(memberRecord.id)||0;
+      const credit=approvedCreditLb(credits,memberRecord,invoiceDate.slice(0,7));
+      calc=applyQuota(calc,memberRecord,round4(previous+staged),credit);
+      pendingWeights.set(memberRecord.id,round4(staged+calc.weight));
+      calc.planName=memberRecord.planName;
+      calc.memberId=memberRecord.id;
+      calc.extraAllowanceLb=credit;
+    }
+    const trackingList=c.packages.map(p=>p.tracking).join('; ');
     const oldCustomer=await store.get(`customers/${item.customerId}`,{type:'json'}).catch(()=>null);
     const customerNotes=[clean(oldCustomer?.notes,3500),c.notes,`${calc.member?'AMC Members Club':'Regular AMC'} customer updated by Invoice Factory batch ${batchKey} on ${invoiceDate}.`].filter(Boolean).join(' ').slice(0,4000);
     const customerRecord={id:item.customerId,type:'customers',name:c.name,whatsapp:c.whatsapp||oldCustomer?.whatsapp||'',email:oldCustomer?.email||'',mailboxCode:c.mailboxCode||oldCustomer?.mailboxCode||'',address:oldCustomer?.address||'',status:oldCustomer?.status||'active',source:oldCustomer?.source||'manual',notes:customerNotes,createdAt:oldCustomer?.createdAt||now,updatedAt:now};
