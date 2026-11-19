@@ -107,8 +107,8 @@ export default async (req,context)=>{
 
   const membershipStore=getStore('henry-memberships');
   const [members,credits,priorInvoices]=await Promise.all([
-    readType(membershipStore,'members/'),
-    readType(membershipStore,`allowance-credits/${invoiceDate.slice(0,7)}/`),
+    readType(membershipStore,'members'),
+    readType(membershipStore,`allowance-credits/${invoiceDate.slice(0,7)}`),
     readType(store,'invoices')
   ]);
   const pendingWeights=new Map(),resolved=new Map(),batchInvoiceIds=new Set(plan.map(x=>x.invoiceId));
