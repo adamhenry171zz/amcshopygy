@@ -106,7 +106,7 @@ async function reconcileInvoicePayments(store,data=null){
     }
 
     const autoId=`auto-invoice-${safeId(invoice.id||invoiceNo)}`;
-    const isSameInvoice=p=>String(p.relatedId||'').trim().toUpperCase()===invoiceNo.toUpperCase();
+    const isSameInvoice=p=>(!p.relatedType||p.relatedType==='invoice')&&String(p.relatedId||'').trim().toUpperCase()===invoiceNo.toUpperCase();
     const explicitPaid=payments.filter(p=>p.id!==autoId&&p.status==='verified'&&isSameInvoice(p)).reduce((sum,p)=>sum+num(p.amount),0);
     const autoNeeded=Math.max(0,Math.round((expectedPaid-explicitPaid)*100)/100);
     const existingAuto=payments.find(p=>p.id===autoId);
