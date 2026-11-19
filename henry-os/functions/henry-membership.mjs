@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { getStore } from '@netlify/blobs';
+import { applyQuota,usageBefore } from './henry-membership-pricing.mjs';
 
 const PLANS={
   starter:{id:'starter',name:'Starter',fee:5000,allowanceLb:20},
@@ -98,6 +99,46 @@ export default async (req,context)=>{
     if(prior)return json({error:'This missed-shipment reference already has an allowance credit for this member and month.'},409);
     await membershipStore.setJSON(key,record);return json({item:record},201);
   }
+
+  if((action==='upgrade_quote'||action==='upgrade_confirm')&&req.method==='POST'){
+    let body;try{body=await req.json()}catch{return json({error:'Invalid JSON'},400)}
+    const memberId=clean(body.memberId,120),invoiceId=clean(body.invoiceId,180),targetId=clean(body.planId,40);
+    if(!/^[a-z0-9_-]+$/i.test(memberId)||!/^[a-z0-9_-]+$/i.test(invoiceId))return json({error:'Invalid member or invoice'},400);
+    const old=await membershipStore.get('members/'+memberId,{type:'json'}).catch(()=>null);
+    const invoice=await amcStore.get('invoices/'+invoiceId,{type:'json'}).catch(()=>null);
+    const target=PLANS[targetId];
+    if(!old||!invoice||!target||!matchesMember(invoice,old)||!isMemberInvoice(invoice))return json({error:'Member and invoice do not match'},404);
+    if(target.allowanceLb<=num(old.allowanceLb)||target.fee<=num(old.monthlyFee))return json({error:'Choose a higher membership plan'},409);
+    const issued=new Date(invoice.sentAt||'');
+    const day=v=>{const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(v);return ['year','month','day'].map(k=>parts.find(x=>x.type===k).value).join('-')};
+    const today=day(new Date());
+    if(!Number.isFinite(issued.getTime())||day(issued)!==today||invoice.status!=='sent')return json({error:'Upgrade available only until 11:59 PM Guyana time on the calendar day the invoice was actually sent.'},409);
+    if(invoice.upgradeId)return json({error:'This invoice has already been upgraded.'},409);
+    const calc=invoice.invoiceSnapshot?.calculation;
+    if(!calc||!Number.isFinite(Number(calc.weight))||!Number.isFinite(Number(calc.adjustment)))return json({error:'Invoice billing snapshot missing; manual review required.'},409);
+    const month=invoiceDate(invoice).slice(0,7);
+    const existingInvoices=await readAll(amcStore,'invoices/');
+    const previous=usageBefore(existingInvoices,old,month,new Set([invoice.id]));
+    const currentCredits=await creditsFor(month);
+    const bonus=roundLb(currentCredits.filter(c=>c.memberId===old.id&&c.type==='missed_shipment'&&c.approvedByOwner).reduce((a,c)=>a+num(c.pounds),0));
+    const repriced=applyQuota(calc,{...old,planId:target.id,allowanceLb:String(target.allowanceLb)},previous,bonus);
+    const feeDifference=roundLb(target.fee-num(old.monthlyFee));
+    const oldAmount=num(invoice.amount),newAmount=repriced.total;
+    const quote={memberId,invoiceId,invoiceNo:invoice.invoiceNo,previousPlan:old.planName,newPlan:target.name,feeDifference,previousShippingInvoice:oldAmount,revisedShippingInvoice:newAmount,shippingDifference:roundLb(newAmount-oldAmount),newAllowanceLb:repriced.allowanceLb,memberLb:repriced.memberLb,excessLb:repriced.excessLb,regularOverageRate:repriced.regularOverageRate};
+    if(action==='upgrade_quote')return json({quote});
+    if(body.confirmed!==true||body.feePaid!==true||!clean(body.paymentReference,160))return json({error:'Verify payment of the upgrade fee difference and supply its payment reference before approving.'},400);
+    const upgradeId='member-upgrade-'+invoiceId;
+    const recorded=await amcStore.get('payments/'+upgradeId,{type:'json'}).catch(()=>null);
+    if(recorded)return json({error:'This upgrade payment has already been recorded'},409);
+    const now=new Date().toISOString();
+    const updatedInvoice={...invoice,amount:newAmount.toFixed(2),balance:roundLb(num(invoice.balance)+(newAmount-oldAmount)).toFixed(2),invoiceSnapshot:{...invoice.invoiceSnapshot,calculation:{...repriced,planName:target.name,memberId:old.id,extraAllowanceLb:bonus}},upgradeId,updatedAt:now,notes:(String(invoice.notes||'')+' Membership upgraded on invoice issue day from '+old.planName+' to '+target.name+'; overage repriced.').slice(0,4000)};
+    const updatedMember={...old,planId:target.id,planName:target.name,monthlyFee:String(target.fee),allowanceLb:String(target.allowanceLb),updatedAt:now};
+    await membershipStore.setJSON('members/'+old.id,updatedMember);
+    await amcStore.setJSON('invoices/'+invoice.id,updatedInvoice);
+    await amcStore.setJSON('payments/'+upgradeId,{id:upgradeId,type:'payments',customer:old.customer,whatsapp:invoice.whatsapp||'',amount:feeDifference.toFixed(2),method:'Other',reference:clean(body.paymentReference,160),status:'verified',paymentDate:today,relatedType:'membership_upgrade',relatedId:invoice.invoiceNo,notes:'Owner-confirmed membership upgrade fee difference. This does not count as an invoice payment.',createdAt:now,updatedAt:now});
+    return json({upgraded:true,quote,invoice:updatedInvoice});
+  }
+
   if(action==='summary'&&req.method==='GET'){
     const requested=url.searchParams.get('month'),month=monthValid(requested)?requested:guyanaMonth();
     const [members,invoices,credits]=await Promise.all([readAll(membershipStore,'members/'),readAll(amcStore,'invoices/'),creditsFor(month)]);
