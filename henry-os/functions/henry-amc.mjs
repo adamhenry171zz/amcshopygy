@@ -228,6 +228,9 @@ export default async(req,context)=>{
       next.status='draft';next.sentAt='';next.dueDate=fiveDays;next.dispatchPreparedAt='';
     }else if(command==='prepare'){
       if(old.status!=='draft')return json({error:'Only an unsent draft can be prepared.'},409);
+      const memberInvoice=old.invoiceSnapshot?.customerType==='member'||/^MC\d+/i.test(String(old.invoiceNo||''));
+      if(memberInvoice&&!Number.isFinite(Number(old.invoiceSnapshot?.calculation?.memberLb)))
+        return json({error:'This member draft has not been checked against the monthly allowance. Open HENRY OS Members Club and reprice the unsent invoice before dispatch.'},409);
       const phone=clean(body.whatsapp||old.whatsapp,80);
       const digits=phone.replace(/\D/g,'');
       if(!digits||digits.length<7||digits.length>15)return json({error:'Enter a valid WhatsApp number, including country code if outside Guyana.'},400);
