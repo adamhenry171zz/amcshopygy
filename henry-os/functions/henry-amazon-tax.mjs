@@ -1,3 +1,5 @@
+import zlib from 'node:zlib';
+import {AMC_INVOICE_LOGO_PNG_BASE64} from './henry-tax-logo.mjs';
 import crypto from 'node:crypto';
 import {getStore} from '@netlify/blobs';
 
@@ -47,56 +49,130 @@ async function flagPublicFailure(st,req){const key='throttle/'+publicClientKey(r
 const ascii=s=>String(s??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[–—]/g,'-').replace(/[’‘]/g,"'").replace(/[^ -~]/g,'?');
 const esc=s=>ascii(s).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
 const wrap=(s,n=55)=>{const out=[];let t=ascii(s);while(t.length>n){let i=t.lastIndexOf(' ',n);if(i<5)i=n;out.push(t.slice(0,i));t=t.slice(i).trimStart()}if(t)out.push(t);return out.length?out:['']};
-function buildPdf(s,receipt){
- const W=612,H=792,navy='0.06 0.09 0.19',muted='0.36 0.39 0.47',blue='0.91 0.93 0.98',white='1 1 1';
- const pages=[];let ops=[];
- const txt=(x,y,v,sz=10,bold=false,color=navy)=>ops.push('BT /'+(bold?'F2':'F1')+' '+sz+' Tf '+color+' rg 1 0 0 1 '+x+' '+(H-y)+' Tm ('+esc(v)+') Tj ET');
- const rect=(x,y,w,h,col)=>ops.push(col+' rg '+x+' '+(H-y-h)+' '+w+' '+h+' re f');
- const line=(y)=>rect(28,y,W-56,0.8,'0.85 0.86 0.89');
- const header=()=>{
-  rect(0,0,612,9,navy);
-  txt(28,35,'A.M.C SHOPPING GY',22,true);
-  txt(29,52,'14619 228th Street, Springfield Gardens, NY 11413, USA',9);
-  txt(29,66,'Phone: +592 604 2826  |  amcshopping.com',9);
-  rect(28,82,556,34,blue);txt(145,104,'CUSTOMER SHIPMENT DECLARATION',15,true);
-  txt(29,135,'SHIPPER INFORMATION',10,true);
-  txt(29,151,'PoboxShipper',9);txt(29,165,'14619 228th Street, Springfield Gardens, New York, USA 11413',9);
-  line(179);
-  txt(29,197,'CONSIGNEE INFORMATION (CUSTOMER PROVIDED)',10,true);
-  for(const [i,t] of wrap(s.customerName+' | '+s.guyanaAddress,90).slice(0,2).entries())txt(29,214+i*13,t,9);
-  line(246);
-  txt(29,265,'RECEIPT DETAILS',10,true);
-  txt(29,283,'Amazon Order #:',9,true);txt(166,283,receipt.orderId,9);
-  txt(29,299,'AMC Receipt #:',9,true);txt(166,299,receipt.receiptNo,9);
-  txt(29,315,'US warehouse delivery:',9,true);txt(166,315,toDateLabel(receipt.warehouseDate)+', '+formatTime(receipt.warehouseTime),9);
-  txt(29,331,'Estimated Guyana date:',9,true);txt(166,331,toDateLabel(s.receivedGuyanaDate)+', 12:00:00 PM (GYT)',9);
-  line(348);
-  txt(29,367,'ITEMS',10,true);rect(28,379,556,25,blue);
-  txt(37,396,'#',10,true);txt(67,396,'TRACKING NUMBER',10,true);txt(294,396,'DESCRIPTION',10,true);txt(523,396,'LBS',10,true);
- };
- const rows=receipt.items;
- for(let p=0;p<Math.ceil(rows.length/11);p++){
-  ops=[];header();let y=420;
-  for(let i=p*11;i<Math.min((p+1)*11,rows.length);i++){
-   const r=rows[i];if(i%2===0)rect(28,y-15,556,26,'0.97 0.98 0.99');
-   txt(37,y,i+1,9);txt(67,y,r.tracking.slice(0,37),8);txt(294,y,r.description.slice(0,37),8);txt(523,y,r.weight.toFixed(2),9);y+=26;
+
+let embeddedLogo;
+function invoiceLogo(){
+ if(embeddedLogo)return embeddedLogo;
+ const input=Buffer.from(AMC_INVOICE_LOGO_PNG_BASE64,'base64');
+ let at=8,width=0,height=0,kind=0,palette=null,alpha=null,idat=[];
+ while(at+12<=input.length){
+  const length=input.readUInt32BE(at),name=input.toString('ascii',at+4,at+8),data=input.subarray(at+8,at+8+length);at+=length+12;
+  if(name==='IHDR'){width=data.readUInt32BE(0);height=data.readUInt32BE(4);kind=data[9];if(data[8]!==8)throw Error('Unexpected logo format')}
+  else if(name==='PLTE')palette=data;
+  else if(name==='tRNS')alpha=data;
+  else if(name==='IDAT')idat.push(data);
+  else if(name==='IEND')break;
+ }
+ if(!width||!height||!palette||kind!==3||width>1500||height>1500)throw Error('Invalid invoice logo');
+ const raw=zlib.inflateSync(Buffer.concat(idat)),rgb=Buffer.alloc(width*height*3);
+ const prev=Buffer.alloc(width),cur=Buffer.alloc(width);let off=0;
+ const base=[8,23,45]; 
+ for(let y=0;y<height;y++){
+  const filter=raw[off++];
+  for(let x=0;x<width;x++){
+   const n=raw[off++],left=x?cur[x-1]:0,up=prev[x],upLeft=x?prev[x-1]:0;
+   let predictor=0;if(filter===1)predictor=left;else if(filter===2)predictor=up;else if(filter===3)predictor=Math.floor((left+up)/2);else if(filter===4){const p=left+up-upLeft,a=Math.abs(p-left),b=Math.abs(p-up),c=Math.abs(p-upLeft);predictor=a<=b&&a<=c?left:b<=c?up:upLeft}
+   else if(filter!==0)throw Error('Unsupported logo PNG filter');
+   cur[x]=(n+predictor)&255; const idx=cur[x],opacity=alpha&&idx<alpha.length?alpha[idx]:255;
+   for(let c=0;c<3;c++)rgb[(y*width+x)*3+c]=Math.round((palette[idx*3+c]??255)*opacity/255+base[c]*(255-opacity)/255);
   }
-  if((p+1)*11>=rows.length){line(Math.min(y+5,718));const total=rows.reduce((sum,r)=>sum+r.weight,0);txt(29,Math.min(y+24,739),'Total Items: '+rows.length+'    Total Tracking #: '+rows.length,10,true);txt(468,Math.min(y+24,739),'TOTAL '+total.toFixed(2)+' lb',10,true);}
-  txt(29,761,'Customer-submitted shipment details; estimated Guyana date, not proof of arrival.',8,false,muted);
-  txt(29,773,'Not independently verified by AMC. Amazon decides documentation and refund eligibility.',8,false,muted);
+  cur.copy(prev);
+ }
+ embeddedLogo={width,height,bytes:zlib.deflateSync(rgb,{level:8})};
+ return embeddedLogo;
+}
+function buildPdf(data,receipt){
+ // A4 receipt layout follows the two October 2026 AMC warehouse receipt samples.
+ const H=841.89,W=595.28,navy='0.086 0.09 0.165',muted='0.25 0.25 0.29',lavender='0.902 0.902 0.961',pale='0.949 0.953 0.973',border='0.784 0.784 0.823',white='1 1 1';
+ const pages=[],body=Array.isArray(receipt.items)?receipt.items:[];
+ const line=(ops,x1,y1,x2,y2,c=border)=>ops.push(c+' RG 0.5 w '+x1+' '+(H-y1)+' m '+x2+' '+(H-y2)+' l S');
+ const rect=(ops,x,y,w,h,fill)=>ops.push(fill+' rg '+x+' '+(H-y-h)+' '+w+' '+h+' re f');
+ const borderRect=(ops,x,y,w,h)=>ops.push(border+' RG 0.55 w '+x+' '+(H-y-h)+' '+w+' '+h+' re S');
+ const tx=(ops,x,y,v,size=10,bold=false,col=navy)=>ops.push('BT /'+(bold?'F2':'F1')+' '+size+' Tf '+col+' rg 1 0 0 1 '+x+' '+(H-y)+' Tm ('+esc(String(v??''))+') Tj ET');
+ const left=31.18,tableLeft=28.35,tableRight=566.93,rowH=22.68;
+ const head=ops=>{
+  rect(ops,28.35,28.35,79.37,79.37,'0.031 0.090 0.176');
+  // The same white AMC logo embedded in the shipment invoice PDF engine.
+  ops.push('q 70 0 0 51 33.0 '+(H-92)+' cm /Logo Do Q');
+  tx(ops,127.56,46,'A.M.C SHOPPING GY',18,true);
+  tx(ops,127.56,64,'14619 228th Street',10);
+  tx(ops,127.56,78,'Springfield Gardens, New York United State, Zip: 11413',10);
+  tx(ops,127.56,92,'Phone: +592 604 2826',10);
+  rect(ops,28.35,113.39,538.59,28.35,lavender);
+  tx(ops,228,133,'Warehouse Receipt',14,true);
+  tx(ops,left,162,'Shipper Information',11,true);
+  tx(ops,left,181,'PoboxShipper',10);
+  tx(ops,left,198,'14619 228th Street',10);
+  tx(ops,left,215,'Springfield Gardens, New York',10);
+  tx(ops,left,232,'United State Zip: 11413',10);
+  line(ops,28.35,246.61,566.93,246.61);
+  tx(ops,left,269,'Consignee Information',11,true);
+  tx(ops,left,290,data.customerName,10);
+  const address=String(data.guyanaAddress||'').trim();
+  const max=80;const parts=wrap(address,max);
+  tx(ops,left,307,parts[0]||'GUYANA',10);
+  tx(ops,left,324,parts[1]||'',10);
+  line(ops,28.35,337.32,566.93,337.32);
+  tx(ops,left,361,'Receipt Details',12,true);
+  tx(ops,left,386,'Order #:',10,true);tx(ops,158.7,386,receipt.orderId,10);
+  tx(ops,left,406,'Receipt Number:',10,true);tx(ops,158.7,406,receipt.receiptNo,10);
+  // This is a schedule-based date unless supported by AMC's shipment records.
+  tx(ops,left,426,'Scheduled Date/Time:',10,true);
+  tx(ops,158.7,426,toDateLabel(receipt.expectedGuyanaDate)+', 12:00:00 PM',10);
+  line(ops,28.35,436.54,566.93,436.54);
+  tx(ops,left,462,'Items',12,true);
+ };
+ const columns=[28.35,56.69,255.12,453.55,538.58,595.27];
+ const cell=(ops,x,y,w,h,fill=null)=>{if(fill)rect(ops,x,y,w,h,fill);borderRect(ops,x,y,w,h)};
+ const chunks=Math.max(1,Math.ceil(body.length/11));
+ for(let p=0;p<chunks;p++){
+  const ops=[];head(ops);
+  const visible=body.slice(p*11,p*11+11);
+  const y0=467.72;
+  for(let i=0;i<4;i++)cell(ops,columns[i],y0,columns[i+1]-columns[i],rowH,pale);
+  tx(ops,37.5,484,'#',10,true);
+  tx(ops,59.5,484,'Tracking Number(s)',10,true);
+  tx(ops,258.0,484,'Description',10,true);
+  tx(ops,471.5,484,'Weight (lbs)',10,true);
+  for(let i=0;i<visible.length;i++){
+   const item=visible[i],y=y0+rowH*(i+1);
+   for(let c=0;c<4;c++)cell(ops,columns[c],y,columns[c+1]-columns[c],rowH);
+   tx(ops,40.9,y+15,p*11+i+1,10);
+   tx(ops,62.4,y+15,String(item.tracking||'').slice(0,32),9.5);
+   tx(ops,260.8,y+15,String(item.description||'Amazon Package').slice(0,36),9.5);
+   tx(ops,514.5,y+15,Number(item.weight||0).toFixed(2),10);
+  }
+  const bottom=y0+rowH*(visible.length+1),last=p===chunks-1;
+  if(last){
+   for(let i=0;i<4;i++)cell(ops,columns[i],bottom,columns[i+1]-columns[i],rowH);
+   cell(ops,columns[4],bottom,columns[5]-columns[4],rowH);
+   const sum=body.reduce((v,o)=>v+Number(o.weight||0),0);
+   tx(ops,31.2,bottom+15,'Total Items: '+body.length,9.5,true);
+   tx(ops,258,bottom+15,'Total Tracking #: '+body.length,9.5,true);
+   tx(ops,480,bottom+15,'Total (lbs):',9.5,true);
+   tx(ops,573,bottom+15,sum.toFixed(2),9.5,true);
+  }
   pages.push(ops.join('\n'));
  }
- const objs=[null],add=x=>(objs.push(x),objs.length-1);
- const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'),bold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
- const pagesId=add('');const kids=[];
- for(const stream of pages){const bytes=Buffer.from(stream,'latin1');const cid=add('<< /Length '+bytes.length+' >>\nstream\n'+stream+'\nendstream');const pid=add('<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 '+font+' 0 R /F2 '+bold+' 0 R >> >> /Contents '+cid+' 0 R >>');kids.push(pid+' 0 R')}
- objs[pagesId]='<< /Type /Pages /Kids ['+kids.join(' ')+'] /Count '+kids.length+' >>';
- const catalog=add('<< /Type /Catalog /Pages '+pagesId+' 0 R >>');
+ const logo=invoiceLogo(),objects=[null],add=o=>(objects.push(o),objects.length-1);
+ const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+ const fontBold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+ const compressed=logo.bytes.toString('latin1');
+ const im=add('<< /Type /XObject /Subtype /Image /Width '+logo.width+' /Height '+logo.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length '+logo.bytes.length+' >>\nstream\n'+compressed+'\nendstream');
+ const pagesRef=add(''),refs=[];
+ for(const commands of pages){
+  const bytes=Buffer.from(commands,'latin1');
+  const streamId=add('<< /Length '+bytes.length+' >>\nstream\n'+commands+'\nendstream');
+  const pageId=add('<< /Type /Page /Parent '+pagesRef+' 0 R /MediaBox [0 0 '+W+' '+H+'] /Resources << /Font << /F1 '+font+' 0 R /F2 '+fontBold+' 0 R >> /XObject << /Logo '+im+' 0 R >> >> /Contents '+streamId+' 0 R >>');
+  refs.push(pageId+' 0 R');
+ }
+ objects[pagesRef]='<< /Type /Pages /Kids ['+refs.join(' ')+'] /Count '+refs.length+' >>';
+ const catalog=add('<< /Type /Catalog /Pages '+pagesRef+' 0 R >>');
  let doc='%PDF-1.4\n%AMC\n';const offsets=[0];
- for(let i=1;i<objs.length;i++){offsets.push(Buffer.byteLength(doc,'latin1'));doc+=i+' 0 obj\n'+objs[i]+'\nendobj\n'}
- const at=Buffer.byteLength(doc,'latin1');doc+='xref\n0 '+objs.length+'\n0000000000 65535 f \n';
- for(let i=1;i<objs.length;i++)doc+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
- doc+='trailer\n<< /Size '+objs.length+' /Root '+catalog+' 0 R >>\nstartxref\n'+at+'\n%%EOF';
+ for(let i=1;i<objects.length;i++){offsets.push(Buffer.byteLength(doc,'latin1'));doc+=i+' 0 obj\n'+objects[i]+'\nendobj\n'}
+ const start=Buffer.byteLength(doc,'latin1');doc+='xref\n0 '+objects.length+'\n0000000000 65535 f \n';
+ for(let i=1;i<objects.length;i++)doc+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+ doc+='trailer\n<< /Size '+objects.length+' /Root '+catalog+' 0 R >>\nstartxref\n'+start+'\n%%EOF';
  return Buffer.from(doc,'latin1');
 }
 export default async(req,context)=>{
