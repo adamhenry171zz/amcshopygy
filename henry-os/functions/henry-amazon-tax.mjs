@@ -1,3 +1,5 @@
+import {POPPINS_REGULAR_BASE64} from './henry-tax-poppins-regular.mjs';
+import {POPPINS_BOLD_BASE64} from './henry-tax-poppins-bold.mjs';
 import zlib from 'node:zlib';
 import {AMC_INVOICE_LOGO_PNG_BASE64} from './henry-tax-logo.mjs';
 import crypto from 'node:crypto';
@@ -157,8 +159,47 @@ function buildPdf(data,receipt){
   pages.push(ops.join('\n'));
  }
  const logo=invoiceLogo(),objects=[null],add=o=>(objects.push(o),objects.length-1);
- const font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
- const fontBold=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+ const makeTrueType=(base64,name)=>{
+  const ttf=Buffer.from(base64,'base64');
+  const numTables=ttf.readUInt16BE(4),tables={};
+  for(let i=0;i<numTables;i++){const o=12+16*i;tables[ttf.toString('ascii',o,o+4)]={offset:ttf.readUInt32BE(o+8),length:ttf.readUInt32BE(o+12)}}
+  for(const name of ['head','hhea','hmtx','cmap'])if(!tables[name])throw Error('Poppins font table missing: '+name);
+  const unit=ttf.readUInt16BE(tables.head.offset+18);
+  const bbox=[36,38,40,42].map(k=>Math.round(ttf.readInt16BE(tables.head.offset+k)*1000/unit));
+  const hhea=tables.hhea.offset,hmtx=tables.hmtx.offset;
+  const metricCount=ttf.readUInt16BE(hhea+34);
+  const cmap=tables.cmap.offset,subCount=ttf.readUInt16BE(cmap+2);
+  let f4=null;
+  for(let i=0;i<subCount;i++){
+   const rec=cmap+4+8*i,platform=ttf.readUInt16BE(rec),encoding=ttf.readUInt16BE(rec+2);
+   const offset=cmap+ttf.readUInt32BE(rec+4);
+   if(ttf.readUInt16BE(offset)===4&&platform===3&&(encoding===1||encoding===0)){f4=offset;break}
+  }
+  if(f4===null)throw Error('Poppins Unicode cmap missing');
+  const seg=ttf.readUInt16BE(f4+6)/2,end=f4+14,start=end+2*seg+2,delta=start+2*seg,range=delta+2*seg;
+  const glyphFor=cp=>{
+   for(let i=0;i<seg;i++){
+    if(cp<ttf.readUInt16BE(start+2*i)||cp>ttf.readUInt16BE(end+2*i))continue;
+    const off=ttf.readUInt16BE(range+2*i),d=ttf.readInt16BE(delta+2*i);
+    if(!off)return(cp+d)&65535;
+    const address=range+2*i+off+2*(cp-ttf.readUInt16BE(start+2*i));
+    const g=ttf.readUInt16BE(address);
+    return g?(g+d)&65535:0;
+   }return 0;
+  };
+  const widths=[];
+  for(let cp=32;cp<=126;cp++){
+   const gid=glyphFor(cp),index=Math.min(gid,metricCount-1);
+   widths.push(Math.round(ttf.readUInt16BE(hmtx+index*4)*1000/unit));
+  }
+  const zipped=zlib.deflateSync(ttf,{level:8});
+  const fileId=add('<< /Length '+zipped.length+' /Length1 '+ttf.length+' /Filter /FlateDecode >>\nstream\n'+zipped.toString('latin1')+'\nendstream');
+  const fontName='/'+name,ascent=Math.round(ttf.readInt16BE(hhea+4)*1000/unit),descent=Math.round(ttf.readInt16BE(hhea+6)*1000/unit);
+  const descriptor=add('<< /Type /FontDescriptor /FontName '+fontName+' /Flags 32 /FontBBox ['+bbox.join(' ')+'] /ItalicAngle 0 /Ascent '+ascent+' /Descent '+descent+' /CapHeight '+Math.round(ascent*0.75)+' /StemV '+(name.endsWith('Bold')?140:75)+' /FontFile2 '+fileId+' 0 R >>');
+  return add('<< /Type /Font /Subtype /TrueType /BaseFont '+fontName+' /Encoding /WinAnsiEncoding /FirstChar 32 /LastChar 126 /Widths ['+widths.join(' ')+'] /FontDescriptor '+descriptor+' 0 R >>');
+ };
+ const font=makeTrueType(POPPINS_REGULAR_BASE64,'Poppins-Regular');
+ const fontBold=makeTrueType(POPPINS_BOLD_BASE64,'Poppins-Bold');
  const compressed=logo.bytes.toString('latin1');
  const im=add('<< /Type /XObject /Subtype /Image /Width '+logo.width+' /Height '+logo.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length '+logo.bytes.length+' >>\nstream\n'+compressed+'\nendstream');
  const pagesRef=add(''),refs=[];
