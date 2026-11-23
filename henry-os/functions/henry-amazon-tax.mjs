@@ -68,7 +68,7 @@ function buildPdf(s,receipt){
   txt(29,265,'RECEIPT DETAILS',10,true);
   txt(29,283,'Amazon Order #:',9,true);txt(166,283,receipt.orderId,9);
   txt(29,299,'AMC Receipt #:',9,true);txt(166,299,receipt.receiptNo,9);
-  txt(29,315,'Access reference:',9,true);txt(166,315,receipt.accessId,9);
+  txt(29,315,'US warehouse delivery:',9,true);txt(166,315,toDateLabel(receipt.warehouseDate)+', '+formatTime(receipt.warehouseTime),9);
   txt(29,331,'Estimated Guyana date:',9,true);txt(166,331,toDateLabel(s.receivedGuyanaDate)+', 12:00:00 PM (GYT)',9);
   line(348);
   txt(29,367,'ITEMS',10,true);rect(28,379,556,25,blue);
