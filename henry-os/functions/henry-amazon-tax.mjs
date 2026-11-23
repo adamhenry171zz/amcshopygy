@@ -130,7 +130,7 @@ export default async(req,context)=>{
  }
  if(action==='admin_create'&&req.method==='POST'){
   let b;try{b=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
-  const id=clean(b.id,45).toUpperCase(),customerName=clean(b.customerName,160),guyanaAddress=clean(b.guyanaAddress,250),warehouseDate=clean(b.warehouseDate,10),receivedGuyanaDate=clean(b.receivedGuyanaDate,10),receivedGuyanaTime=clean(b.receivedGuyanaTime,5);
+  const id=clean(b.id,45).toUpperCase()||('AMC-SHP-'+crypto.randomBytes(8).toString('hex').toUpperCase()),customerName=clean(b.customerName,160),guyanaAddress=clean(b.guyanaAddress,250),warehouseDate=clean(b.warehouseDate,10),receivedGuyanaDate=clean(b.receivedGuyanaDate,10),receivedGuyanaTime=clean(b.receivedGuyanaTime,5);
   if(!idOk(id)||!customerName||!guyanaAddress||!validDate(warehouseDate)||!validDate(receivedGuyanaDate)||!validClock(receivedGuyanaTime))return json({error:'Complete shipment ID, name, address and valid dates/times.'},400);
   const expected=nextTuesday(warehouseDate);
   if(b.confirmedArrival!==true)return json({error:'Owner must confirm the actual Guyana receipt date and time before authorizing a warehouse receipt.'},400);
