@@ -19,6 +19,7 @@ const validDate=s=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s+'T1
 const validClock=s=>/^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 const nextTuesday=s=>{if(!validDate(s))throw Error('Enter a valid US warehouse delivery date.');const d=new Date(s+'T12:00:00Z');const days=(2-d.getUTCDay()+7)%7||7;d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)};
 const toDateLabel=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(Date.UTC(y,m-1,d,12)).toLocaleDateString('en-US',{timeZone:'UTC',month:'2-digit',day:'2-digit',year:'numeric'})};
+const formatTime=s=>{const [h,m]=s.split(':').map(Number);return String(h%12||12).padStart(2,'0')+':'+String(m).padStart(2,'0')+':00 '+(h>=12?'PM':'AM')};
 const orderOk=s=>/^\d{3}-\d{7}-\d{7}$/.test(s);
 const idOk=s=>/^[A-Z0-9-]{6,45}$/.test(s);
 const key=id=>'shipments/'+id;
@@ -63,19 +64,19 @@ function buildPdf(s,receipt){
   txt(29,283,'Amazon Order #:',9,true);txt(166,283,receipt.orderId,9);
   txt(29,299,'AMC Receipt #:',9,true);txt(166,299,receipt.receiptNo,9);
   txt(29,315,'AMC Shipment ID:',9,true);txt(166,315,s.id,9);
-  txt(29,331,'Received in Guyana:',9,true);txt(166,331,toDateLabel(s.receivedGuyanaDate)+', '+s.receivedGuyanaTime+' (GYT)',9);
+  txt(29,331,'Received in Guyana:',9,true);txt(166,331,toDateLabel(s.receivedGuyanaDate)+', '+formatTime(s.receivedGuyanaTime)+' (GYT)',9);
   line(348);
   txt(29,367,'ITEMS',10,true);rect(28,379,556,25,blue);
   txt(37,396,'#',10,true);txt(67,396,'TRACKING NUMBER',10,true);txt(294,396,'DESCRIPTION',10,true);txt(523,396,'LBS',10,true);
  };
  const rows=receipt.items;
- for(let p=0;p<Math.ceil(rows.length/17);p++){
+ for(let p=0;p<Math.ceil(rows.length/11);p++){
   ops=[];header();let y=420;
-  for(let i=p*17;i<Math.min((p+1)*17,rows.length);i++){
+  for(let i=p*11;i<Math.min((p+1)*11,rows.length);i++){
    const r=rows[i];if(i%2===0)rect(28,y-15,556,26,'0.97 0.98 0.99');
    txt(37,y,i+1,9);txt(67,y,r.tracking.slice(0,37),8);txt(294,y,r.description.slice(0,37),8);txt(523,y,r.weight.toFixed(2),9);y+=26;
   }
-  if((p+1)*17>=rows.length){line(Math.min(y+5,718));const total=rows.reduce((sum,r)=>sum+r.weight,0);txt(29,Math.min(y+24,739),'Total Items: '+rows.length+'    Total Tracking #: '+rows.length,10,true);txt(468,Math.min(y+24,739),'TOTAL '+total.toFixed(2)+' lb',10,true);}
+  if((p+1)*11>=rows.length){line(Math.min(y+5,718));const total=rows.reduce((sum,r)=>sum+r.weight,0);txt(29,Math.min(y+24,739),'Total Items: '+rows.length+'    Total Tracking #: '+rows.length,10,true);txt(468,Math.min(y+24,739),'TOTAL '+total.toFixed(2)+' lb',10,true);}
   txt(29,761,'Issued by A.M.C Shopping | Shipment received in Guyana and verified by AMC.',8,false,muted);
   txt(29,773,'Amazon order number supplied by requesting customer. Subject to Amazon review.',8,false,muted);
   pages.push(ops.join('\n'));
@@ -137,7 +138,7 @@ export default async(req,context)=>{
  if(!idOk(id)||!/^[a-f0-9]{64}$/.test(token))return json({error:'Invalid access details.'},403);
  const row=await read(st,key(id));
  if(!row||row.status!=='active'||!tokenOK(row,token))return json({error:'Access details could not be verified. Contact AMC Shopping.'},403);
- if(action==='verify')return json({shipmentId:id,customerName:row.customerName,receivedInGuyana:toDateLabel(row.receivedGuyanaDate)+' '+row.receivedGuyanaTime+' GYT',packages:row.items.map(({tracking,weight,description})=>({tracking,weight,description}))});
+ if(action==='verify')return json({shipmentId:id,customerName:row.customerName,receivedInGuyana:toDateLabel(row.receivedGuyanaDate)+' '+formatTime(row.receivedGuyanaTime)+' GYT',packages:row.items.map(({tracking,weight,description})=>({tracking,weight,description}))});
  const orderId=clean(b.orderId,25);
  if(!orderOk(orderId))return json({error:'Enter a valid Amazon order number, for example 114-1234567-1234567.'},400);
  const tracking=[...new Set((Array.isArray(b.tracking)?b.tracking:[]).map(x=>clean(x,75).toUpperCase()))];
