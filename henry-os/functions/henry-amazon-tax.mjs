@@ -106,7 +106,9 @@ export default async(req,context)=>{
  if(action==='admin_list'&&req.method==='GET'){
   const {blobs}=await st.list({prefix:'shipments/'});
   const rows=await Promise.all(blobs.slice(0,300).map(b=>read(st,b.key)));
-  return json({shipments:rows.filter(Boolean).map(({tokenHash,...r})=>r).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))});
+  const receiptFiles=await st.list({prefix:'receipts/'});
+  const savedReceipts=await Promise.all(receiptFiles.blobs.slice(0,500).map(b=>read(st,b.key)));
+  return json({shipments:rows.filter(Boolean).map(({tokenHash,...r})=>r).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),receipts:savedReceipts.filter(Boolean).map(r=>({id:r.id,receiptNo:r.receiptNo,shipmentId:r.shipmentId,orderId:r.orderId,createdAt:r.createdAt,customerName:r.customerName,packageCount:r.items.length})).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))});
  }
  if(action==='admin_create'&&req.method==='POST'){
   let b;try{b=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
