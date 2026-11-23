@@ -144,9 +144,12 @@ export default async(req,context)=>{
  if(!tracking.length||tracking.length>30)return json({error:'Select at least one package.'},400);
  const items=tracking.map(t=>row.items.find(r=>r.tracking===t));
  if(items.some(x=>!x))return json({error:'Package selection did not match verified AMC records.'},400);
+ const claimKey='claim-keys/'+id+'/'+sha(orderId+'|'+tracking.slice().sort().join('|'));
+ if(await read(st,claimKey))return json({error:'A receipt has already been issued for this Amazon order and package selection. Contact AMC Shopping if you need a correction.'},409);
  const claimId=crypto.randomUUID(),receiptNo='AMCTX-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+crypto.randomBytes(4).toString('hex').toUpperCase();
  const receipt={id:claimId,receiptNo,shipmentId:id,orderId,items,createdAt:new Date().toISOString(),customerName:row.customerName,receivedGuyanaDate:row.receivedGuyanaDate,receivedGuyanaTime:row.receivedGuyanaTime,source:'customer-entered-order/owner-verified-shipment'};
- await st.setJSON('receipts/'+claimId,receipt);
  const pdf=buildPdf(row,receipt);
+ await st.setJSON('receipts/'+claimId,receipt);
+ await st.setJSON(claimKey,{claimId,receiptNo,createdAt:receipt.createdAt});
  return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Warehouse-Receipt-'+orderId+'.pdf"','cache-control':'no-store, no-cache, must-revalidate','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
 };
