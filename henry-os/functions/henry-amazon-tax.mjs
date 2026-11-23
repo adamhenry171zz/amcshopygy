@@ -21,8 +21,6 @@ const nextTuesday=s=>{if(!validDate(s))throw Error('Enter a valid US warehouse d
 const toDateLabel=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(Date.UTC(y,m-1,d,12)).toLocaleDateString('en-US',{timeZone:'UTC',month:'2-digit',day:'2-digit',year:'numeric'})};
 const formatTime=s=>{const [h,m]=s.split(':').map(Number);return String(h%12||12).padStart(2,'0')+':'+String(m).padStart(2,'0')+':00 '+(h>=12?'PM':'AM')};
 const orderOk=s=>/^\d{3}-\d{7}-\d{7}$/.test(s);
-const idOk=s=>/^[A-Z0-9-]{6,45}$/.test(s);
-const key=id=>'shipments/'+id;
 const store=()=>getStore('amc-tax-receipts');
 const read=async(st,k)=>st.get(k,{type:'json'}).catch(()=>null);
 const parseItems=s=>{
@@ -41,7 +39,7 @@ const parseItems=s=>{
 // A 128-bit owner-issued receipt access number is the only credential customers enter.
 const accessFormat=/^AMC-RCPT-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}$/;
 const normalizeAccess=v=>clean(v,62).toUpperCase().replace(/\s/g,'');
-const accessKey=v=>'access/'+sha(v);
+const accessKey=v=>'codes/'+sha(v);
 const publicClientKey=req=>sha(req.headers.get('x-nf-client-connection-ip')||'unknown').slice(0,32);
 async function checkPublicThrottle(st,req){const key='throttle/'+publicClientKey(req),state=await read(st,key),now=Date.now();if(state&&state.until>now)return true;return false}
 async function flagPublicFailure(st,req){const key='throttle/'+publicClientKey(req),now=Date.now();const previous=await read(st,key);const state=!previous||previous.reset<now?{count:1,reset:now+15*60*1000,until:0}:{...previous,count:previous.count+1};if(state.count>=10)state.until=state.reset;await st.setJSON(key,state)}
@@ -60,18 +58,18 @@ function buildPdf(s,receipt){
   txt(28,35,'A.M.C SHOPPING GY',22,true);
   txt(29,52,'14619 228th Street, Springfield Gardens, NY 11413, USA',9);
   txt(29,66,'Phone: +592 604 2826  |  amcshopping.com',9);
-  rect(28,82,556,34,blue);txt(218,104,'WAREHOUSE RECEIPT',15,true);
+  rect(28,82,556,34,blue);txt(145,104,'CUSTOMER SHIPMENT DECLARATION',15,true);
   txt(29,135,'SHIPPER INFORMATION',10,true);
   txt(29,151,'PoboxShipper',9);txt(29,165,'14619 228th Street, Springfield Gardens, New York, USA 11413',9);
   line(179);
-  txt(29,197,'CONSIGNEE INFORMATION',10,true);
+  txt(29,197,'CONSIGNEE INFORMATION (CUSTOMER PROVIDED)',10,true);
   for(const [i,t] of wrap(s.customerName+' | '+s.guyanaAddress,90).slice(0,2).entries())txt(29,214+i*13,t,9);
   line(246);
   txt(29,265,'RECEIPT DETAILS',10,true);
   txt(29,283,'Amazon Order #:',9,true);txt(166,283,receipt.orderId,9);
   txt(29,299,'AMC Receipt #:',9,true);txt(166,299,receipt.receiptNo,9);
-  txt(29,315,'AMC Shipment ID:',9,true);txt(166,315,s.id,9);
-  txt(29,331,'Received in Guyana:',9,true);txt(166,331,toDateLabel(s.receivedGuyanaDate)+', '+formatTime(s.receivedGuyanaTime)+' (GYT)',9);
+  txt(29,315,'Access reference:',9,true);txt(166,315,receipt.accessId,9);
+  txt(29,331,'Estimated Guyana date:',9,true);txt(166,331,toDateLabel(s.receivedGuyanaDate)+', 12:00:00 PM (GYT)',9);
   line(348);
   txt(29,367,'ITEMS',10,true);rect(28,379,556,25,blue);
   txt(37,396,'#',10,true);txt(67,396,'TRACKING NUMBER',10,true);txt(294,396,'DESCRIPTION',10,true);txt(523,396,'LBS',10,true);
@@ -84,8 +82,8 @@ function buildPdf(s,receipt){
    txt(37,y,i+1,9);txt(67,y,r.tracking.slice(0,37),8);txt(294,y,r.description.slice(0,37),8);txt(523,y,r.weight.toFixed(2),9);y+=26;
   }
   if((p+1)*11>=rows.length){line(Math.min(y+5,718));const total=rows.reduce((sum,r)=>sum+r.weight,0);txt(29,Math.min(y+24,739),'Total Items: '+rows.length+'    Total Tracking #: '+rows.length,10,true);txt(468,Math.min(y+24,739),'TOTAL '+total.toFixed(2)+' lb',10,true);}
-  txt(29,761,'Issued by A.M.C Shopping | Shipment received in Guyana and verified by AMC.',8,false,muted);
-  txt(29,773,'Amazon order number supplied by requesting customer. Subject to Amazon review.',8,false,muted);
+  txt(29,761,'Customer-submitted shipment details; estimated Guyana date, not proof of arrival.',8,false,muted);
+  txt(29,773,'Not independently verified by AMC. Amazon decides documentation and refund eligibility.',8,false,muted);
   pages.push(ops.join('\n'));
  }
  const objs=[null],add=x=>(objs.push(x),objs.length-1);
@@ -105,73 +103,66 @@ export default async(req,context)=>{
  const production=context?.deploy?.context==='production';
  const url=new URL(req.url),action=url.searchParams.get('action')||'';
  if(!process.env.HENRY_SESSION_SECRET||!process.env.HENRY_ADMIN_EMAIL)return json({error:'HENRY OS owner authentication is not configured.'},503);
- const owner=isOwner(req);
- const admin=['admin_create','admin_list','admin_revoke','admin_pdf'].includes(action);
+ const owner=isOwner(req),admin=['admin_create','admin_list','admin_revoke','admin_pdf'].includes(action);
  if(admin&&!owner)return json({error:'Owner login required.'},401);
- if(req.method==='POST'&&!production)return json({error:'Preview is read-only. Publish to production to issue or generate receipts.'},403);
+ if(req.method==='POST'&&!production)return json({error:'Preview is read-only. Try again after a production deployment.'},403);
  if(req.method==='POST'&&Number(req.headers.get('content-length')||0)>18000)return json({error:'Request too large.'},413);
  const st=store();
+ if(action==='admin_create'&&req.method==='POST'){
+  const receiptNumber='AMC-RCPT-'+crypto.randomBytes(16).toString('hex').toUpperCase().match(/.{1,8}/g).join('-');
+  const accessId=crypto.randomUUID();
+  const now=new Date().toISOString(),record={id:accessId,status:'active',createdAt:now,issuedCount:0};
+  await st.setJSON(accessKey(receiptNumber),{...record});
+  await st.setJSON('code-list/'+accessId,{...record,hash:sha(receiptNumber)});
+  return json({receiptNumber,link:'/amazon-tax',record},201);
+ }
+ if(action==='admin_list'&&req.method==='GET'){
+  const [codes,receipts]=await Promise.all([st.list({prefix:'code-list/'}),st.list({prefix:'receipts/'})]);
+  const codeRows=await Promise.all(codes.blobs.slice(0,500).map(b=>read(st,b.key)));
+  const receiptRows=await Promise.all(receipts.blobs.slice(0,700).map(b=>read(st,b.key)));
+  return json({codes:codeRows.filter(Boolean).map(({hash,...v})=>v).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),receipts:receiptRows.filter(Boolean).map(r=>({id:r.id,receiptNo:r.receiptNo,accessId:r.accessId,customerName:r.customerName,orderId:r.orderId,createdAt:r.createdAt,packageCount:r.items.length,totalWeight:r.items.reduce((n,x)=>n+x.weight,0)})).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))});
+ }
+ if(action==='admin_revoke'&&req.method==='POST'){
+  let b;try{b=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
+  const id=clean(b.id,60);
+  if(!/^[0-9a-f-]{36}$/.test(id))return json({error:'Invalid access ID.'},400);
+  const row=await read(st,'code-list/'+id);if(!row)return json({error:'Access number not found.'},404);
+  const saved=await read(st,'codes/'+row.hash);
+  if(!saved)return json({error:'Access data missing.'},409);
+  row.status='revoked';saved.status='revoked';row.revokedAt=saved.revokedAt=new Date().toISOString();
+  await st.setJSON('codes/'+row.hash,saved);await st.setJSON('code-list/'+id,row);
+  return json({ok:true});
+ }
  if(action==='admin_pdf'&&req.method==='GET'){
   const id=clean(url.searchParams.get('id'),60);
   if(!/^[0-9a-f-]{36}$/.test(id))return json({error:'Invalid receipt ID.'},400);
   const receipt=await read(st,'receipts/'+id);
   if(!receipt)return json({error:'Receipt not found.'},404);
-  const shipment=await read(st,key(receipt.shipmentId));
-  if(!shipment)return json({error:'Linked shipment record missing.'},409);
+  const shipment={customerName:receipt.customerName,guyanaAddress:receipt.guyanaAddress,receivedGuyanaDate:receipt.expectedGuyanaDate};
   const pdf=buildPdf(shipment,receipt);
-  return new Response(pdf,{headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Warehouse-Receipt-'+receipt.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'}});
+  return new Response(pdf,{headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Order-'+receipt.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'}});
  }
- if(action==='admin_list'&&req.method==='GET'){
-  const {blobs}=await st.list({prefix:'shipments/'});
-  const rows=await Promise.all(blobs.slice(0,300).map(b=>read(st,b.key)));
-  const receiptFiles=await st.list({prefix:'receipts/'});
-  const savedReceipts=await Promise.all(receiptFiles.blobs.slice(0,500).map(b=>read(st,b.key)));
-  return json({shipments:rows.filter(Boolean).map(({tokenHash,accessHash,...r})=>r).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),receipts:savedReceipts.filter(Boolean).map(r=>({id:r.id,receiptNo:r.receiptNo,shipmentId:r.shipmentId,orderId:r.orderId,createdAt:r.createdAt,customerName:r.customerName,packageCount:r.items.length})).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))});
- }
- if(action==='admin_create'&&req.method==='POST'){
-  let b;try{b=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
-  const id=clean(b.id,45).toUpperCase()||('AMC-SHP-'+crypto.randomBytes(8).toString('hex').toUpperCase()),customerName=clean(b.customerName,160),guyanaAddress=clean(b.guyanaAddress,250),warehouseDate=clean(b.warehouseDate,10),receivedGuyanaDate=clean(b.receivedGuyanaDate,10),receivedGuyanaTime=clean(b.receivedGuyanaTime,5);
-  if(!idOk(id)||!customerName||!guyanaAddress||!validDate(warehouseDate)||!validDate(receivedGuyanaDate)||!validClock(receivedGuyanaTime))return json({error:'Complete shipment ID, name, address and valid dates/times.'},400);
-  const expected=nextTuesday(warehouseDate);
-  if(b.confirmedArrival!==true)return json({error:'Owner must confirm the actual Guyana receipt date and time before authorizing a warehouse receipt.'},400);
-  if(receivedGuyanaDate<warehouseDate)return json({error:'Guyana receipt cannot precede warehouse delivery.'},400);
-  if(receivedGuyanaDate>new Date().toISOString().slice(0,10))return json({error:'Cannot certify arrival in the future.'},400);
-  let items;try{items=parseItems(b.items)}catch(e){return json({error:e.message},400)}
-  if(await read(st,key(id)))return json({error:'Shipment ID already exists. Use a unique ID.'},409);
-  const secret=crypto.randomBytes(16).toString('hex').toUpperCase();
-  const receiptAccessNumber='AMC-RCPT-'+secret.match(/.{1,8}/g).join('-');
-  const row={id,customerName,guyanaAddress,warehouseDate,expectedGuyanaDate:expected,receivedGuyanaDate,receivedGuyanaTime,items,accessHash:sha(receiptAccessNumber),status:'active',createdAt:new Date().toISOString(),issuedCount:0};
-  await st.setJSON(key(id),row);
-  await st.setJSON(accessKey(receiptAccessNumber),{id,createdAt:row.createdAt});
-  return json({shipment:{...row,accessHash:undefined},link:'/amazon-tax',receiptNumber:receiptAccessNumber,note:'Provide this receipt number to the customer privately. The portal URL is the same for every customer; no shipment ID or secret URL is needed.'},201);
- }
- if(action==='admin_revoke'&&req.method==='POST'){
-  let b;try{b=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
-  const id=clean(b.id,45).toUpperCase(),row=await read(st,key(id));if(!row)return json({error:'Shipment not found.'},404);
-  row.status='revoked';row.revokedAt=new Date().toISOString();await st.setJSON(key(id),row);return json({ok:true});
- }
- if(!['verify','generate'].includes(action))return json({error:'Not found.'},404);
- if(action==='verify'&&req.method!=='POST'||action==='generate'&&req.method!=='POST')return json({error:'Method not allowed.'},405);
- let b;try{b=await req.json()}catch{return json({error:'Invalid request.'},400)}
- const receiptNumber=normalizeAccess(b.receiptNumber);
- if(await checkPublicThrottle(st,req))return json({error:'Too many unsuccessful attempts. Please try again later.'},429);
- if(!accessFormat.test(receiptNumber)){await flagPublicFailure(st,req);return json({error:'Invalid receipt number. Request the number directly from AMC Shopping.'},403)}
- const lookup=await read(st,accessKey(receiptNumber));
- const id=lookup?.id, row=id?await read(st,key(id)):null;
- if(!row||row.status!=='active'||!eq(row.accessHash||'',sha(receiptNumber))){await flagPublicFailure(st,req);return json({error:'Receipt number could not be verified. Please contact AMC Shopping.'},403)}
- if(action==='verify')return json({shipmentId:id,customerName:row.customerName,receivedInGuyana:toDateLabel(row.receivedGuyanaDate)+' '+formatTime(row.receivedGuyanaTime)+' GYT',packages:row.items.map(({tracking,weight,description})=>({tracking,weight,description}))});
- const orderId=clean(b.orderId,25);
- if(!orderOk(orderId))return json({error:'Enter a valid Amazon order number, for example 114-1234567-1234567.'},400);
- const tracking=[...new Set((Array.isArray(b.tracking)?b.tracking:[]).map(x=>clean(x,75).toUpperCase()))];
- if(!tracking.length||tracking.length>30)return json({error:'Select at least one package.'},400);
- const items=tracking.map(t=>row.items.find(r=>r.tracking===t));
- if(items.some(x=>!x))return json({error:'Package selection did not match verified AMC records.'},400);
- const claimKey='claim-keys/'+id+'/'+sha(orderId+'|'+tracking.slice().sort().join('|'));
- if(await read(st,claimKey))return json({error:'A receipt has already been issued for this Amazon order and package selection. Contact AMC Shopping if you need a correction.'},409);
- const claimId=crypto.randomUUID(),receiptNo='AMCTX-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+crypto.randomBytes(4).toString('hex').toUpperCase();
- const receipt={id:claimId,receiptNo,shipmentId:id,orderId,items,createdAt:new Date().toISOString(),customerName:row.customerName,receivedGuyanaDate:row.receivedGuyanaDate,receivedGuyanaTime:row.receivedGuyanaTime,source:'customer-entered-order/owner-verified-shipment'};
- const pdf=buildPdf(row,receipt);
- await st.setJSON('receipts/'+claimId,receipt);
- await st.setJSON(claimKey,{claimId,receiptNo,createdAt:receipt.createdAt});
- return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Warehouse-Receipt-'+orderId+'.pdf"','cache-control':'no-store, no-cache, must-revalidate','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
+ if(!['verify','generate'].includes(action)||req.method!=='POST')return json({error:'Not found.'},404);
+ let body;try{body=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
+ const access=normalizeAccess(body.receiptNumber);
+ if(await checkPublicThrottle(st,req))return json({error:'Too many unsuccessful attempts. Try later.'},429);
+ if(!accessFormat.test(access)){await flagPublicFailure(st,req);return json({error:'Invalid receipt number. Please ask AMC Shopping for your access number.'},403)}
+ const row=await read(st,accessKey(access));
+ if(!row||row.status!=='active'){await flagPublicFailure(st,req);return json({error:'Invalid or revoked receipt number. Ask AMC Shopping for assistance.'},403)}
+ if(action==='verify')return json({ok:true,message:'Access confirmed. Fill out the order details below.'});
+ const customerName=clean(body.customerName,160),guyanaAddress=clean(body.guyanaAddress,250),orderId=clean(body.orderId,25),warehouseDate=clean(body.warehouseDate,10),warehouseTime=clean(body.warehouseTime,5),destination=clean(body.destination,80);
+ if(customerName.length<3||guyanaAddress.length<8||!orderOk(orderId)||!validDate(warehouseDate)||!validClock(warehouseTime))return json({error:'Complete your name, Guyana address, Amazon order number, US warehouse delivery date and time.'},400);
+ if(warehouseDate>new Date().toISOString().slice(0,10))return json({error:'Warehouse delivery date cannot be in the future.'},400);
+ if(destination&&destination.toLowerCase()!=='guyana')return json({error:'This assistance page is for shipments forwarded to Guyana.'},400);
+ let items;try{items=parseItems(body.items)}catch(e){return json({error:e.message},400)}
+ if(body.confirmed!==true)return json({error:'Review and confirm your submitted shipment information.'},400);
+ const expectedGuyanaDate=nextTuesday(warehouseDate);
+ const claimKey='claim-keys/'+row.id+'/'+sha(orderId);
+ const previous=await read(st,claimKey);
+ if(previous){return json({error:'This Amazon order already has a generated document. Ask AMC Shopping for a replacement if needed.'},409)}
+ const receipt={id:crypto.randomUUID(),receiptNo:'AMC-DOC-'+crypto.randomBytes(6).toString('hex').toUpperCase(),accessId:row.id,orderId,customerName,guyanaAddress,warehouseDate,warehouseTime,expectedGuyanaDate,items,createdAt:new Date().toISOString(),source:'customer-submitted/unverified'};
+ const pdf=buildPdf({customerName,guyanaAddress,receivedGuyanaDate:expectedGuyanaDate},receipt);
+ await st.setJSON('receipts/'+receipt.id,receipt);
+ await st.setJSON(claimKey,{receiptId:receipt.id,createdAt:receipt.createdAt});
+ return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Order-'+orderId+'.pdf"','cache-control':'no-store, no-cache, must-revalidate','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
 };
