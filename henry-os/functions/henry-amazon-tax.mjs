@@ -267,7 +267,7 @@ export default async(req,context)=>{
   if(!receipt)return json({error:'Receipt not found.'},404);
   const shipment={customerName:receipt.customerName,customerPhone:receipt.customerPhone,guyanaAddress:receipt.guyanaAddress,receivedGuyanaDate:receipt.expectedGuyanaDate};
   const pdf=buildPdf(shipment,receipt);
-  return new Response(pdf,{headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Order-'+receipt.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'}});
+  return new Response(pdf,{headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="Order # '+receipt.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'}});
  }
  if(!['verify','generate'].includes(action)||req.method!=='POST')return json({error:'Not found.'},404);
  let body;try{body=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
@@ -290,11 +290,11 @@ export default async(req,context)=>{
   const existing=await read(st,'receipts/'+previous.receiptId);
   if(!existing)return json({error:'Document was issued but cannot be retrieved. Contact AMC Shopping.'},409);
   const pdf=buildPdf({customerName:existing.customerName,customerPhone:existing.customerPhone,guyanaAddress:existing.guyanaAddress,receivedGuyanaDate:existing.expectedGuyanaDate},existing);
-  return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Order-'+existing.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
+  return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="Order # '+existing.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
  }
  const receipt={id:crypto.randomUUID(),receiptNo:row.publicReceiptNo||String(crypto.randomInt(1000000,10000000)),accessId:row.id,orderId,customerName,customerPhone,guyanaAddress,warehouseDate,warehouseTime,expectedGuyanaDate,items,createdAt:new Date().toISOString(),source:'customer-submitted/unverified'};
  const pdf=buildPdf({customerName,customerPhone,guyanaAddress,receivedGuyanaDate:expectedGuyanaDate},receipt);
  await st.setJSON('receipts/'+receipt.id,receipt);
  await st.setJSON(claimKey,{receiptId:receipt.id,createdAt:receipt.createdAt});
- return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Order-'+orderId+'.pdf"','cache-control':'no-store, no-cache, must-revalidate','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
+ return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="Order # '+orderId+'.pdf"','cache-control':'no-store, no-cache, must-revalidate','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
 };
