@@ -159,7 +159,12 @@ export default async(req,context)=>{
  const expectedGuyanaDate=nextTuesday(warehouseDate);
  const claimKey='claim-keys/'+row.id+'/'+sha(orderId);
  const previous=await read(st,claimKey);
- if(previous){return json({error:'This Amazon order already has a generated document. Ask AMC Shopping for a replacement if needed.'},409)}
+ if(previous){
+  const existing=await read(st,'receipts/'+previous.receiptId);
+  if(!existing)return json({error:'Document was issued but cannot be retrieved. Contact AMC Shopping.'},409);
+  const pdf=buildPdf({customerName:existing.customerName,guyanaAddress:existing.guyanaAddress,receivedGuyanaDate:existing.expectedGuyanaDate},existing);
+  return new Response(pdf,{status:200,headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Order-'+existing.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff','content-length':String(pdf.length)}});
+ }
  const receipt={id:crypto.randomUUID(),receiptNo:'AMC-DOC-'+crypto.randomBytes(6).toString('hex').toUpperCase(),accessId:row.id,orderId,customerName,guyanaAddress,warehouseDate,warehouseTime,expectedGuyanaDate,items,createdAt:new Date().toISOString(),source:'customer-submitted/unverified'};
  const pdf=buildPdf({customerName,guyanaAddress,receivedGuyanaDate:expectedGuyanaDate},receipt);
  await st.setJSON('receipts/'+receipt.id,receipt);
