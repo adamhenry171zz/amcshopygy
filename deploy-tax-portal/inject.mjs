@@ -8,6 +8,8 @@ const root=new URL('../henry-os/',import.meta.url);
 for(const [source,target] of [
  ['functions/henry-amazon-tax.mjs',path.join(functions,'henry-amazon-tax.mjs')],
  ['functions/henry-tax-logo.mjs',path.join(functions,'henry-tax-logo.mjs')],
+ ['functions/henry-tax-poppins-regular.mjs',path.join(functions,'henry-tax-poppins-regular.mjs')],
+ ['functions/henry-tax-poppins-bold.mjs',path.join(functions,'henry-tax-poppins-bold.mjs')],
  ['public/amazon-tax.html',path.join(site,'amazon-tax.html')],
  ['public/amazon-tax.css',path.join(assets,'amc-amazon-tax.css')],
  ['public/amc-amazon-tax.js',path.join(assets,'amc-amazon-tax.js')],
