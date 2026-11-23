@@ -38,7 +38,14 @@ const parseItems=s=>{
   return {tracking:tracking.toUpperCase(),weight:Math.round(weight*100)/100,description:clean(description.join('|'),120)};
  });
 };
-const tokenOK=(row,token)=>/^[a-f0-9]{64}$/.test(token||'')&&eq(row?.tokenHash||'',sha(token));
+// A 128-bit owner-issued receipt access number is the only credential customers enter.
+const accessFormat=/^AMC-RCPT-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}-[A-F0-9]{8}$/;
+const normalizeAccess=v=>clean(v,62).toUpperCase().replace(/\s/g,'');
+const accessKey=v=>'access/'+sha(v);
+const publicClientKey=req=>sha(req.headers.get('x-nf-client-connection-ip')||'unknown').slice(0,32);
+async function checkPublicThrottle(st,req){const key='throttle/'+publicClientKey(req),state=await read(st,key),now=Date.now();if(state&&state.until>now)return true;return false}
+async function flagPublicFailure(st,req){const key='throttle/'+publicClientKey(req),now=Date.now();const previous=await read(st,key);const state=!previous||previous.reset<now?{count:1,reset:now+15*60*1000,until:0}:{...previous,count:previous.count+1};if(state.count>=10)state.until=state.reset;await st.setJSON(key,state)}
+
 const ascii=s=>String(s??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[–—]/g,'-').replace(/[’‘]/g,"'").replace(/[^ -~]/g,'?');
 const esc=s=>ascii(s).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
 const wrap=(s,n=55)=>{const out=[];let t=ascii(s);while(t.length>n){let i=t.lastIndexOf(' ',n);if(i<5)i=n;out.push(t.slice(0,i));t=t.slice(i).trimStart()}if(t)out.push(t);return out.length?out:['']};
@@ -119,7 +126,7 @@ export default async(req,context)=>{
   const rows=await Promise.all(blobs.slice(0,300).map(b=>read(st,b.key)));
   const receiptFiles=await st.list({prefix:'receipts/'});
   const savedReceipts=await Promise.all(receiptFiles.blobs.slice(0,500).map(b=>read(st,b.key)));
-  return json({shipments:rows.filter(Boolean).map(({tokenHash,...r})=>r).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),receipts:savedReceipts.filter(Boolean).map(r=>({id:r.id,receiptNo:r.receiptNo,shipmentId:r.shipmentId,orderId:r.orderId,createdAt:r.createdAt,customerName:r.customerName,packageCount:r.items.length})).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))});
+  return json({shipments:rows.filter(Boolean).map(({tokenHash,accessHash,...r})=>r).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),receipts:savedReceipts.filter(Boolean).map(r=>({id:r.id,receiptNo:r.receiptNo,shipmentId:r.shipmentId,orderId:r.orderId,createdAt:r.createdAt,customerName:r.customerName,packageCount:r.items.length})).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))});
  }
  if(action==='admin_create'&&req.method==='POST'){
   let b;try{b=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
@@ -131,10 +138,12 @@ export default async(req,context)=>{
   if(receivedGuyanaDate>new Date().toISOString().slice(0,10))return json({error:'Cannot certify arrival in the future.'},400);
   let items;try{items=parseItems(b.items)}catch(e){return json({error:e.message},400)}
   if(await read(st,key(id)))return json({error:'Shipment ID already exists. Use a unique ID.'},409);
-  const token=crypto.randomBytes(32).toString('hex');
-  const row={id,customerName,guyanaAddress,warehouseDate,expectedGuyanaDate:expected,receivedGuyanaDate,receivedGuyanaTime,items,tokenHash:sha(token),status:'active',createdAt:new Date().toISOString(),issuedCount:0};
+  const secret=crypto.randomBytes(16).toString('hex').toUpperCase();
+  const receiptAccessNumber='AMC-RCPT-'+secret.match(/.{1,8}/g).join('-');
+  const row={id,customerName,guyanaAddress,warehouseDate,expectedGuyanaDate:expected,receivedGuyanaDate,receivedGuyanaTime,items,accessHash:sha(receiptAccessNumber),status:'active',createdAt:new Date().toISOString(),issuedCount:0};
   await st.setJSON(key(id),row);
-  return json({shipment:{...row,tokenHash:undefined},link:'/amazon-tax?access='+token,accessToken:token,note:'The access link is shown once. Send it privately with the Shipment ID.'},201);
+  await st.setJSON(accessKey(receiptAccessNumber),{id,createdAt:row.createdAt});
+  return json({shipment:{...row,accessHash:undefined},link:'/amazon-tax',receiptNumber:receiptAccessNumber,note:'Provide this receipt number to the customer privately. The portal URL is the same for every customer; no shipment ID or secret URL is needed.'},201);
  }
  if(action==='admin_revoke'&&req.method==='POST'){
   let b;try{b=await req.json()}catch{return json({error:'Invalid JSON.'},400)}
@@ -144,10 +153,12 @@ export default async(req,context)=>{
  if(!['verify','generate'].includes(action))return json({error:'Not found.'},404);
  if(action==='verify'&&req.method!=='POST'||action==='generate'&&req.method!=='POST')return json({error:'Method not allowed.'},405);
  let b;try{b=await req.json()}catch{return json({error:'Invalid request.'},400)}
- const id=clean(b.shipmentId,45).toUpperCase(),token=clean(b.accessToken,80);
- if(!idOk(id)||!/^[a-f0-9]{64}$/.test(token))return json({error:'Invalid access details.'},403);
- const row=await read(st,key(id));
- if(!row||row.status!=='active'||!tokenOK(row,token))return json({error:'Access details could not be verified. Contact AMC Shopping.'},403);
+ const receiptNumber=normalizeAccess(b.receiptNumber);
+ if(await checkPublicThrottle(st,req))return json({error:'Too many unsuccessful attempts. Please try again later.'},429);
+ if(!accessFormat.test(receiptNumber)){await flagPublicFailure(st,req);return json({error:'Invalid receipt number. Request the number directly from AMC Shopping.'},403)}
+ const lookup=await read(st,accessKey(receiptNumber));
+ const id=lookup?.id, row=id?await read(st,key(id)):null;
+ if(!row||row.status!=='active'||!eq(row.accessHash||'',sha(receiptNumber))){await flagPublicFailure(st,req);return json({error:'Receipt number could not be verified. Please contact AMC Shopping.'},403)}
  if(action==='verify')return json({shipmentId:id,customerName:row.customerName,receivedInGuyana:toDateLabel(row.receivedGuyanaDate)+' '+formatTime(row.receivedGuyanaTime)+' GYT',packages:row.items.map(({tracking,weight,description})=>({tracking,weight,description}))});
  const orderId=clean(b.orderId,25);
  if(!orderOk(orderId))return json({error:'Enter a valid Amazon order number, for example 114-1234567-1234567.'},400);
