@@ -38,7 +38,7 @@ test('one code supports multiple customer-submitted PDFs with the sample A4 layo
  const verified=await handler(req('verify',{receiptNumber}),live);assert.equal(verified.status,200);
  for(let n=0;n<2;n++){
   const orderId='114-'+String(1234567+n)+'-'+String(7654321+n);
-  const form={receiptNumber,customerName:'Test Customer',guyanaAddress:'Lot 5-6 Supply East Bank Demerara, Guyana',orderId,warehouseDate:'2026-11-19',warehouseTime:'13:00',items:'TBA335514688312 | 3.00 | Amazon Package\nTBADD0055525698 | 7.00 | Amazon Package',confirmed:true};
+  const form={receiptNumber,customerName:'Test Customer',customerPhone:'+592 604 2826',guyanaAddress:'Lot 5-6 Supply East Bank Demerara, Guyana',orderId,warehouseDate:'2026-11-19',warehouseTime:'13:00',items:'TBA335514688312 | 3.00 | Amazon Package\nTBADD0055525698 | 7.00 | Amazon Package',confirmed:true};
   const result=await handler(req('generate',form),live);
   assert.equal(result.status,200);
   const buf=Buffer.from(await result.arrayBuffer());assert.ok(buf.length>8000);
@@ -51,6 +51,8 @@ test('one code supports multiple customer-submitted PDFs with the sample A4 layo
   assert.ok(source.includes('Consignee Information'));
   assert.ok(source.includes('Receipt Details'));
   assert.ok(source.includes('Total Tracking #: 2'));
+  assert.ok(source.includes('Phone: +592 604 2826'));
+  assert.ok(/\(\d{7}\) Tj ET/.test(source));
   assert.ok(!source.includes('not proof of arrival'));
   assert.ok(!source.includes('customer-submitted shipment details'));
   assert.ok(source.includes('Scheduled Date/Time:'));
@@ -59,6 +61,8 @@ test('one code supports multiple customer-submitted PDFs with the sample A4 layo
  }
  const rows=await handler(req('admin_list',null,true),live);const data=await rows.json();
  assert.equal(data.receipts.length,2);
+ assert.match(data.receipts[0].receiptNo,/^\d{7}$/);
+ assert.equal(data.receipts[0].receiptNo,data.receipts[1].receiptNo);
  const reread=await handler(req('admin_pdf',null,true),live);assert.notEqual(reread.status,200); // requires id
 });
 test('a large package order flows onto multiple A4 pages',()=>{
