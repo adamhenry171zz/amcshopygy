@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import {readFile} from 'node:fs/promises';
 import {AMC_INVOICE_LOGO_PNG_BASE64} from '../functions/henry-tax-logo.mjs';
+import {POPPINS_REGULAR_BASE64} from '../functions/henry-tax-poppins-regular.mjs';
+import {POPPINS_BOLD_BASE64} from '../functions/henry-tax-poppins-bold.mjs';
 
 const original=await readFile(new URL('../functions/henry-amazon-tax.mjs',import.meta.url),'utf8');
 const script=original.replace(/^import .*?;$/gm,'').replace('export default async(req,context)=>','const handler=async(req,context)=>');
@@ -15,7 +17,7 @@ const getStore=()=>({
 });
 const secret='s'.repeat(40),email='owner@example.com';
 const env={env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email}};
-const {handler,buildPdf,invoiceLogo,nextTuesday}=new Function('crypto','zlib','getStore','AMC_INVOICE_LOGO_PNG_BASE64','process','Response','URL','Buffer',script+'\nreturn {handler,buildPdf,invoiceLogo,nextTuesday};')(crypto,zlib,getStore,AMC_INVOICE_LOGO_PNG_BASE64,env,Response,URL,Buffer);
+const {handler,buildPdf,invoiceLogo,nextTuesday}=new Function('crypto','zlib','getStore','AMC_INVOICE_LOGO_PNG_BASE64','POPPINS_REGULAR_BASE64','POPPINS_BOLD_BASE64','process','Response','URL','Buffer',script+'\nreturn {handler,buildPdf,invoiceLogo,nextTuesday};')(crypto,zlib,getStore,AMC_INVOICE_LOGO_PNG_BASE64,POPPINS_REGULAR_BASE64,POPPINS_BOLD_BASE64,env,Response,URL,Buffer);
 const token=Buffer.from(JSON.stringify({email,exp:Date.now()+5000000})).toString('base64url');
 const cookie=token+'.'+crypto.createHmac('sha256',secret).update(token).digest('base64url');
 const req=(action,body=null,owner=false)=>new Request('https://test.example/.netlify/functions/henry-amazon-tax?action='+action,{method:body?'POST':'GET',headers:{...(owner?{cookie:'henry_session='+cookie}:{}),...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
@@ -46,6 +48,8 @@ test('one code supports multiple customer-submitted PDFs with the sample A4 layo
   assert.ok(source.startsWith('%PDF-1.4'));
   assert.ok(source.includes('/MediaBox [0 0 595.28 841.89]'));
   assert.ok(source.includes('/Logo Do'));
+  assert.ok(source.includes('/BaseFont /Poppins-Regular'));
+  assert.ok(source.includes('/BaseFont /Poppins-Bold'));
   assert.ok(source.includes('Warehouse Receipt'));
   assert.ok(source.includes('Shipper Information'));
   assert.ok(source.includes('Consignee Information'));
