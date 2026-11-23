@@ -99,11 +99,21 @@ export default async(req,context)=>{
  const url=new URL(req.url),action=url.searchParams.get('action')||'';
  if(!process.env.HENRY_SESSION_SECRET||!process.env.HENRY_ADMIN_EMAIL)return json({error:'HENRY OS owner authentication is not configured.'},503);
  const owner=isOwner(req);
- const admin=['admin_create','admin_list','admin_revoke'].includes(action);
+ const admin=['admin_create','admin_list','admin_revoke','admin_pdf'].includes(action);
  if(admin&&!owner)return json({error:'Owner login required.'},401);
  if(req.method==='POST'&&!production)return json({error:'Preview is read-only. Publish to production to issue or generate receipts.'},403);
  if(req.method==='POST'&&Number(req.headers.get('content-length')||0)>18000)return json({error:'Request too large.'},413);
  const st=store();
+ if(action==='admin_pdf'&&req.method==='GET'){
+  const id=clean(url.searchParams.get('id'),60);
+  if(!/^[0-9a-f-]{36}$/.test(id))return json({error:'Invalid receipt ID.'},400);
+  const receipt=await read(st,'receipts/'+id);
+  if(!receipt)return json({error:'Receipt not found.'},404);
+  const shipment=await read(st,key(receipt.shipmentId));
+  if(!shipment)return json({error:'Linked shipment record missing.'},409);
+  const pdf=buildPdf(shipment,receipt);
+  return new Response(pdf,{headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC-Warehouse-Receipt-'+receipt.orderId+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'}});
+ }
  if(action==='admin_list'&&req.method==='GET'){
   const {blobs}=await st.list({prefix:'shipments/'});
   const rows=await Promise.all(blobs.slice(0,300).map(b=>read(st,b.key)));
