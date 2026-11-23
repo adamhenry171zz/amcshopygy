@@ -107,10 +107,9 @@ function buildPdf(data,receipt){
   tx(ops,left,232,'United State Zip: 11413',10);
   line(ops,28.35,246.61,566.93,246.61);
   tx(ops,left,269,'Consignee Information',11,true);
-  tx(ops,left,290,data.customerName,10);
-  const address=String(data.guyanaAddress||'').trim();
-  const max=80;const parts=wrap(address,max);
-  tx(ops,left,307,parts[0]||'GUYANA',10);
+  const consignee=wrap((data.customerName||'')+' '+(data.guyanaAddress||''),75);
+  tx(ops,left,290,consignee[0]||data.customerName,10);
+  tx(ops,left,307,consignee.slice(1).join(' ').slice(0,90)||'GUYANA',10);
   tx(ops,left,324,'Phone: '+(data.customerPhone||'+592 604 2826'),10);
   line(ops,28.35,337.32,566.93,337.32);
   tx(ops,left,361,'Receipt Details',12,true);
@@ -144,7 +143,10 @@ function buildPdf(data,receipt){
   }
   const bottom=y0+rowH*(visible.length+1),last=p===chunks-1;
   if(last){
-   for(let i=0;i<4;i++)cell(ops,columns[i],bottom,columns[i+1]-columns[i],rowH);
+   // Totals row merges the first two package columns, matching the sample PDF.
+   cell(ops,columns[0],bottom,columns[2]-columns[0],rowH);
+   cell(ops,columns[2],bottom,columns[3]-columns[2],rowH);
+   cell(ops,columns[3],bottom,columns[4]-columns[3],rowH);
    cell(ops,columns[4],bottom,columns[5]-columns[4],rowH);
    const sum=body.reduce((v,o)=>v+Number(o.weight||0),0);
    tx(ops,31.2,bottom+15,'Total Items: '+body.length,9.5,true);
