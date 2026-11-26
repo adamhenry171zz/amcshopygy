@@ -1,0 +1,70 @@
+/* Scoped to the customer quotation form. Existing calculators retain their original styles. */
+#smart-shein-quote{--sq-navy:#010539;--sq-blue:#087aca;--sq-ink:#112b49;--sq-muted:#52667d;--sq-line:#dce7f3;padding:clamp(24px,5vw,62px) 0;background:linear-gradient(180deg,#eef6ff 0%,#fff 100%)}
+#smart-shein-quote *{box-sizing:border-box}
+#smart-shein-quote [hidden]{display:none!important}
+#smart-shein-quote .sq-card{max-width:760px;margin:auto;padding:clamp(20px,4vw,40px);border:1px solid #d6e4f1;border-radius:24px;background:#fff;color:var(--sq-ink);box-shadow:0 14px 45px rgba(1,5,57,.075)}
+#smart-shein-quote .sq-header{background:none;position:static;display:block;text-align:center;margin:0 0 24px;padding:0;border:0;box-shadow:none}
+#smart-shein-quote .sq-kicker,.sq-calc-kicker{font-size:11px;letter-spacing:.14em;color:#0874cb;font-weight:850}
+#smart-shein-quote h1{font-size:clamp(29px,5vw,44px);line-height:1.1;letter-spacing:-.04em;margin:10px 0;color:var(--sq-navy)}
+#smart-shein-quote .sq-header p{color:var(--sq-muted);font-size:15px;margin:0 0 13px}
+#smart-shein-quote .sq-estimate-link{font-size:13px;color:#086fba;text-decoration:underline;text-underline-offset:3px;font-weight:700}
+#smart-shein-quote .sq-preview{margin:0 0 20px;padding:8px 12px;border-radius:7px;background:#f0f5fb;color:#405c78;font-size:11px;text-align:center;font-weight:700}
+#smart-shein-quote form{margin:0}
+#smart-shein-quote .sq-step{min-width:0;border:0;border-top:1px solid var(--sq-line);padding:20px 0 6px;margin:0 0 20px}
+#smart-shein-quote legend{padding:0 8px 0 0;color:var(--sq-navy);font-size:16px;font-weight:800}
+#smart-shein-quote legend span{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:7px;border-radius:50%;background:#e9f4ff;color:#0869b6;font-size:13px}
+#smart-shein-quote .sq-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#smart-shein-quote .sq-tile{position:relative;display:block;margin:0;cursor:pointer;min-width:0}
+#smart-shein-quote .sq-tile input{position:absolute;opacity:0;width:1px;height:1px;margin:0;inset:0}
+#smart-shein-quote .sq-tile-body{position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;min-height:94px;border:1.5px solid #dce7f3;background:#fff;border-radius:13px;padding:12px 6px;text-align:center;transition:background .15s,border-color .15s}
+#smart-shein-quote .sq-tile:hover .sq-tile-body{border-color:#71aee3;background:#f7fbff}
+#smart-shein-quote .sq-tile input:checked+.sq-tile-body{border:2px solid var(--sq-blue);background:#eef7ff;padding:11.5px 5.5px;box-shadow:0 0 0 1px #087aca12}
+#smart-shein-quote .sq-tile input:focus-visible+.sq-tile-body{outline:3px solid #68b4f1;outline-offset:3px}
+#smart-shein-quote .sq-mark{width:37px;height:37px;display:grid;place-items:center;background:#f0f4fa;color:#273b53;border-radius:10px;font-size:24px;font-weight:900;line-height:1}
+#smart-shein-quote .sq-amazon .sq-mark{background:#192b3b;color:#ffb23c;font-family:Georgia,serif}
+#smart-shein-quote .sq-shein .sq-mark,#smart-shein-quote .sq-nike .sq-mark,#smart-shein-quote .sq-fashion .sq-mark{background:#111;color:#fff}
+#smart-shein-quote .sq-fashion .sq-mark{font-size:16px}
+#smart-shein-quote .sq-temu .sq-mark{background:#fa6421;color:white}
+#smart-shein-quote .sq-ebay .sq-mark{background:#fff1f1;color:#dd242b}
+#smart-shein-quote .sq-walmart .sq-mark{background:#0874c4;color:#ffd245}
+#smart-shein-quote .sq-ali .sq-mark{background:#ff5636;color:#fff}
+#smart-shein-quote .sq-store-name{font-size:12px;font-weight:800;color:var(--sq-ink);overflow-wrap:anywhere}
+#smart-shein-quote .sq-tick{display:none;position:absolute;top:5px;right:5px;font-size:10px;border-radius:50%;width:16px;height:16px;background:var(--sq-blue);color:white;place-items:center}
+#smart-shein-quote .sq-tile input:checked+.sq-tile-body .sq-tick{display:grid}
+#smart-shein-quote label{display:block;color:var(--sq-ink);font-weight:700;font-size:13px;margin:12px 0 5px}
+#smart-shein-quote label.sq-tile{margin:0}
+#smart-shein-quote input:not([type=radio]):not([type=checkbox]):not([type=file]),#smart-shein-quote textarea{display:block;width:100%;min-width:0;padding:12px;background:white;color:var(--sq-ink);border:1px solid #c8d7e8;border-radius:9px;font:inherit;font-size:16px;margin:6px 0;line-height:1.35}
+#smart-shein-quote input:focus-visible,#smart-shein-quote textarea:focus-visible,#smart-shein-quote button:focus-visible{outline:3px solid #75b8e8;outline-offset:2px}
+#smart-shein-quote .sq-optional{font-weight:400;color:var(--sq-muted)}
+#smart-shein-quote .sq-upload{display:flex;position:relative;flex-direction:column;align-items:center;text-align:center;gap:7px;border:1.5px dashed #7db7e4;background:#f5faff;border-radius:13px;padding:20px 10px;cursor:pointer;margin:0;overflow:hidden}
+#smart-shein-quote .sq-upload:hover,#smart-shein-quote .sq-upload:focus-within{background:#eaf5ff;border-color:var(--sq-blue)}
+#smart-shein-quote .sq-upload-icon{display:grid;place-items:center;color:var(--sq-blue)}
+#smart-shein-quote .sq-upload strong{font-size:15px}
+#smart-shein-quote .sq-upload span:not(.sq-upload-icon):not(.sq-upload-action){color:var(--sq-muted);font-size:12px;font-weight:400}
+#smart-shein-quote .sq-upload-action{display:block;color:#fff;background:var(--sq-blue);padding:8px 15px;border-radius:8px;font-weight:750;font-size:13px;margin-top:4px}
+#smart-shein-quote .sq-upload input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+#smart-shein-quote .sq-note{margin:7px 0;font-size:12px;line-height:1.5;color:var(--sq-muted);font-weight:400}
+#smart-shein-quote .sq-files-line{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#edf6ff;padding:9px;border-radius:8px;margin:9px 0;font-size:12px}
+#smart-shein-quote #sq-file-list{overflow-wrap:anywhere;min-width:0}
+#smart-shein-quote #sq-clear{flex-shrink:0;background:transparent;color:#1467a8;font:inherit;font-weight:700;border:0;text-decoration:underline;cursor:pointer}
+#smart-shein-quote .sq-details{margin:14px 0 0}
+#smart-shein-quote summary{font-size:13px;font-weight:700;color:#176db1;cursor:pointer}
+#smart-shein-quote .sq-contact{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#smart-shein-quote .sq-contact label{margin:0}
+#smart-shein-quote .sq-check{display:flex;align-items:flex-start;gap:9px;color:#40566d;font-size:12px;line-height:1.5;font-weight:500;margin-top:12px}
+#smart-shein-quote .sq-check input{flex:none;accent-color:var(--sq-blue);width:18px;height:18px;margin:1px 0 0;cursor:pointer}
+#smart-shein-quote .sq-trap{display:none!important}
+#smart-shein-quote #sq-submit{display:flex;justify-content:center;align-items:center;gap:8px;width:100%;background:var(--sq-blue);color:white;border:0;border-radius:10px;font:inherit;font-weight:800;padding:15px;cursor:pointer;min-height:51px}
+#smart-shein-quote #sq-submit:hover{background:#0669af}
+#smart-shein-quote #sq-submit:disabled{opacity:.6;cursor:wait}
+#smart-shein-quote #sq-msg{font-size:13px;line-height:1.5;font-weight:700;color:#116547;margin:10px 0}
+#smart-shein-quote #sq-msg:empty{display:none}
+#smart-shein-quote #sq-msg.sq-error{color:#ad292e}
+#smart-shein-quote .sq-secure{text-align:center;font-size:12px;font-weight:650;color:#456279;margin:13px 0 0}
+#smart-shein-quote .sq-disclaimer{text-align:center}
+.sq-calc-intro{text-align:center;padding:30px 0 6px!important;background:#fff;color:#112b49}
+.sq-calc-intro h2{font-size:clamp(24px,4vw,34px);margin:9px 0;color:#010539;letter-spacing:-.03em}
+.sq-calc-intro p{max-width:620px;margin:0 auto;color:#52667d;font-size:14px;line-height:1.5}
+#payment-estimator,#shein-calculator,#quote-form{scroll-margin-top:105px}
+@media(max-width:520px){#smart-shein-quote .sq-card{padding:18px 14px;border-radius:17px}#smart-shein-quote .sq-tiles{gap:7px}#smart-shein-quote .sq-tile-body{min-height:84px;gap:5px}#smart-shein-quote .sq-mark{width:32px;height:32px;font-size:21px}#smart-shein-quote .sq-store-name{font-size:11px}#smart-shein-quote .sq-contact{grid-template-columns:1fr;gap:9px}#smart-shein-quote legend{font-size:15px}}
+@media(prefers-reduced-motion:reduce){#smart-shein-quote *{transition:none!important}}

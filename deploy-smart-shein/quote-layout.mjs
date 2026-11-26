@@ -1,0 +1,31 @@
+// The existing calculator sections and scripts are intentionally left byte-for-byte intact.
+const stores=[
+ ['Amazon','amazon','a'],['SHEIN','shein','S'],['Temu','temu','T'],['eBay','ebay','e'],
+ ['Walmart','walmart','✳'],['Nike','nike','N'],['Fashion Nova','fashion','FN'],['AliExpress','ali','A'],['Other','other','+']
+];
+const tiles=stores.map(([name,style,mark],i)=>'<label class="sq-tile sq-'+style+'"><input type="radio" name="sq-retailer" value="'+name+'" '+(i===0?'required':'')+'><span class="sq-tile-body"><span class="sq-mark" aria-hidden="true">'+mark+'</span><span class="sq-store-name">'+(name==='Other'?'Other stores':name)+'</span><span class="sq-tick" aria-hidden="true">✓</span></span></label>').join('');
+const panel=(preview)=>'<section id="smart-shein-quote" aria-labelledby="sq-title"><div class="wrap"><div class="sq-card"><header class="sq-header"><span class="sq-kicker">AMC SHOPPING · SHOP FOR ME</span><h1 id="sq-title">Get your shopping quote.</h1><p>Shop your favourite stores. We’ll handle the rest.</p><a class="sq-estimate-link" href="#payment-estimator">Just checking prices? Get a quick estimate ↓</a></header>'+(preview?'<p class="sq-preview">TEST PREVIEW · Use fictional contact details only.</p>':'')+
+'<div id="quote-form"><form id="sq-form"><fieldset class="sq-step"><legend><span>1</span> Where are you shopping?</legend><div class="sq-tiles">'+tiles+'</div><label id="sq-other-wrap" hidden>Store name<input id="sq-other" maxlength="100" placeholder="e.g. Target or Etsy"></label></fieldset>'+
+'<fieldset class="sq-step"><legend><span>2</span> Show us what you’re buying</legend><label class="sq-upload" for="sq-files"><span class="sq-upload-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17H6a4 4 0 0 1-.5-8 6.5 6.5 0 0 1 12.6 1.2A3.5 3.5 0 0 1 18 17h-1"/><path d="M12 20V11m-4 4 4-4 4 4"/></svg></span><strong id="sq-upload-title">Upload cart screenshots</strong><span>Show products, quantities, sizes and USD prices.</span><span class="sq-upload-action">Choose screenshots</span><input id="sq-files" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-describedby="sq-files-help"></label><p class="sq-note" id="sq-files-help">Up to 3 images, JPG, PNG or WebP. Images over 1 MB may be resized. Crop out names, addresses and payment information.</p><div class="sq-files-line" id="sq-files-line" hidden><span id="sq-file-list"></span><button type="button" id="sq-clear">Remove files</button></div><label>Cart or product link <span class="sq-optional">(optional)</span><input id="sq-link" type="url" placeholder="Paste your shopping link" maxlength="2000"></label><p class="sq-note">Screenshots are fastest. A link-only request will need manual review.</p><details class="sq-details"><summary>Add order notes (optional)</summary><label>Sizes, quantities, coupons or special instructions<textarea id="sq-notes" maxlength="1800" rows="3" placeholder="Anything else we should know?"></textarea></label></details></fieldset>'+
+'<fieldset class="sq-step"><legend><span>3</span> Your contact details</legend><div class="sq-contact"><label>Full name<input id="sq-name" required maxlength="160" autocomplete="name" placeholder="Your full name"></label><label>WhatsApp number<input id="sq-phone" required type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="+592 ..."></label></div><label class="sq-check"><input type="checkbox" id="sq-us" required><span>My store is set to United States and prices are in USD.</span></label><label class="sq-check" id="sq-consent-wrap" hidden><input type="checkbox" id="sq-consent"><span>I agree AMC may use OpenAI to review my screenshots. I have removed personal and payment details.</span></label></fieldset><label class="sq-trap" aria-hidden="true">Leave blank<input id="sq-trap" tabindex="-1" autocomplete="off"></label><button type="submit" id="sq-submit">Request my quotation <span aria-hidden="true">→</span></button><p id="sq-msg" role="status" aria-live="polite"></p><p class="sq-secure">Reviewed by AMC Shopping · No payment required to request a quote.</p><p class="sq-note sq-disclaimer">Final prices, availability and freight are subject to verification. A quotation request does not place an order.</p></form></div></div></div></section>';
+export function redesignQuotePage(page,{preview=true}={}){
+ if(page.includes('id="smart-shein-quote"'))return page;
+ const general=page.match(/<section id="payment-estimator"[^>]*>[\s\S]*?<\/section>/);
+ const shein=page.match(/<section id="shein-calculator"[^>]*>[\s\S]*?<\/section>/);
+ const old=page.match(/<section id="quote-form"[^>]*>[\s\S]*?<\/section>/);
+ if(!general||!shein||!old||!page.includes('<main>')||!/<\/main>/i.test(page))throw Error('Quote layout markers missing; refusing to remove or rewrite calculator content.');
+ // Original page hero is replaced by the new concise form heading. Keep navigation and footer.
+ page=page.replace(/<section class="page-hero"[^>]*>[\s\S]*?<\/section>/,()=> '');
+ page=page.replace(old[0],()=> '').replace(/<section class="quote-how"[^>]*>[\s\S]*?<\/section>/,()=> '');
+ // Move both calculator blocks to the end of main, preserving their exact markup.
+ page=page.replace(general[0],()=> '').replace(shein[0],()=> '');
+ const intro='<section class="sq-calc-intro"><div class="wrap"><span class="sq-calc-kicker">QUICK PRICE ESTIMATES</span><h2>Just checking prices?</h2><p>Use our existing calculators to get an idea of your payment before requesting a quotation. Estimates may differ from final approved amounts.</p></div></section>';
+ page=page.replace('<main>',()=>'<main>'+panel(preview));
+ page=page.replace('</main>',()=>intro+general[0]+shein[0]+'</main>');
+ // The obsolete store-tab handler is no longer needed; keep both calculation assets.
+ page=page.replace(/<script\s+src="(?:\/)?assets\/quote\.js"\s*><\/script>/g,()=> '');
+ if(!/<\/head>/i.test(page)||!/<\/body>/i.test(page))throw Error('Quote document closing tags missing.');
+ page=page.replace(/<\/head>/i,()=>'<link rel="stylesheet" href="/assets/smart-shein-quote.css"></head>');
+ page=page.replace(/<\/body>/i,()=>'<script src="/assets/smart-shein-quote.js" defer></script></body>');
+ return page;
+}
