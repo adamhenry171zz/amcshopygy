@@ -81,3 +81,26 @@ test('mock vision request: response normalized, duplicates removed',async()=>{
  }});
  assert.equal(r.items[0].qty,2);assert.equal(r.imageCount,1);assert.ok(r.estimatedUsd>0);
 });
+
+test('customer layout keeps both original calculators unchanged and removes competing request',async()=>{
+ const {redesignQuotePage}=await import('../../deploy-smart-shein/quote-layout.mjs');
+ const original=await readFile(new URL('../../quote.html',import.meta.url),'utf8');
+ const v55=await readFile(new URL('../../deploy-v55/inject.mjs',import.meta.url),'utf8');
+ const estimator=v55.match(/const estimator = `([\s\S]*?)`;/)?.[1];
+ assert.ok(estimator);
+ const seeded=original.replace('<main>',()=>'<main>'+estimator).replace('</main>',()=>'<section class="quote-how"><p>Old instructions</p></section></main>');
+ const shein=seeded.match(/<section id="shein-calculator"[^>]*>[\s\S]*?<\/section>/)[0];
+ const result=redesignQuotePage(seeded);
+ assert.ok(result.includes(estimator));assert.ok(result.includes(shein));
+ assert.ok(result.indexOf('id="smart-shein-quote"')<result.indexOf('id="payment-estimator"'));
+ assert.ok(result.indexOf('id="payment-estimator"')<result.indexOf('id="shein-calculator"'));
+ assert.equal((result.match(/name="sq-retailer"/g)||[]).length,9);
+ assert.equal((result.match(/id="quote-form"/g)||[]).length,1);
+ assert.ok(!result.includes('name="amc-quotation-request"'));
+ assert.ok(!result.includes('class="quote-how"'));
+ assert.ok(result.includes('assets/shein-calculator.js'));
+ assert.ok(!result.includes('src="assets/quote.js"'));
+ assert.ok(result.includes('id="sq-consent"'));assert.ok(result.includes('id="sq-us"'));
+ assert.equal(redesignQuotePage(result),result);
+ assert.throws(()=>redesignQuotePage(original));
+});

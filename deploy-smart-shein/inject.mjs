@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {redesignQuotePage} from './quote-layout.mjs';
 // The owner must explicitly authorize production release; branch previews remain testable.
 if(process.env.CONTEXT==='production'&&process.env.AMC_SMART_SHEIN_ENABLE_PRODUCTION!=='true'){console.log('Smart SHEIN feature is disabled for production.');process.exit(0)}
 const site=path.resolve(process.argv[2]||'');if(!process.argv[2]||!fs.existsSync(site))throw Error('Site directory missing.');
@@ -16,19 +17,13 @@ for(const [src,dst] of [
  ['functions/henry-shein-quote-rules.mjs',path.join(functions,'henry-shein-quote-rules.mjs')],
  ['functions/henry-smart-quote-ai.mjs',path.join(functions,'henry-smart-quote-ai.mjs')]
 ])fs.copyFileSync(new URL(src,root),dst);
-const quoteFile=path.join(site,'quote.html');let page=fs.readFileSync(quoteFile,'utf8');
-const panel=String.raw`<section id="smart-shein-quote"><div class="wrap"><div class="sq-card"><span class="sq-kicker">AMC SMART QUOTATION · PREVIEW</span><h2>Request a quote from any supported store.</h2><p>Choose your retailer and upload clear USD cart screenshots. AMC reviews AI-assisted product suggestions before quoting. No account needed. Use fictional contact details in this preview.</p><form id="sq-form"><div class="sq-grid"><label>Full name<input id="sq-name" required maxlength="160" autocomplete="name"></label><label>WhatsApp number<input id="sq-phone" required type="tel" autocomplete="tel"></label><label>Email (optional)<input id="sq-email" type="email"></label><label>Shopping source<select id="sq-retailer"><option>SHEIN</option><option>Amazon</option><option>Temu</option><option>eBay</option><option>Walmart</option><option>Fashion Nova</option><option>Nike</option><option>AliExpress</option><option>Other</option></select></label><label>Cart or product link (optional)<input id="sq-link" type="url" placeholder="https://..."></label></div><label class="sq-check"><input type="checkbox" id="sq-us" required> I confirm my store is set to United States and prices are USD.</label><button type="button" class="sq-secondary" id="sq-extract">Check share link</button><p class="sq-note">Links are reference only. For automatic item suggestions, attach screenshots showing product names, variants, quantities and USD prices.</p><details><summary>Import product details from a spreadsheet</summary><p>Copy a table containing product name, USD unit price, quantity, size and colour. The import can also accept product links, SKU, image URL and weight.</p><label>Paste table (tab-separated)<textarea id="sq-paste" placeholder="Name	Price	Quantity	Size	Colour"></textarea></label><button type="button" class="sq-secondary" id="sq-import">Import product rows</button></details><h3>Review or add items</h3><div id="sq-rows"></div><button id="sq-add" class="sq-secondary" type="button">+ Add item</button><label>Cart screenshots (3 maximum, 1 MB each; crop out addresses, account and payment details)<input id="sq-files" type="file" accept="image/png,image/jpeg,image/webp" multiple></label><label class="sq-check"><input type="checkbox" id="sq-consent"> I agree that AMC may use OpenAI to analyze the uploaded cart screenshots. I have removed personal and payment details. Do not upload private account information.</label><label>Order notes / coupon information<textarea id="sq-notes" maxlength="2000"></textarea></label><label class="sq-trap" aria-hidden="true">Leave blank<input id="sq-trap" tabindex="-1" autocomplete="off"></label><button type="submit" id="sq-submit">Submit quotation request</button><p id="sq-msg" role="status" aria-live="polite"></p><p class="sq-note">Prices, stock, discounts, checkout shipping and final weight are subject to AMC verification. Submitting does not place an order.</p></form></div></div></section>`;
-if(!page.includes('id="smart-shein-quote"')){
- if(!page.includes('<section id="quote-form">'))throw Error('Existing quote form marker not found. Avoid unsafe replacement.');
- page=page.replace('<section id="quote-form">',panel+'<section id="quote-form">');
- page=page.replace(/<\/head>/i,'<link rel="stylesheet" href="/assets/smart-shein-quote.css"></head>');
- page=page.replace(/<\/body>/i,'<script src="/assets/smart-shein-quote.js" defer></script></body>');
- fs.writeFileSync(quoteFile,page);
-}
+const quoteFile=path.join(site,'quote.html');
+const page=fs.readFileSync(quoteFile,'utf8');
+fs.writeFileSync(quoteFile,redesignQuotePage(page,{preview:process.env.CONTEXT!=='production'}));
 const dashboard=path.join(admin,'index.html');let html=fs.readFileSync(dashboard,'utf8');
 if(!html.includes('smart-shein-admin.html')){
  const marker='<a class="nav-item" href="/admin/invoice-factory-preview.html">';
  if(!html.includes(marker))throw Error('Existing HENRY OS navigation marker not found.');
  html=html.replace(marker,'<a class="nav-item" href="/admin/smart-shein-admin.html"><span>▤</span>Smart Quotations</a>'+marker);fs.writeFileSync(dashboard,html);
 }
-console.log('Smart SHEIN quotation preview integrated without replacing legacy quote forms.');
+console.log('AMC Smart Quotations layout integrated; original price calculators preserved.');

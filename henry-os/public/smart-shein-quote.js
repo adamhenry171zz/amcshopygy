@@ -1,19 +1,49 @@
 (()=>{
  const root=document.getElementById('smart-shein-quote');if(!root)return;
- const $=id=>root.querySelector('#'+id),api=(action,body)=>fetch('/.netlify/functions/henry-shein-quotes?action='+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),cache:'no-store'}).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d});
- const fields=[['name','Product name','text'],['price','USD unit price','number'],['qty','Quantity','number'],['size','Size','text'],['color','Colour','text'],['weight','Unit weight (lb, optional)','number'],['link','Product URL (optional)','url']];
- let source='customer_manual';
+ const $=id=>root.querySelector('#'+id),form=$('sq-form'),filesInput=$('sq-files'),consent=$('sq-consent');
+ const radios=[...root.querySelectorAll('input[name="sq-retailer"]')];
+ const selected=()=>radios.find(r=>r.checked)?.value||'';
  const msg=(s,bad=false)=>{$('sq-msg').textContent=s;$('sq-msg').classList.toggle('sq-error',bad)};
- function row(item={}){if($('sq-rows').children.length>=50)return;const el=document.createElement('fieldset');el.className='sq-item';const legend=document.createElement('legend');legend.textContent='Product';el.append(legend);
- for(const [key,label,type] of fields){const l=document.createElement('label'),i=document.createElement('input');l.textContent=label;i.type=type;i.dataset.field=key;i.value=item[key]??'';if(type==='number'){i.min=key==='qty'?'1':'0.01';i.step=key==='qty'?'1':'0.01'}l.append(i);el.append(l)}
- el.dataset.image=item.image||'';el.dataset.sku=item.sku||'';const b=document.createElement('button');b.type='button';b.textContent='Remove';b.className='sq-secondary';b.onclick=()=>el.remove();el.append(b);$('sq-rows').append(el)}
- function items(){return [...$('sq-rows').children].map(el=>({...Object.fromEntries([...el.querySelectorAll('[data-field]')].map(i=>[i.dataset.field,i.value.trim()])),image:el.dataset.image,sku:el.dataset.sku})).filter(x=>Object.values(x).some(v=>v))}
- $('sq-add').onclick=()=>row();
- $('sq-extract').onclick=async()=>{try{const d=await api('extract',{cartLink:$('sq-link').value,retailer:$('sq-retailer').value});msg(d.message)}catch(e){msg(e.message,true)}};
- $('sq-import').onclick=async()=>{try{const d=await api('parse',{cartText:$('sq-paste').value,retailer:$('sq-retailer').value});if(items().length&&!confirm('Replace existing product rows with this import?'))return;$('sq-rows').replaceChildren();d.items.forEach(row);source='customer_export';msg('Imported '+d.items.length+' rows. Confirm all missing quantities, sizes, colours and prices.')}catch(e){msg(e.message,true)}};
- async function screenshot(file){if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>1050000)throw Error('Use JPG, PNG or WebP, maximum 1 MB per screenshot.');return new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=reject;r.onload=()=>resolve({mime:file.type,data:String(r.result).split(',')[1]});r.readAsDataURL(file)})}
- $('sq-form').onsubmit=async e=>{e.preventDefault();$('sq-submit').disabled=true;msg('Saving your request…');try{const files=[...$('sq-files').files];if(files.length>3)throw Error('Upload at most three screenshots.');if(files.length&&!$('sq-consent').checked)throw Error('Confirm AI screenshot consent or remove the screenshots.');
- const d=await api('submit',{retailer:$('sq-retailer').value,aiConsent:$('sq-consent').checked,name:$('sq-name').value,whatsapp:$('sq-phone').value,email:$('sq-email').value,cartLink:$('sq-link').value,usConfirmed:$('sq-us').checked,website:$('sq-trap').value,notes:$('sq-notes').value,items:items(),source,screenshots:await Promise.all(files.map(screenshot))});
- $('sq-form').reset();$('sq-rows').replaceChildren();source='customer_manual';msg('Request received! Reference '+d.reference+'. AMC will review and contact you on WhatsApp. This is not an approved quote or order.');
- }catch(err){msg(err.message||'Unable to submit request. Please retry.',true)}finally{$('sq-submit').disabled=false}};
+ function syncStore(){const store=selected();$('sq-upload-title').textContent='Upload '+(store&&store!=='Other'?store+' ':'')+'cart screenshots';$('sq-other-wrap').hidden=store!=='Other';$('sq-other').required=store==='Other';}
+ function syncFiles(){const files=[...filesInput.files];$('sq-files-line').hidden=!files.length;$('sq-consent-wrap').hidden=!files.length;consent.required=files.length>0;if(!files.length)consent.checked=false;$('sq-file-list').textContent=files.length?files.length+' screenshot'+(files.length===1?'':'s')+' selected · '+files.map(f=>f.name).join(', '):'';}
+ radios.forEach(r=>r.addEventListener('change',syncStore));filesInput.addEventListener('change',()=>{syncFiles();if(filesInput.files.length>3)msg('Please choose no more than three screenshots.',true);else msg('')});
+ $('sq-clear').addEventListener('click',()=>{filesInput.value='';syncFiles();msg('')});
+ const asData=blob=>new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=()=>reject(Error('Unable to read screenshot.'));r.onload=()=>resolve({mime:blob.type,data:String(r.result).split(',')[1]});r.readAsDataURL(blob)});
+ async function screenshot(file){
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('Use JPG, PNG or WebP screenshots.');
+  if(file.size<=1050000)return asData(file);
+  if(file.size>20000000)throw Error('Screenshot is too large. Crop it and try again.');
+  // Retain the original when possible; resize oversized mobile screenshots locally.
+  const image=new Image(),url=URL.createObjectURL(file);
+  try{
+   await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(Error('Unable to open screenshot.'));image.src=url});
+   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');if(!ctx)throw Error('Unable to resize this screenshot.');
+   for(const [max,quality] of [[2600,.92],[2300,.88],[1900,.85],[1600,.82]]){
+    const scale=Math.min(1,max/Math.max(image.naturalWidth,image.naturalHeight));
+    canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
+    if(blob&&blob.size<=1050000)return asData(blob);
+   }
+   throw Error('Screenshot is too large after resizing. Crop it or split the cart across screenshots.');
+  }finally{URL.revokeObjectURL(url)}
+ }
+ form.onsubmit=async e=>{
+  e.preventDefault();if(!form.reportValidity())return;const files=[...filesInput.files],store=selected(),link=$('sq-link').value.trim();
+  if(!store){msg('Choose your shopping store.',true);return}
+  if(files.length>3){msg('Upload no more than three screenshots.',true);return}
+  if(!files.length&&!link){msg('Upload a cart screenshot or paste a shopping link.',true);return}
+  if(files.length&&!consent.checked){msg('Confirm AI screenshot consent or remove the screenshots.',true);return}
+  if(store==='Other'&&!$('sq-other').value.trim()){msg('Enter the name of the store.',true);return}
+  $('sq-submit').disabled=true;msg('Sending your request…');
+  try{
+   const notes=(store==='Other'?'Store: '+$('sq-other').value.trim()+'\n':'')+$('sq-notes').value.trim();
+   const screenshots=await Promise.all(files.map(screenshot));
+   const response=await fetch('/.netlify/functions/henry-shein-quotes?action=submit',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({retailer:store,aiConsent:consent.checked,name:$('sq-name').value,whatsapp:$('sq-phone').value,email:'',cartLink:link,usConfirmed:$('sq-us').checked,website:$('sq-trap').value,notes,items:[],source:files.length?'customer_screenshots':'customer_link',screenshots}),cache:'no-store'});
+   let d;try{d=await response.json()}catch{throw Error('Unable to contact AMC. Please try again.')}
+   if(!response.ok)throw Error(d.error||'Request failed. Please try again.');
+   form.reset();syncStore();syncFiles();msg('Request received! Reference '+d.reference+'. AMC will review your cart and contact you on WhatsApp.');
+  }catch(err){msg(err.message||'Unable to submit your request.',true)}finally{$('sq-submit').disabled=false}
+ };
+ syncStore();syncFiles();
 })();
