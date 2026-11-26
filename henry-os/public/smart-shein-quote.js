@@ -1,0 +1,19 @@
+(()=>{
+ const root=document.getElementById('smart-shein-quote');if(!root)return;
+ const $=id=>root.querySelector('#'+id),api=(action,body)=>fetch('/.netlify/functions/henry-shein-quotes?action='+action,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),cache:'no-store'}).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error||'Request failed');return d});
+ const fields=[['name','Product name','text'],['price','USD unit price','number'],['qty','Quantity','number'],['size','Size','text'],['color','Colour','text'],['weight','Unit weight (lb, optional)','number'],['link','Product URL (optional)','url']];
+ let source='customer_manual';
+ const msg=(s,bad=false)=>{$('sq-msg').textContent=s;$('sq-msg').classList.toggle('sq-error',bad)};
+ function row(item={}){if($('sq-rows').children.length>=50)return;const el=document.createElement('fieldset');el.className='sq-item';const legend=document.createElement('legend');legend.textContent='Product';el.append(legend);
+ for(const [key,label,type] of fields){const l=document.createElement('label'),i=document.createElement('input');l.textContent=label;i.type=type;i.dataset.field=key;i.value=item[key]??'';if(type==='number'){i.min=key==='qty'?'1':'0.01';i.step=key==='qty'?'1':'0.01'}l.append(i);el.append(l)}
+ el.dataset.image=item.image||'';el.dataset.sku=item.sku||'';const b=document.createElement('button');b.type='button';b.textContent='Remove';b.className='sq-secondary';b.onclick=()=>el.remove();el.append(b);$('sq-rows').append(el)}
+ function items(){return [...$('sq-rows').children].map(el=>({...Object.fromEntries([...el.querySelectorAll('[data-field]')].map(i=>[i.dataset.field,i.value.trim()])),image:el.dataset.image,sku:el.dataset.sku})).filter(x=>Object.values(x).some(v=>v))}
+ $('sq-add').onclick=()=>row();
+ $('sq-extract').onclick=async()=>{try{const d=await api('extract',{cartLink:$('sq-link').value});msg(d.message)}catch(e){msg(e.message,true)}};
+ $('sq-import').onclick=async()=>{try{const d=await api('parse',{cartText:$('sq-paste').value});if(items().length&&!confirm('Replace existing product rows with this import?'))return;$('sq-rows').replaceChildren();d.items.forEach(row);source='customer_export';msg('Imported '+d.items.length+' rows. Confirm all missing quantities, sizes, colours and prices.')}catch(e){msg(e.message,true)}};
+ async function screenshot(file){if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>1050000)throw Error('Use JPG, PNG or WebP, maximum 1 MB per screenshot.');return new Promise((resolve,reject)=>{const r=new FileReader();r.onerror=reject;r.onload=()=>resolve({mime:file.type,data:String(r.result).split(',')[1]});r.readAsDataURL(file)})}
+ $('sq-form').onsubmit=async e=>{e.preventDefault();$('sq-submit').disabled=true;msg('Saving your request…');try{const files=[...$('sq-files').files];if(files.length>3)throw Error('Upload at most three screenshots.');
+ const d=await api('submit',{name:$('sq-name').value,whatsapp:$('sq-phone').value,email:$('sq-email').value,cartLink:$('sq-link').value,usConfirmed:$('sq-us').checked,website:$('sq-trap').value,notes:$('sq-notes').value,items:items(),source,screenshots:await Promise.all(files.map(screenshot))});
+ $('sq-form').reset();$('sq-rows').replaceChildren();source='customer_manual';msg('Request received! Reference '+d.reference+'. AMC will review and contact you on WhatsApp. This is not an approved quote or order.');
+ }catch(err){msg(err.message||'Unable to submit request. Please retry.',true)}finally{$('sq-submit').disabled=false}};
+})();
