@@ -81,7 +81,7 @@ test('retailer rules keep SHEIN freight separate and Amazon arrival shorter',()=
 });
 test('AI output is conservative and budget increments atomically',async()=>{
  const result=cleanResult({items:[{name:'Shirt',size:'M',color:'Black',price:10,qty:null,weight:null,currency:'EUR',sku:'',evidence:'uncertain'}],warnings:[],checkoutNotes:'verify'},'Amazon');
- assert.equal(result.items[0].price,null);assert.equal(result.items[0].qty,null);assert.ok(result.warnings.length);
+ assert.equal(result.items[0].price,null);assert.equal(result.items[0].qty,1);assert.ok(result.warnings.some(w=>w.includes('quantity defaulted to 1')));assert.ok(result.warnings.length);
  const store=fakeStore();for(let i=0;i<20;i++)await reserveAttempt(store,'2026-11-26T00:00:00Z');
  await assert.rejects(()=>reserveAttempt(store,'2026-11-26T00:00:00Z'));
 });

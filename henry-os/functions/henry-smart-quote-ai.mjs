@@ -11,8 +11,9 @@ export function cleanResult(raw,store){
  const valid=(v,min,max,int=false)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max&&(!int||Number.isInteger(v))?Math.round(v*100)/100:null;
  const items=raw.items.map((x,i)=>{
   if(!x||typeof x!=='object')throw Error('Invalid extracted row.');
-  const v={name:text(x.name,200),size:text(x.size,60),color:text(x.color,80),price:String(x.currency||'').toUpperCase()==='USD'?valid(x.price,.01,10000):null,qty:valid(x.qty,1,100,true),weight:valid(x.weight,.01,500),sku:text(x.sku,100)};
-  if(!v.name||v.price==null||v.qty==null||!v.size||!v.color)warnings.push('Row '+(i+1)+': confirm missing or uncertain fields.');
+  const v={name:text(x.name,200),size:text(x.size,60),color:text(x.color,80),price:String(x.currency||'').toUpperCase()==='USD'?valid(x.price,.01,10000):null,qty:valid(x.qty,1,100,true)??1,weight:valid(x.weight,.01,500),sku:text(x.sku,100)};
+  if(valid(x.qty,1,100,true)==null)warnings.push('Row '+(i+1)+': quantity defaulted to 1; confirm if different.');
+  if(!v.name||v.price==null||!v.size||!v.color)warnings.push('Row '+(i+1)+': confirm missing or uncertain fields.');
   const k=JSON.stringify([v.name.toLowerCase(),v.size.toLowerCase(),v.color.toLowerCase(),v.sku,v.price]);if(seen.has(k))warnings.push('Row '+(i+1)+': possible overlap or duplicate product. Verify, do not automatically merge.');seen.add(k);
   evidence.push(text(x.evidence,300));return v;
  });
