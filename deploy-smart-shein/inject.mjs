@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+// The owner must explicitly authorize production release; branch previews remain testable.
+if(process.env.CONTEXT==='production'&&process.env.AMC_SMART_SHEIN_ENABLE_PRODUCTION!=='true'){console.log('Smart SHEIN feature is disabled for production.');process.exit(0)}
 const site=path.resolve(process.argv[2]||'');if(!process.argv[2]||!fs.existsSync(site))throw Error('Site directory missing.');
 const assets=path.join(site,'assets'),admin=path.join(site,'admin'),functions=path.resolve(site,'../netlify/functions');
 fs.mkdirSync(assets,{recursive:true});fs.mkdirSync(admin,{recursive:true});fs.mkdirSync(functions,{recursive:true});
