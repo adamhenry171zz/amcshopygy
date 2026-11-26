@@ -59,6 +59,18 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  assert.equal((await call('admin_save',{...draft,version:4,status:'deposit_paid',payments:[{amount:100,date:'2026-12-01',reference:'MMG-test'}]},true)).status,400);
  const paid=await call('admin_save',{...draft,version:4,status:'deposit_paid',payments:[{amount:3200,date:'2026-12-01',reference:'MMG-test'}]},true);assert.equal(paid.status,200);
  assert.equal(paid.data.quote.payments.length,1);
+ // New customer: the dedicated approval action works without saving as review first.
+ const direct=await call('submit',{name:'Direct Test',whatsapp:'+592 6000001',retailer:'Amazon',usConfirmed:true,items:[item()]});
+ assert.equal(direct.status,201);
+ const directId=(await call('admin_list',null,true)).data.quotes.find(q=>q.reference===direct.data.reference).id;
+ const directBody={...draft,id:directId,version:1,retailer:'Amazon',approve:true};
+ const blocked=await call('admin_save',directBody,true);assert.equal(blocked.status,400);assert.match(blocked.data.error,/freight review/);
+ const ready=await call('admin_save',{...directBody,freightAcknowledged:true},true);
+ assert.equal(ready.status,200);assert.equal(ready.data.quote.status,'approved');assert.equal(ready.data.quote.totals.overall,4700);assert.equal(ready.data.quote.delivery.arrivalFrom,'2026-12-08');
+ const pdfUrl='https://preview.invalid/.netlify/functions/henry-shein-quotes?action=admin_pdf&id='+directId;
+ const unauthorized=await handler(new Request(pdfUrl),ctx);assert.equal(unauthorized.status,401);
+ const pdf=await handler(new Request(pdfUrl,{headers:{cookie}}),ctx);assert.equal(pdf.status,200);assert.equal(pdf.headers.get('content-type'),'application/pdf');assert.ok(Buffer.from(await pdf.arrayBuffer()).toString('latin1').startsWith('%PDF-1.4'));
+
 });
 
 test('retailer rules keep SHEIN freight separate and Amazon arrival shorter',()=>{
@@ -112,4 +124,19 @@ test('Premium Blue PDF uses approved totals and supports multiple pages',()=>{
  const pdf=renderQuotePdf(q),s=pdf.toString('latin1');
  assert.ok(s.startsWith('%PDF-1.4'));assert.ok(s.includes('BALANCE ON ARRIVAL'));assert.ok(s.includes('AMOUNT DUE ON ARRIVAL'));assert.ok(s.includes('GYD $'+q.totals.balance.toLocaleString('en-US')));assert.ok(s.includes('/Logo Do'));assert.ok(Number(s.match(/\/Count (\d+)/)[1])>1);
  assert.throws(()=>renderQuotePdf({...q,status:'review'}));
+});
+
+test('approval UI reports exact missing fields and freight conditions',async()=>{
+ const js=await readFile(new URL('../admin/smart-shein-admin.js',import.meta.url),'utf8');
+ const start=js.indexOf(' function approvalProblems('),end=js.indexOf(' async function save(',start);
+ assert.ok(start>=0&&end>start);
+ const check=new Function(js.slice(start,end)+'\nreturn approvalProblems;')();
+ const opts={retailer:'Amazon',orderTuesday:'2026-12-01',feesUsd:'0',extraGyd:'0',feeNote:'',weightsAcknowledged:true,freightAcknowledged:true};
+ const valid={name:'Test',price:'13.00',qty:'1',size:'N/A',color:'Black',weight:''};
+ assert.deepEqual(check([valid],opts),[]);
+ assert.ok(check([] ,opts).some(x=>x.includes('at least one')));
+ assert.ok(check([{...valid,size:'',qty:''}],opts).some(x=>x.includes('size')&&x.includes('quantity')));
+ assert.ok(check([valid],{...opts,freightAcknowledged:false}).some(x=>x.includes('freight')));
+ assert.ok(check([valid],{...opts,weightsAcknowledged:false}).some(x=>x.includes('unknown-weight')));
+ assert.ok(check([valid],{...opts,extraGyd:'500'}).some(x=>x.includes('Describe')));
 });

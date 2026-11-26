@@ -3,7 +3,7 @@
  const status=(s)=>{$('status').textContent=s};
  const api=async(action,body=null,id='')=>{const r=await fetch(endpoint+'?action='+action+(id?'&id='+encodeURIComponent(id):''),{credentials:'same-origin',cache:'no-store',...(body!==null?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})});let d;try{d=await r.json()}catch{throw Error('Unable to contact quotation service.')}if(!r.ok)throw Error(d.error||'Request failed');return d};
  const stages={new:['review','needs_info','cancelled'],review:['needs_info','approved','cancelled'],needs_info:['review','cancelled'],approved:['review','sent','cancelled'],sent:['review','deposit_paid','cancelled'],deposit_paid:['ordered','cancelled'],ordered:['arrived'],arrived:['paid'],paid:[],cancelled:[]};
- let active=null;const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+ let active=null,saving=false;const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
  const fields=[['name','Product','text'],['price','Unit USD','number'],['qty','Quantity','number'],['size','Size','text'],['color','Colour','text'],['weight','Weight per unit (lb)','number'],['link','Retailer URL','url'],['image','Image URL (optional)','url'],['sku','SKU','text']];
  function itemRow(item={}){if($('items').children.length>=50)return;const field=document.createElement('fieldset');field.className='product';
  for(const [key,label,type] of fields){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');i.type=type;i.value=item[key]??'';i.dataset.key=key;if(type==='number'){i.min=key==='qty'?'1':'0.01';i.step=key==='qty'?'1':'0.01'}l.append(i);field.append(l)}
@@ -30,11 +30,11 @@
  for(const s of q.screenshots||[]){if(!['image/png','image/jpeg','image/webp'].includes(s.mime))continue;const i=document.createElement('img');i.src='data:'+s.mime+';base64,'+s.data;i.alt='Customer cart screenshot';$('evidence').append(i)}
  $('items').replaceChildren();q.items.forEach(itemRow);$('payments').replaceChildren();q.payments.forEach(paymentRow);
  $('fees').value=q.feesUsd??0;$('extra').value=q.extraGyd??0;$('fee-note').value=q.feeNote||'';$('tuesday').value=q.orderTuesday||nextTuesday();$('follow').value=q.followUp||'';$('notes').value=q.ownerNotes||'';$('weights').checked=q.weightsAcknowledged===true;
- $('stage').replaceChildren();for(const st of [q.status,...(stages[q.status]||[])]){const opt=document.createElement('option');opt.value=st;opt.textContent=st.replaceAll('_',' ');$('stage').append(opt)}
+ $('stage').replaceChildren();for(const st of [q.status,...(stages[q.status]||[]).filter(s=>s!=='approved')]){const opt=document.createElement('option');opt.value=st;opt.textContent=st.replaceAll('_',' ');$('stage').append(opt)}
  $('totals').textContent=q.totals?'Approved overall GYD $'+fmt(q.totals.overall)+' | Down payment $'+fmt(q.totals.down)+' | Balance on arrival $'+fmt(q.totals.balance)+'\nEstimated arrival: '+q.delivery.arrivalFrom+' to '+q.delivery.arrivalTo+'\nRecorded payments: $'+fmt(q.payments.reduce((n,p)=>n+p.amount,0)):'No approved totals yet. Save as review, then approve after verification.';
- $('editor-status').textContent='';refreshDraft();refreshActions();}
+ $('editor-status').textContent='';feedback('');refreshDraft();refreshActions();}
  async function list(){const d=await api('admin_list');$('environment').textContent=d.preview?'PREVIEW ONLY — use fictional customer records. Storage is isolated from production.':'PRODUCTION';$('queue').replaceChildren();const stats=$('queue-stats');stats.replaceChildren();for(const [label,n] of [['New requests',d.quotes.filter(q=>q.status==='new').length],['In review',d.quotes.filter(q=>['review','needs_info'].includes(q.status)).length],['Awaiting deposit',d.quotes.filter(q=>['approved','sent'].includes(q.status)).length]]){const el=document.createElement('div');el.className='metric';const s=document.createElement('small');s.textContent=label;const v=document.createElement('strong');v.textContent=n;el.append(s,v);stats.append(el)}if(!d.quotes.length){$('queue').textContent='No requests yet.';return}
- for(const q of d.quotes){const row=document.createElement('div');row.className='queue-row';const text=document.createElement('span');text.textContent=q.reference+' · '+(q.retailer||'SHEIN')+' · '+q.name+' · '+q.status.replaceAll('_',' ')+' · '+q.itemCount+' items · '+q.screenshotCount+' screenshots'+(q.followUp?' · Follow up '+q.followUp:'');const btn=document.createElement('button');btn.type='button';btn.textContent='Review';btn.onclick=async()=>{try{show((await api('admin_get',null,q.id)).quote);$('editor').scrollIntoView({behavior:'smooth'})}catch(e){status(e.message)}};row.append(text,btn);$('queue').append(row)}}
+ for(const q of d.quotes){const row=document.createElement('div');row.className='queue-row';const text=document.createElement('span');text.textContent=q.reference+' · '+(q.retailer||'SHEIN')+' · '+q.name+' · '+q.status.replaceAll('_',' ')+' · '+q.itemCount+' items · '+q.screenshotCount+' screenshots'+(q.followUp?' · Follow up '+q.followUp:'');const btn=document.createElement('button');btn.type='button';btn.textContent='Review';btn.onclick=async()=>{if(saving)return;try{show((await api('admin_get',null,q.id)).quote);$('editor').scrollIntoView({behavior:'smooth'})}catch(e){status(e.message)}};row.append(text,btn);$('queue').append(row)}}
  $('refresh').onclick=()=>list().catch(e=>status(e.message));$('add').onclick=()=>itemRow();$('add-payment').onclick=()=>paymentRow();
  function nextTuesday(){
  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Guyana',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()),p=Object.fromEntries(parts.map(x=>[x.type,x.value]));
@@ -59,7 +59,7 @@
  }
  function refreshActions(){
   const canPdf=active?.totals&&active?.delivery&&['approved','sent','deposit_paid','ordered','arrived','paid'].includes(active.status);
-  $('approve').disabled=!editable();$('quote-status').textContent=active.status.replaceAll('_',' ').toUpperCase();
+  $('approve').disabled=saving||!editable();$('quote-status').textContent=active.status.replaceAll('_',' ').toUpperCase();
   const a=$('pdf');a.setAttribute('aria-disabled',String(!canPdf));
   if(canPdf){a.href=endpoint+'?action=admin_pdf&id='+encodeURIComponent(active.id);a.target='_blank';a.rel='noopener';$('pdf-help').textContent='Approved quotation ready. Download the PDF and attach it to the customer’s WhatsApp conversation.'}
   else{a.removeAttribute('href');$('pdf-help').textContent='Review the products, confirm weights and any fees, then approve to enable Generate PDF.'}
@@ -68,16 +68,52 @@
  }
  $('edit').addEventListener('input',refreshDraft);$('edit').addEventListener('change',refreshDraft);
  const itemObserver=new MutationObserver(refreshDraft);itemObserver.observe($('items'),{childList:true});
+ function feedback(message,kind='info',focus=false){
+  const el=$('approval-feedback');el.textContent=message;el.hidden=!message;el.dataset.kind=kind;
+  $('editor-status').textContent=message;
+  if(message&&focus){el.focus({preventScroll:true});el.scrollIntoView({block:'center',behavior:'smooth'})}
+ }
+ // Explicit validation mirrors the backend without bypassing its checks.
+ function approvalProblems(rows,opts){
+  const problems=[];
+  if(!rows.length)problems.push('Add or apply at least one product row.');
+  const numeric=(v,min,max,integer=false)=>/^\d+(?:\.\d{1,2})?$/.test(String(v))&&Number(v)>=min&&Number(v)<=max&&(!integer||Number.isInteger(Number(v)));
+  rows.forEach((r,i)=>{
+   const missing=[];if(!r.name)missing.push('product name');if(!numeric(r.price,.01,10000))missing.push('valid USD unit price');if(!numeric(r.qty,1,100,true))missing.push('quantity (1–100)');if(!r.size)missing.push('size (or N/A)');if(!r.color)missing.push('color (or N/A)');if(r.weight&&!numeric(r.weight,.01,500))missing.push('valid weight in lb');
+   if(missing.length)problems.push('Product '+(i+1)+': '+missing.join(', ')+'.');
+  });
+  const dt=new Date(opts.orderTuesday+'T12:00:00Z');if(!Number.isFinite(dt.getTime())||dt.getUTCDay()!==2)problems.push('Select a Tuesday order placement date.');
+  if(!numeric(opts.feesUsd||'0',0,10000)||!numeric(opts.extraGyd||'0',0,1000000))problems.push('Check that fees are valid nonnegative amounts.');
+  if((Number(opts.feesUsd)||Number(opts.extraGyd))&&!opts.feeNote.trim())problems.push('Describe the added fees.');
+  if(rows.some(r=>!r.weight)&&!opts.weightsAcknowledged)problems.push('Tick the unknown-weight acknowledgement after reviewing weights.');
+  if(opts.retailer!=='SHEIN'&&!opts.freightAcknowledged)problems.push('Tick the non-SHEIN freight acknowledgement after reviewing freight.');
+  return problems;
+ }
  async function save(approve=false){
-  if(!active)return;
-  if(approve&&!confirm('Approve these verified prices and lock the quotation for PDF generation?'))return;
-  if(!approve&&!$('edit').reportValidity())return;
-  $('save').disabled=true;$('approve').disabled=true;
+  if(!active||saving)return;
+  const id=active.id;
+  const body={id,version:active.version,approve,retailer:$('retailer').value,freightAcknowledged:$('freight').checked,items:readRows('items'),payments:readRows('payments').map(p=>({...p,amount:Number(p.amount)})),feesUsd:$('fees').value,extraGyd:$('extra').value,feeNote:$('fee-note').value,orderTuesday:$('tuesday').value,followUp:$('follow').value,ownerNotes:$('notes').value,weightsAcknowledged:$('weights').checked,status:approve?'approved':$('stage').value==='new'?'review':$('stage').value};
+  if(approve){
+   if(!editable()){feedback('This quotation is already locked. Reopen it for review to change the pricing.','error',true);return}
+   const issues=approvalProblems(body.items,body);
+   if(issues.length){feedback('Cannot approve yet:\n• '+issues.join('\n• '),'error',true);return}
+  }
+  if(!$('edit').reportValidity()){feedback('Check the highlighted field and try again.','error',true);return}
+  saving=true;$('save').disabled=true;$('approve').disabled=true;
+  $('approve').textContent=approve?'Approving…':'Approve quotation';
+  feedback(approve?'Approving quotation and locking pricing…':'Saving changes…');
   try{
-   const target=approve?'approved':$('stage').value==='new'?'review':$('stage').value;
-   const d=await api('admin_save',{id:active.id,version:active.version,approve,retailer:$('retailer').value,freightAcknowledged:$('freight').checked,items:readRows('items'),payments:readRows('payments').map(p=>({...p,amount:Number(p.amount)})),feesUsd:$('fees').value,extraGyd:$('extra').value,feeNote:$('fee-note').value,orderTuesday:$('tuesday').value,followUp:$('follow').value,ownerNotes:$('notes').value,weightsAcknowledged:$('weights').checked,status:target});
-   show(d.quote);$('editor-status').textContent=approve?'Approved. Generate PDF is now available.':'Saved.';await list();
-  }catch(err){$('editor-status').textContent=err.message}finally{$('save').disabled=false;refreshActions()}
+   const d=await api('admin_save',body);
+   if(active?.id===id){
+    show(d.quote);
+    feedback(approve?'Approved successfully. Generate PDF is now available.':'Saved successfully.','success',approve);
+   }
+   try{await list()}catch(e){status('Quotation saved, but the queue refresh failed: '+e.message)}
+  }catch(err){
+   if(active?.id===id)feedback((approve?'Approval failed: ':'Save failed: ')+err.message,'error',true);
+  }finally{
+   saving=false;$('save').disabled=false;$('approve').textContent='Approve quotation';refreshActions();
+  }
  }
  $('edit').onsubmit=e=>{e.preventDefault();save(false)};
  $('approve').onclick=()=>save(true);
