@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import {getStore,getDeployStore} from '@netlify/blobs';
 import {text,safeSheinLink,safeRetailLink,retailer,normalizeItems,quoteTotals,deliveryWindow,parseCartText,validateScreenshot} from './henry-shein-quote-rules.mjs';
 import {extractImages,reserveAttempt} from './henry-smart-quote-ai.mjs';
+import {renderQuotePdf} from './henry-smart-quote-pdf.mjs';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const digest=s=>crypto.createHash('sha256').update(String(s)).digest();
 function owner(req){
@@ -43,6 +44,12 @@ export default async(req,context)=>{
    const data=await store.list({prefix:'quotes/',paginate:false});
    const rows=await Promise.all(data.blobs.slice(0,250).map(b=>read(store,b.key)));
    return json({preview:!production,quotes:rows.filter(Boolean).map(({items,...q})=>({...q,itemCount:items.length})).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),limit:250});
+  }
+  if(action==='admin_pdf'&&req.method==='GET'){
+   const id=new URL(req.url).searchParams.get('id')||'';if(!isId(id))return json({error:'Invalid quote ID.'},400);
+   const row=await read(store,key(id));if(!row)return json({error:'Quote not found.'},404);
+   if(!row.totals||!row.delivery||!['approved','sent','deposit_paid','ordered','arrived','paid'].includes(row.status))return json({error:'Approve the quotation before downloading.'},409);
+   return new Response(renderQuotePdf(row),{headers:{'content-type':'application/pdf','content-disposition':'attachment; filename="AMC_Quotation_'+row.reference+'.pdf"','cache-control':'no-store','x-content-type-options':'nosniff'}});
   }
   if(action==='admin_get'&&req.method==='GET'){
    const id=new URL(req.url).searchParams.get('id')||'';
@@ -110,7 +117,7 @@ export default async(req,context)=>{
    const old=record.data;
    if(b.version!==old.version)return json({error:'This quotation was changed. Refresh before saving.'},409);
    const status=text(b.status,30);
-   if(!statuses.includes(status)||status!==old.status&&!transition[old.status]?.includes(status))throw Error('Invalid status transition.');
+   if(!statuses.includes(status)||status!==old.status&&!transition[old.status]?.includes(status)&&!(status==='approved'&&b.approve===true&&['new','needs_info'].includes(old.status)))throw Error('Invalid status transition.');
    const locked=['approved','sent','deposit_paid','ordered','arrived','paid','cancelled'].includes(old.status)&&status!=='review';
    const storeName=locked?(old.retailer||'SHEIN'):retailer(b.retailer||old.retailer),items=locked?old.items:normalizeItems(b.items||[],{store:storeName}),feesUsd=locked?old.feesUsd:Number(b.feesUsd||0),extraGyd=locked?old.extraGyd:Number(b.extraGyd||0),feeNote=locked?old.feeNote:text(b.feeNote,500),orderTuesday=locked?old.orderTuesday:text(b.orderTuesday,10);
    const payments=paymentList(b.payments||[]);if(payments.length&&['new','review','needs_info','cancelled'].includes(status))throw Error('Record payments only on approved or sent orders.');
@@ -127,7 +134,7 @@ export default async(req,context)=>{
     if(status==='paid'&&paid<totals.overall)throw Error('Full payment has not been recorded.');
     if(paid>totals.overall)throw Error('Recorded payments exceed quotation total.');
    }
-   const stamp=now(),row={...old,retailer:storeName,freightAcknowledged:locked?old.freightAcknowledged:b.freightAcknowledged===true,items,feesUsd,extraGyd,feeNote,orderTuesday,totals,delivery,weightsAcknowledged:locked?old.weightsAcknowledged:b.weightsAcknowledged===true,followUp,ownerNotes:text(b.ownerNotes,3000),payments,status,updatedAt:stamp,version:old.version+1,events:[...old.events,{at:stamp,status}].slice(-200)};
+   const stamp=now(),row={...old,approvedAt:status==='approved'&&!locked?stamp:totals?(old.approvedAt||old.updatedAt):null,retailer:storeName,freightAcknowledged:locked?old.freightAcknowledged:b.freightAcknowledged===true,items,feesUsd,extraGyd,feeNote,orderTuesday,totals,delivery,weightsAcknowledged:locked?old.weightsAcknowledged:b.weightsAcknowledged===true,followUp,ownerNotes:text(b.ownerNotes,3000),payments,status,updatedAt:stamp,version:old.version+1,events:[...old.events,{at:stamp,status}].slice(-200)};
    const saved=await store.setJSON(key(id),row,{onlyIfMatch:record.etag});
    if(saved?.modified===false)return json({error:'Another update occurred; refresh and retry.'},409);
    return json({quote:await withEvidence(store,row)});

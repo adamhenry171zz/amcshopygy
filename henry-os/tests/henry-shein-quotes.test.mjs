@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import {cleanResult,extractImages,reserveAttempt} from '../functions/henry-smart-quote-ai.mjs';
+import {renderQuotePdf} from '../functions/henry-smart-quote-pdf.mjs';
 import * as rules from '../functions/henry-shein-quote-rules.mjs';
 const item=(price=13,qty=1,weight=null)=>({name:'Test shirt',size:'M',color:'Black',price,qty,weight,link:'',sku:'',image:''});
 test('AMC calculations, fees, upward rounding and reconciliation',()=>{
@@ -35,7 +36,7 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const production=fakeStore(),preview=fakeStore(),secret='x'.repeat(40),email='owner@example.invalid';
  const ownerPayload=Buffer.from(JSON.stringify({email,exp:Date.now()+600000})).toString('base64url');
  const cookie='henry_session='+ownerPayload+'.'+crypto.createHmac('sha256',secret).update(ownerPayload).digest('base64url');
- const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,extractImages,reserveAttempt,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true'}},Response,URL,Buffer);
+ const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','renderQuotePdf','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,extractImages,reserveAttempt,renderQuotePdf,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true'}},Response,URL,Buffer);
  const ctx={deploy:{context:'deploy-preview'}},live={deploy:{context:'production'}};
  async function call(action,body=null,auth=false,context=ctx,id=''){
   const r=await handler(new Request('https://preview.invalid/.netlify/functions/henry-shein-quotes?action='+action+(id?'&id='+id:''),{method:body===null?'GET':'POST',headers:{...(auth?{cookie}:{}),...(body?{'content-type':'application/json'}:{})},body:body===null?undefined:JSON.stringify(body)}),context);
@@ -103,4 +104,12 @@ test('customer layout keeps both original calculators unchanged and removes comp
  assert.ok(result.includes('id="sq-consent"'));assert.ok(result.includes('id="sq-us"'));
  assert.equal(redesignQuotePage(result),result);
  assert.throws(()=>redesignQuotePage(original));
+});
+
+test('Premium Blue PDF uses approved totals and supports multiple pages',()=>{
+ const items=Array.from({length:30},(_,i)=>({...item(13,1),name:'Product '+(i+1)+' with long selected variation and descriptive name'}));
+ const q={name:'Fictional Test',whatsapp:'+592 6000000',reference:'SQ-TEST',retailer:'Amazon',items,status:'approved',approvedAt:'2026-11-26T10:00:00Z',totals:rules.quoteTotals(items,0,0,'Amazon'),delivery:rules.deliveryWindow('2026-12-01','Amazon')};
+ const pdf=renderQuotePdf(q),s=pdf.toString('latin1');
+ assert.ok(s.startsWith('%PDF-1.4'));assert.ok(s.includes('BALANCE ON ARRIVAL'));assert.ok(s.includes('AMOUNT DUE ON ARRIVAL'));assert.ok(s.includes('GYD $'+q.totals.balance.toLocaleString('en-US')));assert.ok(s.includes('/Logo Do'));assert.ok(Number(s.match(/\/Count (\d+)/)[1])>1);
+ assert.throws(()=>renderQuotePdf({...q,status:'review'}));
 });

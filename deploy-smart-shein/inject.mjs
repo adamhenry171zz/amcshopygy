@@ -15,7 +15,9 @@ for(const [src,dst] of [
  ['admin/smart-shein-admin.css',path.join(admin,'smart-shein-admin.css')],
  ['functions/henry-shein-quotes.mjs',path.join(functions,'henry-shein-quotes.mjs')],
  ['functions/henry-shein-quote-rules.mjs',path.join(functions,'henry-shein-quote-rules.mjs')],
- ['functions/henry-smart-quote-ai.mjs',path.join(functions,'henry-smart-quote-ai.mjs')]
+ ['functions/henry-smart-quote-ai.mjs',path.join(functions,'henry-smart-quote-ai.mjs')],
+ ['functions/henry-smart-quote-pdf.mjs',path.join(functions,'henry-smart-quote-pdf.mjs')],
+ ['functions/henry-tax-logo.mjs',path.join(functions,'henry-tax-logo.mjs')]
 ])fs.copyFileSync(new URL(src,root),dst);
 const quoteFile=path.join(site,'quote.html');
 const page=fs.readFileSync(quoteFile,'utf8');
