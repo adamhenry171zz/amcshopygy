@@ -2,6 +2,17 @@
 export const RATES=Object.freeze({overall:360,down:240});
 export const MAX_ITEMS=50;
 export function text(v,n=200){return String(v??'').trim().replace(/[\u0000-\u001f]/g,' ').slice(0,n)}
+export const RETAILERS=Object.freeze(['SHEIN','Amazon','Temu','eBay','Walmart','Fashion Nova','Nike','AliExpress','Other']);
+export function retailer(v){const s=String(v||'SHEIN');if(!RETAILERS.includes(s))throw Error('Select a supported shopping source.');return s}
+export function safeRetailLink(v,store='SHEIN'){
+ if(store==='SHEIN')return safeSheinLink(v);
+ const raw=text(v,2000);if(!raw)return '';
+ let u;try{u=new URL(raw)}catch{throw Error('Enter a complete HTTPS product or cart URL.')}
+ const h=u.hostname.toLowerCase(),domains={Amazon:['amazon.com','amzn.to','a.co'],Temu:['temu.com'],'eBay':['ebay.com','ebay.us'],Walmart:['walmart.com'],'Fashion Nova':['fashionnova.com'],Nike:['nike.com'],AliExpress:['aliexpress.com','aliexpress.us']};
+ if(u.protocol!=='https:'||u.username||u.password||u.port||!h.includes('.')||/^[\d.]+$/.test(h)||h.endsWith('.local')||h.endsWith('.internal'))throw Error('Use a public HTTPS retailer URL.');
+ if(domains[store]&&!domains[store].some(d=>h===d||h.endsWith('.'+d)))throw Error('The link must match the selected retailer.');
+ return u.href;
+}
 export function safeSheinLink(v){
  const raw=text(v,2000);if(!raw)return '';
  let u;try{u=new URL(raw)}catch{throw Error('Enter a complete SHEIN share URL.')}
@@ -14,10 +25,10 @@ const number=(v,label,min,max,integer=false)=>{
  const s=String(v).trim();if(!/^\d+(?:\.\d{1,2})?$/.test(s))throw Error(label+' must be a valid number.');
  const n=Number(s);if(!Number.isFinite(n)||n<min||n>max||(integer&&!Number.isInteger(n)))throw Error(label+' is out of range.');return n;
 };
-export function normalizeItems(input,{complete=false}={}){
+export function normalizeItems(input,{complete=false,store='SHEIN'}={}){
  if(!Array.isArray(input)||input.length>MAX_ITEMS)throw Error('Maximum 50 product rows.');
  return input.map((v,i)=>{
-  const p=v&&typeof v==='object'?v:{},name=text(p.name,200),size=text(p.size,60),color=text(p.color,80),link=p.link?safeSheinLink(p.link):'',image=safeImageLink(p.image),sku=text(p.sku,100);
+  const p=v&&typeof v==='object'?v:{},name=text(p.name,200),size=text(p.size,60),color=text(p.color,80),link=p.link?safeRetailLink(p.link,store):'',image=safeImageLink(p.image),sku=text(p.sku,100);
   const price=p.price===''||p.price==null?null:number(p.price,'Price',0.01,10000);
   const qty=p.qty===''||p.qty==null?null:number(p.qty,'Quantity',1,100,true);
   const weight=p.weight===''||p.weight==null?null:number(p.weight,'Per-item weight',0.01,500);
@@ -28,28 +39,30 @@ export function normalizeItems(input,{complete=false}={}){
 // Preserve the currently deployed SHEIN calculator's rate brackets, per unit.
 export function shippingRate(w){return w<=10?1500:w<=25?1300:w<=55?1200:w<=99?1100:1050}
 const round100Cents=c=>Math.ceil(c/10000)*100;
-export function quoteTotals(items,feesUsd=0,extraGyd=0){
+export function quoteTotals(items,feesUsd=0,extraGyd=0,store='SHEIN'){
+ retailer(store);
  if(!items.length||items.some(x=>x.price==null||x.qty==null))throw Error('Complete USD price and quantity for every item.');
  const usdFee=number(feesUsd,'Supplier fees (USD)',0,10000);
  const extra=number(extraGyd,'Extra charge (GYD)',0,1000000);
  // USD cents avoid floating-point rounding errors; extra charges fall on arrival.
  const subtotalCents=items.reduce((n,x)=>n+Math.round(x.price*100)*x.qty,0);
  const usdCents=subtotalCents+Math.round(usdFee*100);
- const heavyCents=items.reduce((n,x)=>n+(x.weight!=null&&x.weight>3?Math.round(x.weight*100)*shippingRate(x.weight)*x.qty:0),0);
+ const heavyCents=items.reduce((n,x)=>n+(store==='SHEIN'&&x.weight!=null&&x.weight>3?Math.round(x.weight*100)*shippingRate(x.weight)*x.qty:0),0);
  const down=round100Cents(usdCents*240);
  const overall=round100Cents(usdCents*360+heavyCents+Math.round(extra*100));
  return {subtotalUsd:subtotalCents/100,feesUsd:usdFee,totalUsd:usdCents/100,heavyShippingGyd:heavyCents/100,extraGyd:extra,overall,down,balance:overall-down,unknownWeights:items.filter(x=>x.weight==null).length};
 }
-export function deliveryWindow(orderTuesday){
+export function deliveryWindow(orderTuesday,store='SHEIN'){
+ retailer(store);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(orderTuesday||''))throw Error('Select the confirmed Tuesday order placement date.');
  const d=new Date(orderTuesday+'T12:00:00Z');
  if(!Number.isFinite(d.getTime())||d.toISOString().slice(0,10)!==orderTuesday||d.getUTCDay()!==2)throw Error('Order placement must be a valid Tuesday.');
  const plus=n=>{const x=new Date(d);x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10)};
- return {orderTuesday,arrivalFrom:plus(14),arrivalTo:plus(21)};
+ return {orderTuesday,arrivalFrom:plus(store==='Amazon'?7:14),arrivalTo:plus(store==='Amazon'?14:21)};
 }
 export function nextTuesday(today){const d=new Date(today+'T12:00:00Z');if(!Number.isFinite(d.getTime()))throw Error('Invalid date');d.setUTCDate(d.getUTCDate()+((2-d.getUTCDay()+7)%7||7));return d.toISOString().slice(0,10)}
 // Explicitly customer-supplied tabular data. No requests to SHEIN or cart providers.
-export function parseCartText(input){
+export function parseCartText(input,store='SHEIN'){
  const lines=String(input||'').trim().split(/\r?\n/).filter(l=>l.trim());
  if(lines.length<2||lines.length>MAX_ITEMS+1)throw Error('Paste a tab-separated table with a header and 1–50 product rows.');
  const headers=lines.shift().split('\t').map(h=>h.toLowerCase().trim().replace(/[^a-z0-9]/g,''));
@@ -62,7 +75,7 @@ export function parseCartText(input){
   const price=v('price').replace(/^(?:USD|US\$|\$)\s*/i,'');
   return {name:v('name'),price,qty:v('qty'),size:v('size'),color:v('color'),link:v('link'),sku:v('sku'),image:v('image'),weight:v('weight')};
  });
- return normalizeItems(rows);
+ return normalizeItems(rows,{store});
 }
 export function validateScreenshot(s){
  const mime=text(s?.mime,30),data=String(s?.data||'');

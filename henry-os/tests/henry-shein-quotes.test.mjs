@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {readFile} from 'node:fs/promises';
+import {cleanResult,extractImages,reserveAttempt} from '../functions/henry-smart-quote-ai.mjs';
 import * as rules from '../functions/henry-shein-quote-rules.mjs';
 const item=(price=13,qty=1,weight=null)=>({name:'Test shirt',size:'M',color:'Black',price,qty,weight,link:'',sku:'',image:''});
 test('AMC calculations, fees, upward rounding and reconciliation',()=>{
@@ -34,14 +35,14 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const production=fakeStore(),preview=fakeStore(),secret='x'.repeat(40),email='owner@example.invalid';
  const ownerPayload=Buffer.from(JSON.stringify({email,exp:Date.now()+600000})).toString('base64url');
  const cookie='henry_session='+ownerPayload+'.'+crypto.createHmac('sha256',secret).update(ownerPayload).digest('base64url');
- const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email}},Response,URL,Buffer);
+ const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,extractImages,reserveAttempt,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true'}},Response,URL,Buffer);
  const ctx={deploy:{context:'deploy-preview'}},live={deploy:{context:'production'}};
  async function call(action,body=null,auth=false,context=ctx,id=''){
   const r=await handler(new Request('https://preview.invalid/.netlify/functions/henry-shein-quotes?action='+action+(id?'&id='+id:''),{method:body===null?'GET':'POST',headers:{...(auth?{cookie}:{}),...(body?{'content-type':'application/json'}:{})},body:body===null?undefined:JSON.stringify(body)}),context);
   return {status:r.status,data:await r.json()};
  }
  assert.equal((await call('admin_list')).status,401);
- const submitted=await call('submit',{name:'Test Customer',whatsapp:'+592 6000000',usConfirmed:true,cartLink:'https://onelink.shein.com/example',items:[item()],screenshots:[{mime:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1kAAAAASUVORK5CYII='}]});
+ const submitted=await call('submit',{name:'Test Customer',whatsapp:'+592 6000000',usConfirmed:true,aiConsent:true,cartLink:'https://onelink.shein.com/example',items:[item()],screenshots:[{mime:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1kAAAAASUVORK5CYII='}]});
  assert.equal(submitted.status,201);
  const queue=await call('admin_list',null,true);assert.equal(queue.data.quotes.length,1);assert.equal(queue.data.quotes[0].screenshotCount,1);assert.equal(queue.data.quotes[0].screenshots,undefined);
  assert.equal((await call('admin_list',null,true,live)).data.quotes.length,0);
@@ -57,4 +58,26 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  assert.equal((await call('admin_save',{...draft,version:4,status:'deposit_paid',payments:[{amount:100,date:'2026-12-01',reference:'MMG-test'}]},true)).status,400);
  const paid=await call('admin_save',{...draft,version:4,status:'deposit_paid',payments:[{amount:3200,date:'2026-12-01',reference:'MMG-test'}]},true);assert.equal(paid.status,200);
  assert.equal(paid.data.quote.payments.length,1);
+});
+
+test('retailer rules keep SHEIN freight separate and Amazon arrival shorter',()=>{
+ assert.equal(rules.quoteTotals([item(10,2,5)],0,0,'Amazon').heavyShippingGyd,0);
+ assert.equal(rules.deliveryWindow('2026-12-01','Amazon').arrivalFrom,'2026-12-08');
+ assert.equal(rules.safeRetailLink('https://www.amazon.com/dp/test','Amazon'),'https://www.amazon.com/dp/test');
+ assert.throws(()=>rules.safeRetailLink('https://amazon.com.evil.invalid','Amazon'));
+});
+test('AI output is conservative and budget increments atomically',async()=>{
+ const result=cleanResult({items:[{name:'Shirt',size:'M',color:'Black',price:10,qty:null,weight:null,currency:'EUR',sku:'',evidence:'uncertain'}],warnings:[],checkoutNotes:'verify'},'Amazon');
+ assert.equal(result.items[0].price,null);assert.equal(result.items[0].qty,null);assert.ok(result.warnings.length);
+ const store=fakeStore();for(let i=0;i<20;i++)await reserveAttempt(store,'2026-11-26T00:00:00Z');
+ await assert.rejects(()=>reserveAttempt(store,'2026-11-26T00:00:00Z'));
+});
+test('mock vision request: response normalized, duplicates removed',async()=>{
+ const img={mime:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1kAAAAASUVORK5CYII='};
+ const r=await extractImages([img,img],'Amazon',{apiKey:'test-only',fetcher:async(url,options)=>{
+  assert.equal(url,'https://api.openai.com/v1/responses');const payload=JSON.parse(options.body);assert.equal(payload.store,false);
+  assert.equal(payload.input[1].content.filter(x=>x.type==='input_image').length,1);
+  return new Response(JSON.stringify({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify({items:[{name:'Test',size:'N/A',color:'Black',price:12,qty:2,weight:null,currency:'USD',sku:'',evidence:'$12 x 2'}],warnings:[],checkoutNotes:''})}]}],usage:{input_tokens:1000,output_tokens:100}}));
+ }});
+ assert.equal(r.items[0].qty,2);assert.equal(r.imageCount,1);assert.ok(r.estimatedUsd>0);
 });
