@@ -1,0 +1,75 @@
+
+/* AMC Shopping · Black Friday Mega Sale · 27 Nov 2026 */
+.amc-mega[hidden],.amc-mega [hidden]{display:none!important}
+.amc-mega,.amc-mega *{box-sizing:border-box}
+.amc-mega{--ink:#e9f2ff;--sub:#b5c5e0;--blue:#4ccaff;--gold:#ffda85;--border:#ffffff26;color:var(--ink);font-family:inherit}
+.amc-mega a{text-decoration:none}
+.amc-mega-section{padding:18px 16px 22px;background:#071322}
+.amc-mega-stage,.amc-mega-page-inner{max-width:1180px;margin:0 auto}
+.amc-mega-stage{position:relative;overflow:hidden;isolation:isolate;border-radius:26px;border:1px solid #6482c455;background:radial-gradient(circle at 84% 19%,#1673db65 0%,transparent 40%),radial-gradient(circle at 9% 88%,#bb813329 0%,transparent 42%),linear-gradient(132deg,#101c37 0%,#050a16 73%);box-shadow:0 16px 45px #02061244;padding:clamp(22px,4vw,54px)}
+.amc-mega-stage:after{content:"";position:absolute;z-index:-1;pointer-events:none;inset:0;background:repeating-linear-gradient(117deg,transparent 0 74px,#ffffff07 75px,transparent 76px)}
+.amc-mega-kicker{display:inline-flex;align-items:center;gap:9px;font-weight:850;letter-spacing:1.6px;text-transform:uppercase;font-size:11px;color:var(--gold)}
+.amc-mega-kicker:before{content:"";display:block;width:8px;height:8px;border-radius:50%;background:#ff566b;box-shadow:0 0 15px #ff566b}
+.amc-mega-hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:30px;align-items:center}
+.amc-mega h1,.amc-mega h2,.amc-mega h3,.amc-mega p{margin-top:0}
+.amc-mega-hero-title{font-size:clamp(35px,5.5vw,70px);line-height:.99;letter-spacing:-.065em;font-weight:950;color:#fff;margin:17px 0}
+.amc-mega-hero-title span{color:var(--blue)}
+.amc-mega-lead{max-width:640px;line-height:1.6;font-size:clamp(15px,1.6vw,19px);color:#dae7fa;margin-bottom:19px}
+.amc-mega-highlights{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 20px}
+.amc-mega-highlight{border:1px solid #ffffff33;border-radius:10px;background:#ffffff0a;padding:11px 14px;min-width:120px;flex:1}
+.amc-mega-highlight b{display:block;font-size:clamp(20px,3vw,28px);line-height:1.1;color:#fff}
+.amc-mega-highlight span{display:block;font-size:11px;color:#c4d7f1;margin-top:5px;line-height:1.4}
+.amc-mega-visual{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid #a2b8ff42;background:linear-gradient(150deg,#0c2348,#070d21);border-radius:23px;padding:27px 18px;min-height:280px}
+.amc-mega-visual small{color:var(--gold);font-size:11px;letter-spacing:2px;font-weight:900}
+.amc-mega-big{font-weight:950;font-size:clamp(86px,12vw,146px);line-height:1;letter-spacing:-.105em;color:#fff;text-shadow:0 9px 30px #19a6f34c}
+.amc-mega-big span{font-size:.49em;color:var(--gold);letter-spacing:-.08em}
+.amc-mega-visual strong{font-size:24px;font-weight:900;letter-spacing:.045em}
+.amc-mega-visual p{font-size:13px;text-align:center;color:#c6d6eb;margin:10px 0 0;line-height:1.5}
+.amc-mega-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:21px}
+.amc-mega-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:45px;padding:12px 18px;background:linear-gradient(120deg,#4bd2ff,#1579f3);color:#061323!important;border-radius:11px;border:1px solid #87eaff;font-weight:850;font-size:13px;line-height:1.2;box-shadow:0 4px 20px #147ff52e}
+.amc-mega-btn:hover{filter:brightness(1.13)}
+.amc-mega-btn.outline{background:#ffffff0b;color:#fff!important;border-color:#ffffff5a;box-shadow:none}
+.amc-mega-btn[aria-disabled="true"]{opacity:.55;pointer-events:none;filter:grayscale(.3)}
+.amc-mega-clock{margin-top:20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.amc-mega-clock-label{font-size:11px;font-weight:900;letter-spacing:1.1px;text-transform:uppercase;color:#d9e7fb}
+.amc-mega-clock-digits{font-size:clamp(22px,3vw,34px);font-weight:900;font-variant-numeric:tabular-nums;color:#fff;letter-spacing:.025em}
+.amc-mega-clock-caption{font-size:12px;color:#adbed7}
+.amc-mega-strip{max-width:1180px;margin:18px auto 0;border-radius:13px;background:#08203b;color:#fff;padding:15px 19px;display:flex;align-items:center;justify-content:space-between;gap:17px;border:1px solid #468bd15e}
+.amc-mega-strip strong{display:block;color:#fff;font-size:17px;line-height:1.3}
+.amc-mega-strip small{display:block;color:#c8d9ef;line-height:1.5;margin-top:4px}
+.amc-mega-strip .amc-mega-btn{flex-shrink:0}
+.amc-mega-page{padding:24px 16px 70px;background:linear-gradient(180deg,#071322 0%,#102344 34%,#081422 100%)}
+.amc-mega-page .amc-mega-stage{margin-bottom:36px}
+.amc-mega-block{margin:34px 0 40px}
+.amc-mega-section-kicker{color:var(--gold);font-size:11px;letter-spacing:1.5px;font-weight:850;text-transform:uppercase}
+.amc-mega-heading{font-size:clamp(28px,4vw,43px);letter-spacing:-.04em;line-height:1.15;color:#fff;margin:8px 0 8px}
+.amc-mega-intro{font-size:15px;color:var(--sub);line-height:1.65;max-width:760px}
+.amc-mega-plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:20px}
+.amc-mega-plan{background:#ffffff0b;border:1px solid var(--border);border-radius:17px;padding:23px 19px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.amc-mega-plan.featured{border-color:#2fcfff;background:linear-gradient(145deg,#174f8070,#ffffff0a)}
+.amc-mega-pill{display:inline-flex;align-self:flex-start;padding:5px 9px;border-radius:999px;background:#ffe2a71c;color:#ffe4a9;font-size:10px;font-weight:850;letter-spacing:.5px}
+.amc-mega-plan h3{color:#fff;margin:3px 0 0;font-size:19px;line-height:1.3}
+.amc-mega-plan small{color:var(--sub);font-size:12px}
+.amc-mega-price-before{color:#a7b8d1;font-size:15px;text-decoration:line-through}
+.amc-mega-price{color:#fff;font-weight:950;font-size:clamp(29px,3vw,39px);letter-spacing:-.055em;line-height:1}
+.amc-mega-plan p{color:#cbdaf0;font-size:12px;line-height:1.55;flex:1;margin:0}
+.amc-mega-plan .amc-mega-btn{width:100%;margin-top:8px;font-size:12px}
+.amc-mega-offer-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+.amc-mega-offer{border:1px solid var(--border);background:#ffffff0b;border-radius:18px;padding:26px}
+.amc-mega-offer h3{color:#fff;font-size:23px;margin:12px 0}
+.amc-mega-offer p{color:#c6d8ee;font-size:14px;line-height:1.65}
+.amc-mega-offer.featured{background:radial-gradient(circle at 100% 0,#2f6c9666,transparent 55%),#0b2443;border-color:#57c5f286}
+.amc-mega-service-tags{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 20px}
+.amc-mega-service-tags span{border:1px solid #91baff4d;background:#ffffff12;color:#e5f2ff;font-size:11px;border-radius:999px;padding:7px 10px}
+.amc-mega-terms{background:#ffffff0a;border:1px solid var(--border);border-radius:18px;padding:24px}
+.amc-mega-terms h3{color:#fff;font-size:21px}
+.amc-mega-terms p,.amc-mega-terms li{color:#c1d3ed;font-size:13px;line-height:1.7}
+.amc-mega-terms ul{padding-left:20px}
+.amc-mega-terms a{color:#8cddff;text-decoration:underline}
+.amc-mega-ended{margin:22px 0 15px;padding:17px;border:1px solid #bd9b5999;border-radius:13px;color:#ffe5ab;background:#b0803322;line-height:1.6}
+.amc-mega-mem-note{display:block;margin-top:8px;font-size:11px;font-weight:800;color:#1063aa}
+.plan-card .amc-mega-price-inline{text-decoration:line-through;font-size:.54em;opacity:.7;margin-right:9px}
+.plan-card .amc-mega-price-current{color:#066cb8}
+@media(max-width:870px){.amc-mega-plans{grid-template-columns:repeat(2,minmax(0,1fr))}.amc-mega-hero-grid{grid-template-columns:1fr}.amc-mega-visual{min-height:210px}.amc-mega-offer-grid{grid-template-columns:1fr}}
+@media(max-width:620px){.amc-mega-section{padding:10px 11px 12px}.amc-mega-stage{border-radius:18px;padding:24px 17px}.amc-mega-hero-title{font-size:39px}.amc-mega-visual{padding:20px 12px}.amc-mega-big{font-size:103px}.amc-mega-strip{align-items:stretch;flex-direction:column}.amc-mega-strip .amc-mega-btn{width:100%}.amc-mega-plans{grid-template-columns:1fr}.amc-mega-actions .amc-mega-btn{width:100%}.amc-mega-page{padding:12px 12px 45px}}
+@media(prefers-reduced-motion:no-preference){.amc-mega-btn{transition:transform .15s,filter .15s}.amc-mega-btn:hover{transform:translateY(-1px)}}
