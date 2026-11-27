@@ -30,9 +30,8 @@ function codeActive(r){return r&&!r.revoked&&(!r.expiresAt||Date.parse(r.expires
 function verifyCode(code){if(typeof code!=='string'||!/^AMC-[A-Za-z0-9_-]{22,64}$/.test(code))throw Error('Invalid or expired access code.');return codeHash(code)}
 async function checkCode(store,code,available=true){const hash=verifyCode(code),record=await store.getWithMetadata(accessKey(hash),{type:'json'}),r=record?.data;if(!codeActive(r)||(available&&r.maxUses!==null&&r.uses>=r.maxUses))throw Error('Invalid, expired, revoked or exhausted access code.');return {hash,record,r}}
 async function countLimit(store,key,limit){for(let i=0;i<5;i++){const old=await store.getWithMetadata(key,{type:'json'}),count=old?.data?.count||0;if(count>=limit)throw Error('Too many attempts. Please try again later.');const s=await store.setJSON(key,{count:count+1},old?{onlyIfMatch:old.etag}:{onlyIfNew:true});if(s?.modified!==false)return}throw Error('Please try again shortly.')}
-async function reserveUpload(store,code,id){for(let i=0;i<5;i++){const {hash,record,r}=await checkCode(store,code);const next={...r,uses:r.uses+1,lastUsedAt:now()};const s=await store.setJSON(accessKey(hash),next,{onlyIfMatch:record.etag});if(s?.modified!==false)return {hash,r:next}}throw Error('Access changed. Try again.')}
+async function reserveUpload(store,code){for(let i=0;i<5;i++){const {hash,record,r}=await checkCode(store,code);const next={...r,uses:r.uses+1,lastUsedAt:now()};const s=await store.setJSON(accessKey(hash),next,{onlyIfMatch:record.etag});if(s?.modified!==false)return {hash,r:next}}throw Error('Access changed. Try again.')}
 async function sessionFor(store,b){if(!isId(b.sessionId||''))throw Error('Invalid upload session.');const {hash,r}=await checkCode(store,b.accessCode,false),session=await read(store,uploadKey(b.sessionId));if(!session||session.codeHash!==hash||Date.parse(session.expiresAt)<=Date.now()||session.count>r.limit)throw Error('Upload session expired or unavailable. Start again.');return session}
-async function readExtended(store,row){const manifest=await read(store,evidenceKey(row.id));return manifest?.indices||[]}
 
 async function withEvidence(store,row){const evidence=await read(store,evidenceKey(row.id));return {...row,rates:await quoteRates(store,row),retailer:row.retailer||'SHEIN',screenshots:evidence?.screenshots||[],extendedScreenshots:evidence?.indices||[],ai:await read(store,'ai/'+row.id)}}
 const statuses=['new','review','needs_info','approved','sent','deposit_paid','ordered','arrived','paid','cancelled'];
@@ -94,6 +93,13 @@ export default async(req,context)=>{
    const code='AMC-'+crypto.randomBytes(24).toString('base64url'),hash=codeHash(code),r={name,kind,limit,expiresAt:kind==='owner'?null:new Date(Date.now()+hours*3600000).toISOString(),maxUses,uses:0,revoked:false,createdAt:now()};
    const saved=await store.setJSON(accessKey(hash),r,{onlyIfNew:true});if(saved?.modified===false)throw Error('Could not create code. Try again.');return json({code,access:codeInfo(hash,r)},201);
   }
+  if(action==='admin_upload_cleanup'){
+   const data=await store.list({prefix:'upload-session/'});let removed=0;
+   for(const b of data.blobs.slice(0,100)){const s=await read(store,b.key);if(!s||Date.parse(s.expiresAt)>Date.now()-3600000||await read(store,key(s.id)))continue;
+    for(let i=0;i<s.count;i++)await store.delete(imageKey(s.id,i));await store.delete(evidenceKey(s.id));await store.delete(b.key);removed++;if(removed>=3)break;
+   }
+   return json({removed});
+  }
   if(action==='admin_upload_revoke'){
    const hash=String(b.id||'');if(!/^[a-f0-9]{64}$/.test(hash))throw Error('Invalid access record.');const record=await store.getWithMetadata(accessKey(hash),{type:'json'});if(!record?.data)throw Error('Access record not found.');
    const saved=await store.setJSON(accessKey(hash),{...record.data,revoked:true},{onlyIfMatch:record.etag});if(saved?.modified===false)return json({error:'Access changed. Refresh and retry.'},409);return json({ok:true});
@@ -104,8 +110,8 @@ export default async(req,context)=>{
    const {r}=await checkCode(store,b.accessCode);
    if(action==='upload_check')return json({limit:r.limit,expiresAt:r.expiresAt});
    const count=Number(b.count);if(!Number.isInteger(count)||count<4||count>r.limit)throw Error('Screenshot count exceeds your access limit.');
-   const id=crypto.randomUUID();const {hash}=await reserveUpload(store,b.accessCode,id);
-   const session={id,codeHash:hash,count,expiresAt:new Date(Math.min(Date.now()+2*3600000,r.expiresAt?Date.parse(r.expiresAt):Infinity)).toISOString(),createdAt:now()};
+   const id=crypto.randomUUID();const {hash}=await reserveUpload(store,b.accessCode);
+   const session={id,codeHash:hash,accessName:r.name,accessKind:r.kind,count,expiresAt:new Date(Math.min(Date.now()+2*3600000,r.expiresAt?Date.parse(r.expiresAt):Infinity)).toISOString(),createdAt:now()};
    await store.setJSON(uploadKey(id),session,{onlyIfNew:true});return json({sessionId:id,expiresAt:session.expiresAt});
   }
   if(action==='upload_image'){
@@ -146,7 +152,7 @@ export default async(req,context)=>{
    if(screenshots.length>3)throw Error('Maximum three screenshots without extended access.');
    let session=null,indices=[];
    if(b.sessionId){if(screenshots.length)throw Error('Do not mix upload modes.');session=await sessionFor(store,b);const existing=await read(store,key(session.id));if(existing)return json({ok:true,reference:existing.reference},201);
-    for(let i=0;i<session.count;i++){const s=await read(store,imageKey(session.id,i));if(!s)throw Error('Screenshot '+(i+1)+' has not finished uploading.');indices.push(i)}
+    for(let i=0;i<session.count;i+=5){const chunk=Array.from({length:Math.min(5,session.count-i)},(_,j)=>i+j);const found=await Promise.all(chunk.map(async j=>{const s=await read(store,imageKey(session.id,j));return !!s}));for(let j=0;j<chunk.length;j++){if(!found[j])throw Error('Screenshot '+(chunk[j]+1)+' has not finished uploading.');indices.push(chunk[j])}}
    }
    const checked=screenshots.map(validateScreenshot);
    if((checked.length||indices.length)&&b.aiConsent!==true)throw Error('Confirm consent to AI processing of cart screenshots, or use manual entry without screenshots.');
@@ -157,7 +163,7 @@ export default async(req,context)=>{
    if(count.count>=12)return json({error:'Too many quotation requests. Please try later.'},429);
    await store.setJSON(clientKey,{count:count.count+1});
    const id=session?.id||crypto.randomUUID(),createdAt=now(),reference='SQ-'+id.slice(0,8).toUpperCase();
-   const row={id,reference,name,whatsapp,email,rates:(await defaults(store)).rates,retailer:storeName,cartLink,notes,items,aiConsent:b.aiConsent===true,screenshotCount:indices.length||checked.length,extendedUpload:!!session,source:text(b.source,40)||'customer_manual',status:'new',feesUsd:0,extraGyd:0,feeNote:'',orderTuesday:'',followUp:'',ownerNotes:'',payments:[],createdAt,updatedAt:createdAt,version:1,events:[{at:createdAt,status:'new'}]};
+   const row={id,reference,name,whatsapp,email,rates:(await defaults(store)).rates,retailer:storeName,cartLink,notes,items,aiConsent:b.aiConsent===true,screenshotCount:indices.length||checked.length,extendedUpload:!!session,uploadAccess:session?{name:session.accessName,kind:session.accessKind}:null,source:text(b.source,40)||'customer_manual',status:'new',feesUsd:0,extraGyd:0,feeNote:'',orderTuesday:'',followUp:'',ownerNotes:'',payments:[],createdAt,updatedAt:createdAt,version:1,events:[{at:createdAt,status:'new'}]};
    if(checked.length||indices.length)await store.setJSON(evidenceKey(id),indices.length?{indices}:{screenshots:checked},{onlyIfNew:true});
    const saved=await store.setJSON(key(id),row,{onlyIfNew:true});
    if(saved?.modified===false){const existing=session&&await read(store,key(id));if(existing)return json({ok:true,reference:existing.reference},201);throw Error('Could not save request; please retry.')}
