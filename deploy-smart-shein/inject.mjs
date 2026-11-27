@@ -9,6 +9,7 @@ fs.mkdirSync(assets,{recursive:true});fs.mkdirSync(admin,{recursive:true});fs.mk
 const root=new URL('../henry-os/',import.meta.url);
 for(const [src,dst] of [
  ['public/smart-shein-quote.js',path.join(assets,'smart-shein-quote.js')],
+ ['public/smart-quote-estimates.js',path.join(assets,'smart-quote-estimates.js')],
  ['public/smart-shein-quote.css',path.join(assets,'smart-shein-quote.css')],
  ['admin/smart-shein-admin.html',path.join(admin,'smart-shein-admin.html')],
  ['admin/smart-shein-admin.js',path.join(admin,'smart-shein-admin.js')],

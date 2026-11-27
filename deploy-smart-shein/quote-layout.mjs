@@ -21,9 +21,15 @@ export function redesignQuotePage(page,{preview=true}={}){
  page=page.replace(general[0],()=> '').replace(shein[0],()=> '');
  const intro='<section class="sq-calc-intro"><div class="wrap"><span class="sq-calc-kicker">QUICK PRICE ESTIMATES</span><h2>Just checking prices?</h2><p>Use our existing calculators to get an idea of your payment before requesting a quotation. Estimates may differ from final approved amounts.</p></div></section>';
  page=page.replace('<main>',()=>'<main>'+panel(preview));
- page=page.replace('</main>',()=>intro+general[0]+shein[0]+'</main>');
- // The obsolete store-tab handler is no longer needed; keep both calculation assets.
- page=page.replace(/<script\s+src="(?:\/)?assets\/quote\.js"\s*><\/script>/g,()=> '');
+ const cleanCalc=s=>s.replace(/<span>USD amount × GYD \$240<\/span>|<span>USD amount × GYD \$120<\/span>|<span>USD amount × GYD \$360<\/span>|<span>USD × GYD \$240<\/span>|<span>USD × GYD \$120<\/span>/g,'')
+ .replace('using the standard USD × GYD $360 rate','using current AMC pricing')
+ .replace('Each individual item uses the USD × GYD $360 formula.','Each individual item uses current AMC pricing.')
+ .replace('beyond the USD × GYD $360 card-service calculation','beyond the card-service estimate')
+ .replace(/Example: US\$13\.00[^<]*/g,'Enter your USD subtotal to see an estimate.');
+ page=page.replace('</main>',()=>intro+cleanCalc(general[0])+cleanCalc(shein[0])+'</main>');
+ // Replace legacy client-side pricing scripts with server-backed estimates.
+ page=page.replace(/<script\s+src="(?:\/)?assets\/(?:quote|quote-estimator|shein-calculator)\.js"\s*><\/script>/g,()=> '');
+ page=page.replace(/<\/body>/i,()=>'<script src="/assets/smart-quote-estimates.js?v=pricing-1" defer></script></body>');
  if(!/<\/head>/i.test(page)||!/<\/body>/i.test(page))throw Error('Quote document closing tags missing.');
  page=page.replace(/<\/head>/i,()=>'<link rel="stylesheet" href="/assets/smart-shein-quote.css"></head>');
  page=page.replace(/<\/body>/i,()=>'<script src="/assets/smart-shein-quote.js" defer></script></body>');

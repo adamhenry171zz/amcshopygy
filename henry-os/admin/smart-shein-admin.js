@@ -3,7 +3,7 @@
  const status=(s)=>{$('status').textContent=s};
  const api=async(action,body=null,id='')=>{const r=await fetch(endpoint+'?action='+action+(id?'&id='+encodeURIComponent(id):''),{credentials:'same-origin',cache:'no-store',...(body!==null?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{})});let d;try{d=await r.json()}catch{throw Error('Unable to contact quotation service.')}if(!r.ok)throw Error(d.error||'Request failed');return d};
  const stages={new:['review','needs_info','cancelled'],review:['needs_info','approved','cancelled'],needs_info:['review','cancelled'],approved:['review','sent','cancelled'],sent:['review','deposit_paid','cancelled'],deposit_paid:['ordered','cancelled'],ordered:['arrived'],arrived:['paid'],paid:[],cancelled:[]};
- let active=null,saving=false;const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
+ let active=null,saving=false,defaultPricing=null;const fmt=n=>Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
  const fields=[['name','Product','text'],['price','Unit USD','number'],['qty','Quantity','number'],['size','Size','text'],['color','Colour','text'],['weight','Weight per unit (lb)','number'],['link','Retailer URL','url'],['image','Image URL (optional)','url'],['sku','SKU','text']];
  function itemRow(item={}){if($('items').children.length>=50)return;const field=document.createElement('fieldset');field.className='product';
  for(const [key,label,type] of fields){const l=document.createElement('label');l.textContent=label;const i=document.createElement('input');i.type=type;i.value=item[key]??(key==='qty'?1:'');i.dataset.key=key;if(type==='number'){i.min=key==='qty'?'1':'0.01';i.step=key==='qty'?'1':'0.01'}l.append(i);field.append(l)}
@@ -22,7 +22,7 @@
  $('ai-apply').onclick=()=>{if(!suggestion||!active)return;if(!confirm('Replace current product rows with AI suggestions? Verify all prices, quantities and variants before approving.'))return;$('items').replaceChildren();suggestion.items.forEach(itemRow);refreshDraft();$('editor-status').textContent='AI suggestions loaded. Missing quantities default to 1. Review each row, then approve.'};
  const readRows=id=>[...$(id).children].map(el=>Object.fromEntries([...el.querySelectorAll('[data-key]')].map(i=>[i.dataset.key,i.value.trim()])));
  const safeLink=(url)=>{try{const u=new URL(url);return u.protocol==='https:'&&u.hostname.includes('.')&&!/^[\d.]+$/.test(u.hostname)&&!u.username&&!u.password&&!u.port?u.href:''}catch{return ''}};
- function show(q){active=q;$('retailer').value=q.retailer||'SHEIN';$('freight').checked=q.freightAcknowledged===true;renderAI(q.ai);$('editor').hidden=false;$('ref').textContent=q.reference+' · '+(q.retailer||'SHEIN')+' · '+q.name;$('contact').replaceChildren();
+ function show(q){active=q;$('quote-overall').value=q.rates.overall;$('quote-down').value=q.rates.down;$('retailer').value=q.retailer||'SHEIN';$('freight').checked=q.freightAcknowledged===true;renderAI(q.ai);$('editor').hidden=false;$('ref').textContent=q.reference+' · '+(q.retailer||'SHEIN')+' · '+q.name;$('contact').replaceChildren();
  const p=document.createElement('p');p.textContent=q.whatsapp+(q.email?' · '+q.email:'');$('contact').append(p);
  if(q.whatsapp){const phone=q.whatsapp.replace(/\D/g,'');if(phone.length>=7){const a=document.createElement('a');a.href='https://wa.me/'+phone;a.textContent='Open WhatsApp conversation';a.target='_blank';a.rel='noopener noreferrer';$('contact').append(a)}}
  $('customer-notes').textContent=q.notes||'No customer notes.';
@@ -45,17 +45,17 @@
   if(!active)return;let totals=active.totals,detail='';
   if(editable()){
    const items=readRows('items'),valid=items.length&&items.every(i=>i.price.trim()&&Number(i.price)>0&&i.qty.trim()&&Number.isInteger(Number(i.qty))&&Number(i.qty)>0);
-   if(valid){
+   if(valid&&validRates(readRates('quote'))){
     const subtotal=items.reduce((n,i)=>n+Math.round(Number(i.price)*100)*Number(i.qty),0),fees=Math.round(Number($('fees').value||0)*100),extra=Math.round(Number($('extra').value||0)*100);
     const rate=w=>w<=10?1500:w<=25?1300:w<=55?1200:w<=99?1100:1050;
     const freight=$('retailer').value==='SHEIN'?items.reduce((n,i)=>{const w=Number(i.weight);return n+(w>3?Math.round(w*100)*rate(w)*Number(i.qty):0)},0):0;
-    const overall=Math.ceil(((subtotal+fees)*360+freight+extra)/10000)*100,down=Math.ceil((subtotal+fees)*240/10000)*100;totals={overall,down,balance:overall-down};
+    const rates=readRates('quote');const overall=Math.ceil(((subtotal+fees)*rates.overall+freight+extra)/10000)*100,down=Math.ceil((subtotal+fees)*rates.down/10000)*100;totals={overall,down,balance:overall-down};
     detail='Draft estimate · USD subtotal $'+(subtotal/100).toFixed(2)+' · Heavy-item freight GYD $'+fmt(freight/100)+'. Confirm weights and fees.';
-   }else{totals=null;detail='Add USD prices and quantities to calculate the draft automatically.'}
+   }else{totals=null;detail='Enter valid rates, USD prices and quantities to calculate the draft automatically.'}
    const dt=new Date($('tuesday').value+'T12:00:00Z');if(Number.isFinite(dt.getTime())&&dt.getUTCDay()===2){const a=$('retailer').value==='Amazon'?7:14,b=$('retailer').value==='Amazon'?14:21;const plus=n=>{const d=new Date(dt);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};detail+=' Estimated arrival: '+plus(a)+' to '+plus(b)+'.'}
   }else detail=active.delivery?'Approved snapshot · Estimated arrival: '+active.delivery.arrivalFrom+' to '+active.delivery.arrivalTo+'.':'No approved quotation.';
   for(const [id,k] of [['sum-overall','overall'],['sum-down','down'],['sum-balance','balance']])$(id).textContent=totals?'GYD $'+fmt(totals[k]):'—';
-  $('draft-summary').textContent=detail;
+  $('draft-summary').textContent=detail;$('rate-warning').textContent=rateMessage(readRates('quote'));
  }
  function refreshActions(){
   const canPdf=active?.totals&&active?.delivery&&['approved','sent','deposit_paid','ordered','arrived','paid'].includes(active.status);
@@ -64,7 +64,7 @@
   if(canPdf){a.href=endpoint+'?action=admin_pdf&id='+encodeURIComponent(active.id);a.target='_blank';a.rel='noopener';$('pdf-help').textContent='Approved quotation ready. Download the PDF and attach it to the customer’s WhatsApp conversation.'}
   else{a.removeAttribute('href');$('pdf-help').textContent='Review the products, confirm weights and any fees, then approve to enable Generate PDF.'}
   const locked=!editable();for(const e of $('items').querySelectorAll('input,button'))e.disabled=locked;
-  for(const id of ['retailer','fees','extra','fee-note','tuesday','weights','freight','add'])$(id).disabled=locked;
+  for(const id of ['retailer','fees','extra','fee-note','tuesday','weights','freight','add','quote-overall','quote-down','reset-rates'])$(id).disabled=locked;
  }
  $('edit').addEventListener('input',refreshDraft);$('edit').addEventListener('change',refreshDraft);
  const itemObserver=new MutationObserver(refreshDraft);itemObserver.observe($('items'),{childList:true});
@@ -92,12 +92,13 @@
  async function save(approve=false){
   if(!active||saving)return;
   const id=active.id;
-  const body={id,version:active.version,approve,retailer:$('retailer').value,freightAcknowledged:$('freight').checked,items:readRows('items'),payments:readRows('payments').map(p=>({...p,amount:Number(p.amount)})),feesUsd:$('fees').value,extraGyd:$('extra').value,feeNote:$('fee-note').value,orderTuesday:$('tuesday').value,followUp:$('follow').value,ownerNotes:$('notes').value,weightsAcknowledged:$('weights').checked,status:approve?'approved':$('stage').value==='new'?'review':$('stage').value};
+  const body={id,version:active.version,approve,rates:readRates('quote'),retailer:$('retailer').value,freightAcknowledged:$('freight').checked,items:readRows('items'),payments:readRows('payments').map(p=>({...p,amount:Number(p.amount)})),feesUsd:$('fees').value,extraGyd:$('extra').value,feeNote:$('fee-note').value,orderTuesday:$('tuesday').value,followUp:$('follow').value,ownerNotes:$('notes').value,weightsAcknowledged:$('weights').checked,status:approve?'approved':$('stage').value==='new'?'review':$('stage').value};
   if(approve){
    if(!editable()){feedback('This quotation is already locked. Reopen it for review to change the pricing.','error',true);return}
    const issues=approvalProblems(body.items,body);
    if(issues.length){feedback('Cannot approve yet:\n• '+issues.join('\n• '),'error',true);return}
   }
+  if(editable()&&!validRates(body.rates)){feedback('Enter positive whole-number pricing rates. Down-payment rate cannot exceed overall rate.','error',true);return}
   if(!$('edit').reportValidity()){feedback('Check the highlighted field and try again.','error',true);return}
   saving=true;$('save').disabled=true;$('approve').disabled=true;
   $('approve').textContent=approve?'Approving…':'Approve quotation';
@@ -117,5 +118,14 @@
  }
  $('edit').onsubmit=e=>{e.preventDefault();save(false)};
  $('approve').onclick=()=>save(true);
- (async()=>{try{await list();$('workspace').hidden=false;status('Owner session authenticated.')}catch(e){status(e.message+' Sign into HENRY OS on this same preview first.')}})();
+ function readRates(prefix){return {overall:Number($(prefix+'-overall').value),down:Number($(prefix+'-down').value)}}
+ function validRates(r){return Number.isInteger(r.overall)&&Number.isInteger(r.down)&&r.down>=1&&r.overall>=r.down&&r.overall<=10000}
+ function rateMessage(r){if(!validRates(r))return 'Enter positive whole-number rates; the down-payment rate cannot exceed the overall rate.';if(r.down<240)return 'Warning: deposit rate is below the original 240 baseline. Verify it covers actual supplier checkout and FX costs.';return 'Confirm that the down payment covers the actual supplier checkout cost.'}
+ function renderDefaults(){ $('default-overall').value=defaultPricing.rates.overall;$('default-down').value=defaultPricing.rates.down;$('default-warning').textContent=rateMessage(readRates('default'))}
+ async function loadDefaults(){defaultPricing=await api('admin_pricing');renderDefaults()}
+ $('defaults-form').addEventListener('input',()=>{$('default-warning').textContent=rateMessage(readRates('default'))});
+ $('reload-defaults').onclick=()=>loadDefaults().then(()=>$('default-status').textContent='Current defaults loaded.').catch(e=>$('default-status').textContent=e.message);
+ $('defaults-form').onsubmit=async e=>{e.preventDefault();const rates=readRates('default');if(!validRates(rates)){$('default-status').textContent=rateMessage(rates);return}if(!defaultPricing)return;$('save-defaults').disabled=true;$('default-status').textContent='Saving…';try{defaultPricing=await api('admin_pricing_save',{rates,version:defaultPricing.version});renderDefaults();$('default-status').textContent='Saved. New customer requests and public estimates now use these rates. Existing quotes are unchanged.'}catch(err){$('default-status').textContent=err.message}finally{$('save-defaults').disabled=false}};
+ $('reset-rates').onclick=async()=>{if(!editable())return;const id=active.id;try{await loadDefaults();if(active?.id!==id||!editable())return;$('quote-overall').value=defaultPricing.rates.overall;$('quote-down').value=defaultPricing.rates.down;refreshDraft();feedback('Current default rates applied to this draft. Save or approve to keep them.')}catch(e){feedback(e.message,'error',true)}};
+ (async()=>{try{await Promise.all([list(),loadDefaults()]);$('workspace').hidden=false;status('Owner session authenticated.')}catch(e){status(e.message+' Sign into HENRY OS on this same preview first.')}})();
 })();
