@@ -64,6 +64,11 @@ export default async(req,context)=>{
    const s=await read(store,imageKey(id,index));if(!s)return json({error:'Screenshot not found.'},404);
    return new Response(Buffer.from(s.data,'base64'),{headers:{'content-type':s.mime,'cache-control':'no-store','x-content-type-options':'nosniff'}});
   }
+  if(action==='admin_ai_usage'&&req.method==='GET'){
+   const day=now().slice(0,10),month=day.slice(0,7),budget=await read(store,'ai-budget/'+month)||{total:0,days:{}};
+   const today=budget.days?.[day]||0,total=budget.total||0;
+   return json({day,month,today,total,dailyLimit:20,monthlyLimit:100,dailyRemaining:Math.max(0,20-today),monthlyRemaining:Math.max(0,100-total)});
+  }
   if(action==='admin_pricing'&&req.method==='GET')return json(await defaults(store));
   if(action==='admin_list'&&req.method==='GET'){
    const data=await store.list({prefix:'quotes/',paginate:false});
@@ -186,8 +191,8 @@ export default async(req,context)=>{
      const images=[];for(const i of indices){const s=await read(store,imageKey(id,i));if(!s)throw Error('Screenshot '+(i+1)+' is missing.');if(!state.seenHashes.includes(s.hash)){state.seenHashes.push(s.hash);images.push(s)}else state.warnings.push('Duplicate screenshot '+(i+1)+' skipped.')}
      if(images.length){state.allowance=await reserveAttempt(store);const result=await extractImages(images,row.retailer||'SHEIN',{apiKey:process.env.OPENAI_API_KEY});if(state.items.length+result.items.length>150)throw Error('More than 150 products. Split the cart into separate quotation requests.');
       const priorKeys=new Set(state.items.map(x=>JSON.stringify([x.name.toLowerCase(),x.size.toLowerCase(),x.color.toLowerCase(),x.price,x.sku])));
-      result.items.forEach((x,i)=>{if(priorKeys.has(JSON.stringify([x.name.toLowerCase(),x.size.toLowerCase(),x.color.toLowerCase(),x.price,x.sku])))state.warnings.push('Possible overlap at row '+(state.items.length+i+1)+'; compare screenshots before approval.')});
-      state.items.push(...result.items);state.evidence.push(...result.evidence.map(x=>'Images '+(nextIndex+1)+'–'+(nextIndex+indices.length)+': '+x));state.warnings.push(...result.warnings.map(x=>'Batch '+(Math.floor(nextIndex/3)+1)+': '+x));state.checkoutNotes=(state.checkoutNotes+'\n'+result.checkoutNotes).trim().slice(0,4000);state.inputTokens+=result.inputTokens;state.outputTokens+=result.outputTokens;state.estimatedUsd+=result.estimatedUsd;
+      result.items.forEach((x,i)=>{if(priorKeys.has(JSON.stringify([x.name.toLowerCase(),x.size.toLowerCase(),x.color.toLowerCase(),x.price,x.sku])))state.warnings.push('Possible overlap at Product '+(state.items.length+i+1)+'; compare screenshots before approval.')});
+      const rowOffset=state.items.length;state.items.push(...result.items);state.evidence.push(...result.evidence.map(x=>'Images '+(nextIndex+1)+'–'+(nextIndex+indices.length)+': '+x));state.warnings.push(...result.warnings.map(x=>'Batch '+(Math.floor(nextIndex/3)+1)+': '+x.replace(/\b(?:Row|Product)\s+(\d+)\b/gi,(_,n)=>'Product '+(rowOffset+Number(n)))));state.checkoutNotes=(state.checkoutNotes+'\n'+result.checkoutNotes).trim().slice(0,4000);state.inputTokens+=result.inputTokens;state.outputTokens+=result.outputTokens;state.estimatedUsd+=result.estimatedUsd;
      }
      state.nextIndex=nextIndex+indices.length;state.state=state.nextIndex===state.totalImages?'ready':'partial';state.warnings=[...new Set(state.warnings)].slice(0,250);
     }catch(e){state.state='failed';state.error=text(e.message,250);state.warnings.push('Extraction stopped after '+nextIndex+' of '+state.totalImages+' screenshots. Review remaining screenshots manually.');}

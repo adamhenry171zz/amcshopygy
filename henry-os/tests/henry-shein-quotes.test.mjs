@@ -37,7 +37,7 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const production=fakeStore(),preview=fakeStore(),secret='x'.repeat(40),email='owner@example.invalid';
  const ownerPayload=Buffer.from(JSON.stringify({email,exp:Date.now()+600000})).toString('base64url');
  const cookie='henry_session='+ownerPayload+'.'+crypto.createHmac('sha256',secret).update(ownerPayload).digest('base64url');
- const calls=[];const mockExtract=async(images,retailer)=>{calls.push(images.length);return {items:[item(10)],evidence:['mock screenshot'],warnings:[],checkoutNotes:'',inputTokens:100,outputTokens:20,estimatedUsd:.001}};
+ const calls=[];const mockExtract=async(images,retailer)=>{calls.push(images.length);return {items:[item(10)],evidence:['mock screenshot'],warnings:['Product 1: verify size'],checkoutNotes:'',inputTokens:100,outputTokens:20,estimatedUsd:.001}};
  const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','renderQuotePdf','RATES','normalizeRates','publicEstimate','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,mockExtract,reserveAttempt,renderQuotePdf,rules.RATES,rules.normalizeRates,rules.publicEstimate,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true',OPENAI_API_KEY:'mock-only'}},Response,URL,Buffer);
  const ctx={deploy:{context:'deploy-preview'}},live={deploy:{context:'production'}};
  async function call(action,body=null,auth=false,context=ctx,id=''){
@@ -45,6 +45,8 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
   return {status:r.status,data:await r.json()};
  }
  assert.equal((await call('admin_list')).status,401);
+ assert.equal((await call('admin_ai_usage')).status,401);
+ const initialUsage=await call('admin_ai_usage',null,true);assert.equal(initialUsage.data.dailyRemaining,20);assert.equal(initialUsage.data.monthlyRemaining,100);
  const submitted=await call('submit',{name:'Test Customer',whatsapp:'+592 6000000',usConfirmed:true,aiConsent:true,cartLink:'https://onelink.shein.com/example',items:[item()],screenshots:[{mime:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1kAAAAASUVORK5CYII='}]});
  assert.equal(submitted.status,201);
  const queue=await call('admin_list',null,true);assert.equal(queue.data.quotes.length,1);assert.equal(queue.data.quotes[0].screenshotCount,1);assert.equal(queue.data.quotes[0].screenshots,undefined);
@@ -94,7 +96,8 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  assert.equal((await call('upload_image',{sessionId,accessCode:'AMC-'+'x'.repeat(32),index:0,screenshot:png})).status,400);
  const extended={sessionId,accessCode,name:'Large Cart',whatsapp:'+592 6000003',retailer:'Amazon',usConfirmed:true,aiConsent:true};
  assert.equal((await call('submit',extended)).status,400);
- for(let i=0;i<5;i++)assert.equal((await call('upload_image',{sessionId,accessCode,index:i,screenshot:png})).status,200);
+ const png2={...png,data:Buffer.concat([Buffer.from(png.data,'base64'),Buffer.from([1])]).toString('base64')};
+ for(let i=0;i<5;i++)assert.equal((await call('upload_image',{sessionId,accessCode,index:i,screenshot:i===4?png2:png})).status,200);
  assert.equal((await call('submit',extended)).status,201);
  const ext=await call('admin_get',null,true,ctx,sessionId);assert.equal(ext.data.quote.screenshotCount,5);assert.equal(ext.data.quote.screenshots.length,0);assert.deepEqual(ext.data.quote.extendedScreenshots,[0,1,2,3,4]);
  const evidenceUrl='https://preview.invalid/.netlify/functions/henry-shein-quotes?action=admin_evidence&id='+sessionId+'&index=4';
@@ -103,8 +106,9 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  assert.equal((await call('admin_upload_codes',null,true)).data.codes[0].code,undefined);
  assert.equal((await call('admin_ai',{id:sessionId,version:1})).status,401);
  const batch1=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch1.data.ai.state,'partial');assert.equal(batch1.data.ai.nextIndex,3);
- const batch2=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch2.data.ai.state,'ready');assert.equal(batch2.data.ai.nextIndex,5);assert.deepEqual(calls,[1]);assert.ok(batch2.data.ai.warnings.some(w=>w.includes('Duplicate screenshot')));
- const cached=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(cached.data.cached,true);assert.deepEqual(calls,[1]);
+ const batch2=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch2.data.ai.state,'ready');assert.equal(batch2.data.ai.nextIndex,5);assert.deepEqual(calls,[1,1]);assert.ok(batch2.data.ai.warnings.some(w=>w.includes('Duplicate screenshot')));assert.ok(batch2.data.ai.warnings.some(w=>w.includes('Product 2: verify size')));
+ const cached=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(cached.data.cached,true);assert.deepEqual(calls,[1,1]);
+ const usage=await call('admin_ai_usage',null,true);assert.equal(usage.data.today,2);assert.equal(usage.data.dailyRemaining,18);assert.equal(usage.data.monthlyRemaining,98);
  assert.equal((await call('admin_upload_cleanup',{},true)).data.removed,0);
  assert.equal((await handler(new Request(evidenceUrl,{headers:{cookie}}),ctx)).status,200);
  assert.equal((await call('admin_upload_revoke',{id:code.data.access.id},true)).status,200);
@@ -126,6 +130,8 @@ test('retailer rules keep SHEIN freight separate and Amazon arrival shorter',()=
 test('AI output is conservative and budget increments atomically',async()=>{
  const result=cleanResult({items:[{name:'Shirt',size:'M',color:'Black',price:10,qty:null,weight:null,currency:'EUR',sku:'',evidence:'uncertain'}],warnings:[],checkoutNotes:'verify'},'Amazon');
  assert.equal(result.items[0].price,null);assert.equal(result.items[0].qty,1);assert.ok(result.warnings.some(w=>w.includes('quantity defaulted to 1')));assert.ok(result.warnings.length);
+ const sized=cleanResult({items:[{name:'Bag',size:'',color:'Black',price:10,qty:null,weight:null,currency:'USD',sku:'',evidence:''},{name:'Sneakers',size:'US 9',color:'Blue',price:12,qty:2,weight:null,currency:'USD',sku:'',evidence:''},{name:'Dress',size:'N/A',color:'Red',price:12,qty:1,weight:null,currency:'USD',sku:'',evidence:''}],warnings:[],checkoutNotes:''},'Amazon');
+ assert.deepEqual(sized.items.map(x=>x.size),['One Size','US 9','One Size']);assert.ok(sized.warnings.some(x=>x.includes('Product 1: size defaulted')));assert.ok(sized.warnings.some(x=>x.includes('Product 3: size defaulted')));assert.ok(!sized.warnings.some(x=>x.includes('Product 2: size defaulted')));
  const store=fakeStore();for(let i=0;i<20;i++)await reserveAttempt(store,'2026-11-26T00:00:00Z');
  await assert.rejects(()=>reserveAttempt(store,'2026-11-26T00:00:00Z'));
 });
@@ -191,4 +197,18 @@ test('custom rates reconcile, retain heavy freight, and do not expose rates in e
  const e=rules.publicEstimate([{price:100,weight:0}],{overall:320,down:250});assert.deepEqual([e.overall,e.down,e.balance],[32000,25000,7000]);assert.equal(e.rates,undefined);
  const q={name:'Test',whatsapp:'0000000',reference:'SQ-RATE',retailer:'Amazon',status:'approved',items:[item(100)],rates:{overall:320,down:250},totals:rules.quoteTotals([item(100)],0,0,'Amazon',{overall:320,down:250}),delivery:rules.deliveryWindow('2026-12-01','Amazon'),approvedAt:'2026-11-26'};
  const pdf=renderQuotePdf(q).toString('latin1');assert.ok(pdf.includes('$32,000'));assert.ok(pdf.includes('$25,000'));assert.ok(pdf.includes('$7,000'));assert.ok(!pdf.includes('x GYD $240'));
+});
+
+test('numbered products and WhatsApp messages use saved totals and references, not rates',async()=>{
+ const js=await readFile(new URL('../admin/smart-shein-admin.js',import.meta.url),'utf8');
+ const start=js.indexOf(' function waPhone('),end=js.indexOf(' function refreshWhatsApp(',start);
+ const {waPhone,quotationMessage}=new Function(js.slice(start,end)+'\nreturn {waPhone,quotationMessage};')();
+ assert.equal(waPhone('600-0000'),'5926000000');assert.equal(waPhone('+592 600-0000'),'5926000000');assert.equal(waPhone('123'),'');
+ const q={name:'Test Person',retailer:'Amazon',reference:'SQ-TEST',totals:{overall:36000,down:24000,balance:12000},rates:{overall:360,down:240},delivery:{arrivalFrom:'2026-12-08',arrivalTo:'2026-12-15'}};
+ const message=quotationMessage(q);assert.ok(message.includes('SQ-TEST'));assert.ok(message.includes('GYD $36,000'));assert.ok(message.includes('GYD $24,000'));assert.ok(message.includes('GYD $12,000'));assert.ok(message.includes('estimated, not guaranteed'));assert.ok(!message.includes('multiplier'));assert.ok(quotationMessage(q,true).includes('shop with us again'));
+ assert.ok(js.includes("textContent='Product '+(i+1)"));assert.ok(js.includes('field.remove();renumberProducts()'));
+ const publicJs=await readFile(new URL('../public/smart-shein-quote.js',import.meta.url),'utf8');
+ const s=publicJs.indexOf(' function notifyMessage('),e=publicJs.indexOf(' function showConfirmation(',s);
+ const notify=new Function(publicJs.slice(s,e)+'\nreturn notifyMessage;')();
+ assert.match(notify('Test','SHEIN','SQ-TEST'),/Reference:\* SQ-TEST/);assert.ok(publicJs.includes('https://wa.me/5926042826?text='));
 });

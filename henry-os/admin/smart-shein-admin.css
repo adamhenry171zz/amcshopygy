@@ -5,3 +5,5 @@
 .approval-feedback{white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid #41627f;background:#0b1b2f;color:#dceeff;border-radius:9px;padding:13px 15px;font-size:14px;line-height:1.55;font-weight:650;margin:10px 0}.approval-feedback[data-kind="error"]{border-color:#d27379;background:#512530;color:#ffe4e8}.approval-feedback[data-kind="success"]{border-color:#3a936b;background:#123c32;color:#d0ffe6}.approval-feedback:focus{outline:2px solid #83cfff;outline-offset:3px}
 
 .rate-panel{border:1px solid #41627f;background:#0b1b2f;padding:16px;border-radius:10px;margin:14px 0}.rate-panel h3{margin:0 0 8px}#rate-warning,#default-warning{color:#ffce8e}#default-status{font-weight:700;white-space:pre-wrap}
+
+.product-heading{color:#9bd7ff;font-weight:800;padding:0 8px;font-size:16px;letter-spacing:.01em}.product label:nth-of-type(1){grid-column:1/-1}.size-review{color:#ffce8e;font-weight:700;font-size:13px}.size-review:empty{display:none}.whatsapp-link{background:#16744a}#wa-message{min-height:240px;resize:vertical}
