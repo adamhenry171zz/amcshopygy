@@ -28,6 +28,7 @@ function fakeStore(){
  return {get:async k=>data.has(k)?structuredClone(data.get(k)):null,
  getWithMetadata:async k=>data.has(k)?{data:structuredClone(data.get(k)),etag:etags.get(k)}:null,
  setJSON:async(k,v,opts={})=>{if(opts.onlyIfNew&&data.has(k)||opts.onlyIfMatch&&etags.get(k)!==opts.onlyIfMatch)return {modified:false};data.set(k,structuredClone(v));etags.set(k,String(++version));return {modified:true,etag:etags.get(k)}},
+ delete:async k=>{data.delete(k);etags.delete(k)},
  list:async({prefix})=>({blobs:[...data.keys()].filter(k=>k.startsWith(prefix)).map(key=>({key}))})};
 }
 const src=await readFile(new URL('../functions/henry-shein-quotes.mjs',import.meta.url),'utf8');
@@ -36,7 +37,8 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const production=fakeStore(),preview=fakeStore(),secret='x'.repeat(40),email='owner@example.invalid';
  const ownerPayload=Buffer.from(JSON.stringify({email,exp:Date.now()+600000})).toString('base64url');
  const cookie='henry_session='+ownerPayload+'.'+crypto.createHmac('sha256',secret).update(ownerPayload).digest('base64url');
- const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','renderQuotePdf','RATES','normalizeRates','publicEstimate','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,extractImages,reserveAttempt,renderQuotePdf,rules.RATES,rules.normalizeRates,rules.publicEstimate,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true'}},Response,URL,Buffer);
+ const calls=[];const mockExtract=async(images,retailer)=>{calls.push(images.length);return {items:[item(10)],evidence:['mock screenshot'],warnings:[],checkoutNotes:'',inputTokens:100,outputTokens:20,estimatedUsd:.001}};
+ const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','renderQuotePdf','RATES','normalizeRates','publicEstimate','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,mockExtract,reserveAttempt,renderQuotePdf,rules.RATES,rules.normalizeRates,rules.publicEstimate,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true',OPENAI_API_KEY:'mock-only'}},Response,URL,Buffer);
  const ctx={deploy:{context:'deploy-preview'}},live={deploy:{context:'production'}};
  async function call(action,body=null,auth=false,context=ctx,id=''){
   const r=await handler(new Request('https://preview.invalid/.netlify/functions/henry-shein-quotes?action='+action+(id?'&id='+id:''),{method:body===null?'GET':'POST',headers:{...(auth?{cookie}:{}),...(body?{'content-type':'application/json'}:{})},body:body===null?undefined:JSON.stringify(body)}),context);
@@ -80,6 +82,35 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const custom=await call('admin_save',{...directBody,id:freshId,items:[item(100)],freightAcknowledged:true,rates:{overall:340,down:245}},true);assert.equal(custom.status,200);assert.equal(custom.data.quote.totals.overall,34000);assert.equal(custom.data.quote.totals.down,24500);
  const locked=await call('admin_save',{...directBody,id:freshId,version:2,status:'sent',freightAcknowledged:true,rates:{overall:999,down:100}},true);assert.equal(locked.status,200);assert.equal(locked.data.quote.totals.overall,34000);assert.deepEqual(locked.data.quote.rates,{overall:340,down:245});
  assert.equal((await call('admin_get',null,true,ctx,directId)).data.quote.totals.overall,4700);
+ const png={mime:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1kAAAAASUVORK5CYII='};
+ assert.equal((await call('admin_upload_create',{kind:'owner'})).status,401);
+ const code=await call('admin_upload_create',{kind:'reseller',name:'Test reseller',limit:5,hours:24,maxUses:1},true);assert.equal(code.status,201);
+ const accessCode=code.data.code;assert.equal((await call('upload_check',{accessCode})).data.limit,5);
+ assert.equal((await call('upload_check',{accessCode},false,live)).status,400);
+ assert.equal((await call('upload_start',{accessCode,count:6})).status,400);
+ const opened=await call('upload_start',{accessCode,count:5});assert.equal(opened.status,200);const sessionId=opened.data.sessionId;
+ assert.equal((await call('upload_start',{accessCode,count:5})).status,400);
+ assert.equal((await call('upload_image',{sessionId,accessCode,index:5,screenshot:png})).status,400);
+ assert.equal((await call('upload_image',{sessionId,accessCode:'AMC-'+'x'.repeat(32),index:0,screenshot:png})).status,400);
+ const extended={sessionId,accessCode,name:'Large Cart',whatsapp:'+592 6000003',retailer:'Amazon',usConfirmed:true,aiConsent:true};
+ assert.equal((await call('submit',extended)).status,400);
+ for(let i=0;i<5;i++)assert.equal((await call('upload_image',{sessionId,accessCode,index:i,screenshot:png})).status,200);
+ assert.equal((await call('submit',extended)).status,201);
+ const ext=await call('admin_get',null,true,ctx,sessionId);assert.equal(ext.data.quote.screenshotCount,5);assert.equal(ext.data.quote.screenshots.length,0);assert.deepEqual(ext.data.quote.extendedScreenshots,[0,1,2,3,4]);
+ const evidenceUrl='https://preview.invalid/.netlify/functions/henry-shein-quotes?action=admin_evidence&id='+sessionId+'&index=4';
+ assert.equal((await handler(new Request(evidenceUrl),ctx)).status,401);
+ assert.equal((await handler(new Request(evidenceUrl,{headers:{cookie}}),ctx)).headers.get('content-type'),'image/png');
+ assert.equal((await call('admin_upload_codes',null,true)).data.codes[0].code,undefined);
+ assert.equal((await call('admin_ai',{id:sessionId,version:1})).status,401);
+ const batch1=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch1.data.ai.state,'partial');assert.equal(batch1.data.ai.nextIndex,3);
+ const batch2=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch2.data.ai.state,'ready');assert.equal(batch2.data.ai.nextIndex,5);assert.deepEqual(calls,[1]);assert.ok(batch2.data.ai.warnings.some(w=>w.includes('Duplicate screenshot')));
+ const cached=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(cached.data.cached,true);assert.deepEqual(calls,[1]);
+ assert.equal((await call('admin_upload_cleanup',{},true)).data.removed,0);
+ assert.equal((await handler(new Request(evidenceUrl,{headers:{cookie}}),ctx)).status,200);
+ assert.equal((await call('admin_upload_revoke',{id:code.data.access.id},true)).status,200);
+ assert.equal((await call('upload_image',{sessionId,accessCode,index:0,screenshot:png})).status,400);
+ const ownerCode=await call('admin_upload_create',{kind:'owner'},true);assert.equal(ownerCode.data.access.limit,30);assert.equal(ownerCode.data.access.expiresAt,null);
+ assert.equal((await call('submit',{...extended,sessionId:undefined,screenshots:[png,png,png,png]})).status,400);
  const pdfUrl='https://preview.invalid/.netlify/functions/henry-shein-quotes?action=admin_pdf&id='+directId;
  const unauthorized=await handler(new Request(pdfUrl),ctx);assert.equal(unauthorized.status,401);
  const pdf=await handler(new Request(pdfUrl,{headers:{cookie}}),ctx);assert.equal(pdf.status,200);assert.equal(pdf.headers.get('content-type'),'application/pdf');assert.ok(Buffer.from(await pdf.arrayBuffer()).toString('latin1').startsWith('%PDF-1.4'));

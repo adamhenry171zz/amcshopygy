@@ -1,6 +1,6 @@
 // Server-side quotation rules shared with the preview test suite.
 export const RATES=Object.freeze({overall:360,down:240});
-export const MAX_ITEMS=50;
+export const MAX_ITEMS=150;
 export function text(v,n=200){return String(v??'').trim().replace(/[\u0000-\u001f]/g,' ').slice(0,n)}
 export const RETAILERS=Object.freeze(['SHEIN','Amazon','Temu','eBay','Walmart','Fashion Nova','Nike','AliExpress','Other']);
 export function retailer(v){const s=String(v||'SHEIN');if(!RETAILERS.includes(s))throw Error('Select a supported shopping source.');return s}
@@ -26,7 +26,7 @@ const number=(v,label,min,max,integer=false)=>{
  const n=Number(s);if(!Number.isFinite(n)||n<min||n>max||(integer&&!Number.isInteger(n)))throw Error(label+' is out of range.');return n;
 };
 export function normalizeItems(input,{complete=false,store='SHEIN'}={}){
- if(!Array.isArray(input)||input.length>MAX_ITEMS)throw Error('Maximum 50 product rows.');
+ if(!Array.isArray(input)||input.length>MAX_ITEMS)throw Error('Maximum 150 product rows.');
  return input.map((v,i)=>{
   const p=v&&typeof v==='object'?v:{},name=text(p.name,200),size=text(p.size,60),color=text(p.color,80),link=p.link?safeRetailLink(p.link,store):'',image=safeImageLink(p.image),sku=text(p.sku,100);
   const price=p.price===''||p.price==null?null:number(p.price,'Price',0.01,10000);
@@ -71,7 +71,7 @@ export function nextTuesday(today){const d=new Date(today+'T12:00:00Z');if(!Numb
 // Explicitly customer-supplied tabular data. No requests to SHEIN or cart providers.
 export function parseCartText(input,store='SHEIN'){
  const lines=String(input||'').trim().split(/\r?\n/).filter(l=>l.trim());
- if(lines.length<2||lines.length>MAX_ITEMS+1)throw Error('Paste a tab-separated table with a header and 1–50 product rows.');
+ if(lines.length<2||lines.length>MAX_ITEMS+1)throw Error('Paste a tab-separated table with a header and 1–150 product rows.');
  const headers=lines.shift().split('\t').map(h=>h.toLowerCase().trim().replace(/[^a-z0-9]/g,''));
  const aliases={name:['name','title','product','productname','item'],price:['price','usdprice','priceusd','unitprice','unitpriceusd'],qty:['qty','quantity'],size:['size'],color:['color','colour'],link:['link','url','productlink'],sku:['sku','productsku'],image:['image','imageurl'],weight:['weight','weightlb','weightlbs'],currency:['currency','currencycode']};
  const indices=Object.fromEntries(Object.entries(aliases).map(([k,keys])=>[k,headers.findIndex(h=>keys.includes(h))]));
