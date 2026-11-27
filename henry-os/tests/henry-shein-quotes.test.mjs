@@ -37,7 +37,7 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const production=fakeStore(),preview=fakeStore(),secret='x'.repeat(40),email='owner@example.invalid';
  const ownerPayload=Buffer.from(JSON.stringify({email,exp:Date.now()+600000})).toString('base64url');
  const cookie='henry_session='+ownerPayload+'.'+crypto.createHmac('sha256',secret).update(ownerPayload).digest('base64url');
- const calls=[];const mockExtract=async(images,retailer)=>{calls.push(images.length);return {items:[item(10)],evidence:['mock screenshot'],warnings:[],checkoutNotes:'',inputTokens:100,outputTokens:20,estimatedUsd:.001}};
+ const calls=[];const mockExtract=async(images,retailer)=>{calls.push(images.length);return {items:[item(10)],evidence:['mock screenshot'],warnings:['Product 1: verify size'],checkoutNotes:'',inputTokens:100,outputTokens:20,estimatedUsd:.001}};
  const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','renderQuotePdf','RATES','normalizeRates','publicEstimate','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,mockExtract,reserveAttempt,renderQuotePdf,rules.RATES,rules.normalizeRates,rules.publicEstimate,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true',OPENAI_API_KEY:'mock-only'}},Response,URL,Buffer);
  const ctx={deploy:{context:'deploy-preview'}},live={deploy:{context:'production'}};
  async function call(action,body=null,auth=false,context=ctx,id=''){
@@ -96,7 +96,8 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  assert.equal((await call('upload_image',{sessionId,accessCode:'AMC-'+'x'.repeat(32),index:0,screenshot:png})).status,400);
  const extended={sessionId,accessCode,name:'Large Cart',whatsapp:'+592 6000003',retailer:'Amazon',usConfirmed:true,aiConsent:true};
  assert.equal((await call('submit',extended)).status,400);
- for(let i=0;i<5;i++)assert.equal((await call('upload_image',{sessionId,accessCode,index:i,screenshot:png})).status,200);
+ const png2={...png,data:Buffer.concat([Buffer.from(png.data,'base64'),Buffer.from([1])]).toString('base64')};
+ for(let i=0;i<5;i++)assert.equal((await call('upload_image',{sessionId,accessCode,index:i,screenshot:i===4?png2:png})).status,200);
  assert.equal((await call('submit',extended)).status,201);
  const ext=await call('admin_get',null,true,ctx,sessionId);assert.equal(ext.data.quote.screenshotCount,5);assert.equal(ext.data.quote.screenshots.length,0);assert.deepEqual(ext.data.quote.extendedScreenshots,[0,1,2,3,4]);
  const evidenceUrl='https://preview.invalid/.netlify/functions/henry-shein-quotes?action=admin_evidence&id='+sessionId+'&index=4';
@@ -105,9 +106,9 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  assert.equal((await call('admin_upload_codes',null,true)).data.codes[0].code,undefined);
  assert.equal((await call('admin_ai',{id:sessionId,version:1})).status,401);
  const batch1=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch1.data.ai.state,'partial');assert.equal(batch1.data.ai.nextIndex,3);
- const batch2=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch2.data.ai.state,'ready');assert.equal(batch2.data.ai.nextIndex,5);assert.deepEqual(calls,[1]);assert.ok(batch2.data.ai.warnings.some(w=>w.includes('Duplicate screenshot')));
- const cached=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(cached.data.cached,true);assert.deepEqual(calls,[1]);
- const usage=await call('admin_ai_usage',null,true);assert.equal(usage.data.today,1);assert.equal(usage.data.dailyRemaining,19);assert.equal(usage.data.monthlyRemaining,99);
+ const batch2=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(batch2.data.ai.state,'ready');assert.equal(batch2.data.ai.nextIndex,5);assert.deepEqual(calls,[1,1]);assert.ok(batch2.data.ai.warnings.some(w=>w.includes('Duplicate screenshot')));assert.ok(batch2.data.ai.warnings.some(w=>w.includes('Product 2: verify size')));
+ const cached=await call('admin_ai',{id:sessionId,version:1},true);assert.equal(cached.data.cached,true);assert.deepEqual(calls,[1,1]);
+ const usage=await call('admin_ai_usage',null,true);assert.equal(usage.data.today,2);assert.equal(usage.data.dailyRemaining,18);assert.equal(usage.data.monthlyRemaining,98);
  assert.equal((await call('admin_upload_cleanup',{},true)).data.removed,0);
  assert.equal((await handler(new Request(evidenceUrl,{headers:{cookie}}),ctx)).status,200);
  assert.equal((await call('admin_upload_revoke',{id:code.data.access.id},true)).status,200);

@@ -40,7 +40,7 @@
   }finally{URL.revokeObjectURL(url)}
  }
  form.onsubmit=async e=>{
-  e.preventDefault();if(!form.reportValidity())return;const files=[...filesInput.files],store=selected(),link=$('sq-link').value.trim();
+  e.preventDefault();if(!$('sq-confirmation').hidden||!form.reportValidity())return;const files=[...filesInput.files],store=selected(),link=$('sq-link').value.trim();
   if(!store){msg('Choose your shopping store.',true);return}
   if(files.length>limit){msg('Upload no more than '+limit+' screenshots.',true);return}
   if(!files.length&&!link){msg('Upload a cart screenshot or paste a shopping link.',true);return}

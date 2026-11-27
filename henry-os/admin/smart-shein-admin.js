@@ -38,15 +38,15 @@
  function refreshWhatsApp(){
   const q=active,phone=waPhone(q?.whatsapp),ready=!!(q?.totals&&q?.delivery&&['approved','sent'].includes(q.status));
   const link=$('wa-send');$('wa-panel').hidden=!q||!ready;
-  if(!ready||!phone){link.removeAttribute('href');link.setAttribute('aria-disabled','true');$('wa-message').value='';$('wa-help').textContent='Enter a valid customer WhatsApp number with country code.';return}
-  const message=quotationMessage(q,$('wa-returning').checked);$('wa-message').value=message;link.href='https://wa.me/'+phone+'?text='+encodeURIComponent(message);link.setAttribute('aria-disabled','false');
+  if(!ready||!phone){link.removeAttribute('href');link.setAttribute('aria-disabled','true');$('wa-message').value='';$('wa-help').textContent='Enter a valid customer WhatsApp number with country code.';$('wa-copy').disabled=true;return}
+  $('wa-copy').disabled=false;const message=quotationMessage(q,$('wa-returning').checked);$('wa-message').value=message;link.href='https://wa.me/'+phone+'?text='+encodeURIComponent(message);link.setAttribute('aria-disabled','false');const contact=$('wa-contact-link');if(contact){contact.href=link.href;contact.textContent='Open WhatsApp with quotation message'}
   $('wa-help').textContent='Download the approved PDF, open WhatsApp, attach the PDF and send the prepared message yourself. Opening WhatsApp does not mark the quotation as sent.';
  }
  $('wa-returning').onchange=refreshWhatsApp;
  $('wa-copy').onclick=async()=>{try{await navigator.clipboard.writeText($('wa-message').value);$('wa-help').textContent='Message copied. Attach the PDF before sending.'}catch{$('wa-message').select();$('wa-help').textContent='Select and copy the message manually.'}};
  function show(q){active=q;$('wa-returning').checked=false;$('quote-overall').value=q.rates.overall;$('quote-down').value=q.rates.down;$('retailer').value=q.retailer||'SHEIN';$('freight').checked=q.freightAcknowledged===true;renderAI(q.ai);$('editor').hidden=false;$('ref').textContent=q.reference+' · '+(q.retailer||'SHEIN')+' · '+q.name;$('contact').replaceChildren();
  const p=document.createElement('p');p.textContent=q.whatsapp+(q.email?' · '+q.email:'');$('contact').append(p);
- if(q.whatsapp){const phone=waPhone(q.whatsapp);if(phone){const a=document.createElement('a');a.href='https://wa.me/'+phone;a.textContent='Open WhatsApp conversation';if(!q.totals){a.href+='?text='+encodeURIComponent('Hi '+q.name.trim().split(/\s+/)[0]+'! 👋 Thank you for choosing AMC Shopping. We’ve received your quotation request ('+q.reference+') and will be in touch shortly. 💙')}a.target='_blank';a.rel='noopener noreferrer';$('contact').append(a)}}
+ if(q.whatsapp){const phone=waPhone(q.whatsapp);if(phone){const a=document.createElement('a');a.href='https://wa.me/'+phone;a.id='wa-contact-link';a.textContent='Open WhatsApp conversation';if(!q.totals){a.href+='?text='+encodeURIComponent('Hi '+q.name.trim().split(/\s+/)[0]+'! 👋 Thank you for choosing AMC Shopping. We’ve received your quotation request ('+q.reference+') and will be in touch shortly. 💙')}a.target='_blank';a.rel='noopener noreferrer';$('contact').append(a)}}
  $('customer-notes').textContent=q.notes||'No customer notes.';
  $('evidence').replaceChildren();const link=safeLink(q.cartLink);if(link){const a=document.createElement('a');a.href=link;a.textContent='Open customer cart / product link';a.target='_blank';a.rel='noopener noreferrer';$('evidence').append(a)}
  for(const s of q.screenshots||[]){if(!['image/png','image/jpeg','image/webp'].includes(s.mime))continue;const i=document.createElement('img');i.src='data:'+s.mime+';base64,'+s.data;i.alt='Customer cart screenshot';$('evidence').append(i)}
