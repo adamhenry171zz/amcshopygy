@@ -36,7 +36,7 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const production=fakeStore(),preview=fakeStore(),secret='x'.repeat(40),email='owner@example.invalid';
  const ownerPayload=Buffer.from(JSON.stringify({email,exp:Date.now()+600000})).toString('base64url');
  const cookie='henry_session='+ownerPayload+'.'+crypto.createHmac('sha256',secret).update(ownerPayload).digest('base64url');
- const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','renderQuotePdf','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,extractImages,reserveAttempt,renderQuotePdf,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true'}},Response,URL,Buffer);
+ const handler=new Function('crypto','getStore','getDeployStore','text','safeSheinLink','normalizeItems','quoteTotals','deliveryWindow','parseCartText','validateScreenshot','safeRetailLink','retailer','extractImages','reserveAttempt','renderQuotePdf','RATES','normalizeRates','publicEstimate','process','Response','URL','Buffer',stripped+'\nreturn handler;')(crypto,()=>production,()=>preview,rules.text,rules.safeSheinLink,rules.normalizeItems,rules.quoteTotals,rules.deliveryWindow,rules.parseCartText,rules.validateScreenshot,rules.safeRetailLink,rules.retailer,extractImages,reserveAttempt,renderQuotePdf,rules.RATES,rules.normalizeRates,rules.publicEstimate,{env:{HENRY_SESSION_SECRET:secret,HENRY_ADMIN_EMAIL:email,AMC_SMART_SHEIN_ENABLE_PRODUCTION:'true'}},Response,URL,Buffer);
  const ctx={deploy:{context:'deploy-preview'}},live={deploy:{context:'production'}};
  async function call(action,body=null,auth=false,context=ctx,id=''){
   const r=await handler(new Request('https://preview.invalid/.netlify/functions/henry-shein-quotes?action='+action+(id?'&id='+id:''),{method:body===null?'GET':'POST',headers:{...(auth?{cookie}:{}),...(body?{'content-type':'application/json'}:{})},body:body===null?undefined:JSON.stringify(body)}),context);
@@ -67,6 +67,19 @@ test('owner-only approval, preview isolation, screenshot retrieval, payment chec
  const blocked=await call('admin_save',directBody,true);assert.equal(blocked.status,400);assert.match(blocked.data.error,/freight review/);
  const ready=await call('admin_save',{...directBody,freightAcknowledged:true},true);
  assert.equal(ready.status,200);assert.equal(ready.data.quote.status,'approved');assert.equal(ready.data.quote.totals.overall,4700);assert.equal(ready.data.quote.delivery.arrivalFrom,'2026-12-08');
+ const settings=await call('admin_pricing',null,true);assert.deepEqual(settings.data.rates,{overall:360,down:240});
+ assert.equal((await call('admin_pricing_save',{rates:{overall:320,down:250},version:0})).status,401);
+ assert.equal((await call('admin_pricing_save',{rates:{overall:200,down:250},version:0},true)).status,400);
+ const changed=await call('admin_pricing_save',{rates:{overall:320,down:250},version:0},true);assert.equal(changed.status,200);
+ const estimate=await call('estimate',{items:[{price:100,weight:0}]});assert.equal(estimate.data.overall,32000);assert.equal(estimate.data.down,25000);assert.equal(estimate.data.rates,undefined);
+ assert.equal((await call('admin_pricing_save',{rates:{overall:350,down:240},version:0},true)).status,409);
+ assert.equal((await call('admin_pricing',null,true,live)).data.rates.overall,360);
+ const fresh=await call('submit',{name:'Custom Rate Test',whatsapp:'+592 6000002',retailer:'Amazon',usConfirmed:true,items:[item(100)]});assert.equal(fresh.status,201);
+ const freshId=(await call('admin_list',null,true)).data.quotes.find(q=>q.reference===fresh.data.reference).id;
+ assert.deepEqual((await call('admin_get',null,true,ctx,freshId)).data.quote.rates,{overall:320,down:250});
+ const custom=await call('admin_save',{...directBody,id:freshId,items:[item(100)],freightAcknowledged:true,rates:{overall:340,down:245}},true);assert.equal(custom.status,200);assert.equal(custom.data.quote.totals.overall,34000);assert.equal(custom.data.quote.totals.down,24500);
+ const locked=await call('admin_save',{...directBody,id:freshId,version:2,status:'sent',freightAcknowledged:true,rates:{overall:999,down:100}},true);assert.equal(locked.status,200);assert.equal(locked.data.quote.totals.overall,34000);assert.deepEqual(locked.data.quote.rates,{overall:340,down:245});
+ assert.equal((await call('admin_get',null,true,ctx,directId)).data.quote.totals.overall,4700);
  const pdfUrl='https://preview.invalid/.netlify/functions/henry-shein-quotes?action=admin_pdf&id='+directId;
  const unauthorized=await handler(new Request(pdfUrl),ctx);assert.equal(unauthorized.status,401);
  const pdf=await handler(new Request(pdfUrl,{headers:{cookie}}),ctx);assert.equal(pdf.status,200);assert.equal(pdf.headers.get('content-type'),'application/pdf');assert.ok(Buffer.from(await pdf.arrayBuffer()).toString('latin1').startsWith('%PDF-1.4'));
@@ -104,14 +117,14 @@ test('customer layout keeps both original calculators unchanged and removes comp
  const seeded=original.replace('<main>',()=>'<main>'+estimator).replace('</main>',()=>'<section class="quote-how"><p>Old instructions</p></section></main>');
  const shein=seeded.match(/<section id="shein-calculator"[^>]*>[\s\S]*?<\/section>/)[0];
  const result=redesignQuotePage(seeded);
- assert.ok(result.includes(estimator));assert.ok(result.includes(shein));
+ assert.ok(result.includes('data-card-service-estimator'));assert.ok(result.includes('data-shein-item-calculator'));assert.ok(result.includes('smart-quote-estimates.js'));assert.ok(!result.includes('USD × GYD $360'));
  assert.ok(result.indexOf('id="smart-shein-quote"')<result.indexOf('id="payment-estimator"'));
  assert.ok(result.indexOf('id="payment-estimator"')<result.indexOf('id="shein-calculator"'));
  assert.equal((result.match(/name="sq-retailer"/g)||[]).length,9);
  assert.equal((result.match(/id="quote-form"/g)||[]).length,1);
  assert.ok(!result.includes('name="amc-quotation-request"'));
  assert.ok(!result.includes('class="quote-how"'));
- assert.ok(result.includes('assets/shein-calculator.js'));
+ assert.ok(!result.includes('src="assets/shein-calculator.js"'));
  assert.ok(!result.includes('src="assets/quote.js"'));
  assert.ok(result.includes('id="sq-consent"'));assert.ok(result.includes('id="sq-us"'));
  assert.equal(redesignQuotePage(result),result);
@@ -139,4 +152,12 @@ test('approval UI reports exact missing fields and freight conditions',async()=>
  assert.ok(check([valid],{...opts,freightAcknowledged:false}).some(x=>x.includes('freight')));
  assert.ok(check([valid],{...opts,weightsAcknowledged:false}).some(x=>x.includes('unknown-weight')));
  assert.ok(check([valid],{...opts,extraGyd:'500'}).some(x=>x.includes('Describe')));
+});
+
+test('custom rates reconcile, retain heavy freight, and do not expose rates in estimates',()=>{
+ const t=rules.quoteTotals([item(100,1,4)],0,0,'SHEIN',{overall:320,down:250});assert.deepEqual([t.overall,t.down,t.balance],[38000,25000,13000]);
+ assert.throws(()=>rules.normalizeRates({overall:200,down:240}));
+ const e=rules.publicEstimate([{price:100,weight:0}],{overall:320,down:250});assert.deepEqual([e.overall,e.down,e.balance],[32000,25000,7000]);assert.equal(e.rates,undefined);
+ const q={name:'Test',whatsapp:'0000000',reference:'SQ-RATE',retailer:'Amazon',status:'approved',items:[item(100)],rates:{overall:320,down:250},totals:rules.quoteTotals([item(100)],0,0,'Amazon',{overall:320,down:250}),delivery:rules.deliveryWindow('2026-12-01','Amazon'),approvedAt:'2026-11-26'};
+ const pdf=renderQuotePdf(q).toString('latin1');assert.ok(pdf.includes('$32,000'));assert.ok(pdf.includes('$25,000'));assert.ok(pdf.includes('$7,000'));assert.ok(!pdf.includes('x GYD $240'));
 });

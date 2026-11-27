@@ -39,7 +39,14 @@ export function normalizeItems(input,{complete=false,store='SHEIN'}={}){
 // Preserve the currently deployed SHEIN calculator's rate brackets, per unit.
 export function shippingRate(w){return w<=10?1500:w<=25?1300:w<=55?1200:w<=99?1100:1050}
 const round100Cents=c=>Math.ceil(c/10000)*100;
-export function quoteTotals(items,feesUsd=0,extraGyd=0,store='SHEIN'){
+export function normalizeRates(input=RATES){
+ if(!input||typeof input!=='object'||Array.isArray(input))throw Error('Enter both pricing rates.');
+ const overall=number(input.overall,'Overall rate',1,10000,true),down=number(input.down,'Down-payment rate',1,10000,true);
+ if(down>overall)throw Error('Down-payment rate cannot exceed overall rate.');
+ return {overall,down};
+}
+export function quoteTotals(items,feesUsd=0,extraGyd=0,store='SHEIN',rates=RATES){
+ rates=normalizeRates(rates);
  retailer(store);
  if(!items.length||items.some(x=>x.price==null||x.qty==null))throw Error('Complete USD price and quantity for every item.');
  const usdFee=number(feesUsd,'Supplier fees (USD)',0,10000);
@@ -48,8 +55,8 @@ export function quoteTotals(items,feesUsd=0,extraGyd=0,store='SHEIN'){
  const subtotalCents=items.reduce((n,x)=>n+Math.round(x.price*100)*x.qty,0);
  const usdCents=subtotalCents+Math.round(usdFee*100);
  const heavyCents=items.reduce((n,x)=>n+(store==='SHEIN'&&x.weight!=null&&x.weight>3?Math.round(x.weight*100)*shippingRate(x.weight)*x.qty:0),0);
- const down=round100Cents(usdCents*240);
- const overall=round100Cents(usdCents*360+heavyCents+Math.round(extra*100));
+ const down=round100Cents(usdCents*rates.down);
+ const overall=round100Cents(usdCents*rates.overall+heavyCents+Math.round(extra*100));
  return {subtotalUsd:subtotalCents/100,feesUsd:usdFee,totalUsd:usdCents/100,heavyShippingGyd:heavyCents/100,extraGyd:extra,overall,down,balance:overall-down,unknownWeights:items.filter(x=>x.weight==null).length};
 }
 export function deliveryWindow(orderTuesday,store='SHEIN'){
@@ -84,4 +91,13 @@ export function validateScreenshot(s){
  const valid=mime==='image/png'?b.length>=8&&b.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):mime==='image/jpeg'?b.length>=4&&b[0]===255&&b[1]===216&&b[2]===255:b.length>=12&&b.toString('ascii',0,4)==='RIFF'&&b.toString('ascii',8,12)==='WEBP';
  if(!valid||b.length>1050000)throw Error('Screenshot format or size is invalid.');
  return {mime,data:b.toString('base64')};
+}
+
+// Public estimates expose amounts only; the current private rates stay on the server.
+export function publicEstimate(input,rates=RATES){
+ rates=normalizeRates(rates);
+ if(!Array.isArray(input)||input.length<1||input.length>20)throw Error('Enter 1–20 items.');
+ const rows=input.map((i)=>({price:number(i.price,'USD value',0,10000),qty:1,weight:number(i.weight??0,'Weight',0,500)}));
+ const total=quoteTotals(rows,0,0,'SHEIN',rates);
+ return {overall:total.overall,down:total.down,balance:total.balance,heavyShippingGyd:total.heavyShippingGyd,cardSubtotal:round100Cents(Math.round(total.subtotalUsd*100)*rates.overall),rows:rows.map(i=>{const t=quoteTotals([i],0,0,'SHEIN',rates);return {overall:t.overall,down:t.down,balance:t.balance,heavyShippingGyd:t.heavyShippingGyd}})};
 }

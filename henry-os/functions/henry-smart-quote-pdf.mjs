@@ -80,7 +80,7 @@ export function renderQuotePdf(q){
   txt(L+8,y+13,String(i+1),8,false);
   names.forEach((s,j)=>txt(L+28,y+12+j*11,s,9,true));
   variant.forEach((s,j)=>txt(L+28,y+12+names.length*11+j*10,s,8,false,gray));
-  right(R-94,y+13,usd(item.price*item.qty),9);right(R-9,y+13,gyd(Math.ceil(Math.round(item.price*100)*item.qty*360/10000)*100),9);
+  right(R-94,y+13,usd(item.price*item.qty),9);right(R-9,y+13,gyd(Math.ceil(Math.round(item.price*100)*item.qty*(q.rates?.overall??360)/10000)*100),9);
   y+=h;line(L,y,R,'0.82 0.87 0.93');
  }
  const feeRows=[['ITEM SUBTOTAL',usd(t.subtotalUsd),''],...(t.feesUsd?[['SUPPLIER CHECKOUT FEES',usd(t.feesUsd),'']]:[]),...(t.heavyShippingGyd?[['HEAVY-ITEM FREIGHT','',gyd(t.heavyShippingGyd)]]:[]),...(t.extraGyd?[['OTHER APPROVED CHARGES','',gyd(t.extraGyd)]]:[])];
@@ -90,7 +90,7 @@ export function renderQuotePdf(q){
  y+=10;txt(L,y,'* Per-item GYD figures are indicative; the approved overall is rounded up once.',8,false,gray);y+=12;
  box(L,y,TW*.48,68,pale);box(L+TW*.48+1,y,TW*.52-1,68,pale);
  txt(L+8,y+13,'HOW TO PAY',9,true);txt(L+8,y+26,'MMG: +592 604 2826',9);txt(L+8,y+39,'Account name: Adam Henry',9);txt(L+8,y+52,'Send payment confirmation before ordering.',8);
- const nx=L+TW*.48+9;txt(nx,y+13,'ORDER & PRICE NOTES',9,true);txt(nx,y+26,'Down-payment: '+usd(t.totalUsd)+' x GYD $240 (rounded up).',8);txt(nx,y+39,'Prices and availability confirmed at checkout.',8);txt(nx,y+52,'Additional freight may apply on final weight.',8);y+=84;
+ const nx=L+TW*.48+9;txt(nx,y+13,'ORDER & PRICE NOTES',9,true);txt(nx,y+26,'Down-payment: GYD '+gyd(t.down)+'.',8);txt(nx,y+39,'Prices and availability confirmed at checkout.',8);txt(nx,y+52,'Additional freight may apply on final weight.',8);y+=84;
  txt(L,y,'TERMS & CONDITIONS',10,true);y+=13;
  const terms='Quotation valid for 7 days, subject to stock and price changes. Confirm product details before purchase. Down-payment is non-refundable after order placement. Additional freight may apply once final weight is confirmed. Arrival may change due to supplier dispatch, customs, freight or weather delays.';
  for(const s of wrap(terms,113)){txt(L,y,s,8);y+=10}

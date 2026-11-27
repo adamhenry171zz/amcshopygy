@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import {getStore,getDeployStore} from '@netlify/blobs';
-import {text,safeSheinLink,safeRetailLink,retailer,normalizeItems,quoteTotals,deliveryWindow,parseCartText,validateScreenshot} from './henry-shein-quote-rules.mjs';
+import {text,safeSheinLink,safeRetailLink,retailer,normalizeItems,quoteTotals,deliveryWindow,parseCartText,validateScreenshot,RATES,normalizeRates,publicEstimate} from './henry-shein-quote-rules.mjs';
 import {extractImages,reserveAttempt} from './henry-smart-quote-ai.mjs';
 import {renderQuotePdf} from './henry-smart-quote-pdf.mjs';
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
@@ -17,8 +17,11 @@ function owner(req){
 const read=(store,key)=>store.get(key,{type:'json'});
 const isId=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 const key=id=>'quotes/'+id;
+const pricingKey='settings/pricing-v1';
+async function defaults(store){const d=await read(store,pricingKey);return d?{rates:normalizeRates(d.rates),version:d.version}:{rates:{...RATES},version:0}}
+async function quoteRates(store,row){return row.rates?normalizeRates(row.rates):row.totals||!['new','review','needs_info'].includes(row.status)?{...RATES}:(await defaults(store)).rates}
 const evidenceKey=id=>'evidence/'+id;
-async function withEvidence(store,row){const evidence=await read(store,evidenceKey(row.id));return {...row,retailer:row.retailer||'SHEIN',screenshots:evidence?.screenshots||[],ai:await read(store,'ai/'+row.id)}}
+async function withEvidence(store,row){const evidence=await read(store,evidenceKey(row.id));return {...row,rates:await quoteRates(store,row),retailer:row.retailer||'SHEIN',screenshots:evidence?.screenshots||[],ai:await read(store,'ai/'+row.id)}}
 const statuses=['new','review','needs_info','approved','sent','deposit_paid','ordered','arrived','paid','cancelled'];
 const transition={new:['review','needs_info','cancelled'],review:['needs_info','approved','cancelled'],needs_info:['review','cancelled'],approved:['review','sent','cancelled'],sent:['review','deposit_paid','cancelled'],deposit_paid:['ordered','cancelled'],ordered:['arrived'],arrived:['paid'],paid:[],cancelled:[]};
 const now=()=>new Date().toISOString();
@@ -40,6 +43,7 @@ export default async(req,context)=>{
  if(admin&&!owner(req))return json({error:'Owner login required.'},401);
  if(req.method==='POST'&&req.headers.get('origin')&&req.headers.get('origin')!==new URL(req.url).origin)return json({error:'Invalid origin.'},403);
  try{
+  if(action==='admin_pricing'&&req.method==='GET')return json(await defaults(store));
   if(action==='admin_list'&&req.method==='GET'){
    const data=await store.list({prefix:'quotes/',paginate:false});
    const rows=await Promise.all(data.blobs.slice(0,250).map(b=>read(store,b.key)));
@@ -61,6 +65,20 @@ export default async(req,context)=>{
   const raw=await req.text();if(Buffer.byteLength(raw)>4500000)return json({error:'Request too large.'},413);
   let b;try{b=JSON.parse(raw)}catch{return json({error:'Invalid JSON.'},400)}
   if(!b||typeof b!=='object'||Array.isArray(b))return json({error:'Invalid request.'},400);
+  if(action==='admin_pricing_save'){
+   const rates=normalizeRates(b.rates);
+   const record=await store.getWithMetadata(pricingKey,{type:'json'});
+   const version=record?.data?.version??0;
+   if(b.version!==version)return json({error:'Pricing defaults changed. Reload settings and try again.'},409);
+   const next={rates,version:version+1,updatedAt:now()};
+   const saved=await store.setJSON(pricingKey,next,record?.data?{onlyIfMatch:record.etag}:{onlyIfNew:true});
+   if(saved?.modified===false)return json({error:'Pricing defaults changed. Reload settings and try again.'},409);
+   return json({rates:next.rates,version:next.version});
+  }
+  if(action==='estimate'){
+   if(raw.length>8000)throw Error('Estimate request too large.');
+   return json(publicEstimate(b.items,(await defaults(store)).rates));
+  }
   if(action==='parse'){
    return json({items:parseCartText(b.cartText,retailer(b.retailer)),source:'customer_export',warning:'Confirm every quantity, size, colour and USD unit price.'});
   }
@@ -85,7 +103,7 @@ export default async(req,context)=>{
    if(count.count>=12)return json({error:'Too many quotation requests. Please try later.'},429);
    await store.setJSON(clientKey,{count:count.count+1});
    const id=crypto.randomUUID(),createdAt=now(),reference='SQ-'+id.slice(0,8).toUpperCase();
-   const row={id,reference,name,whatsapp,email,retailer:storeName,cartLink,notes,items,aiConsent:b.aiConsent===true,screenshotCount:checked.length,source:text(b.source,40)||'customer_manual',status:'new',feesUsd:0,extraGyd:0,feeNote:'',orderTuesday:'',followUp:'',ownerNotes:'',payments:[],createdAt,updatedAt:createdAt,version:1,events:[{at:createdAt,status:'new'}]};
+   const row={id,reference,name,whatsapp,email,rates:(await defaults(store)).rates,retailer:storeName,cartLink,notes,items,aiConsent:b.aiConsent===true,screenshotCount:checked.length,source:text(b.source,40)||'customer_manual',status:'new',feesUsd:0,extraGyd:0,feeNote:'',orderTuesday:'',followUp:'',ownerNotes:'',payments:[],createdAt,updatedAt:createdAt,version:1,events:[{at:createdAt,status:'new'}]};
    if(checked.length)await store.setJSON(evidenceKey(id),{screenshots:checked},{onlyIfNew:true});
    const saved=await store.setJSON(key(id),row,{onlyIfNew:true});
    if(saved?.modified===false)throw Error('Could not save request; please retry.');
@@ -120,12 +138,13 @@ export default async(req,context)=>{
    if(!statuses.includes(status)||status!==old.status&&!transition[old.status]?.includes(status)&&!(status==='approved'&&b.approve===true&&['new','needs_info'].includes(old.status)))throw Error('Invalid status transition.');
    const locked=['approved','sent','deposit_paid','ordered','arrived','paid','cancelled'].includes(old.status)&&status!=='review';
    const storeName=locked?(old.retailer||'SHEIN'):retailer(b.retailer||old.retailer),items=locked?old.items:normalizeItems(b.items||[],{store:storeName}),feesUsd=locked?old.feesUsd:Number(b.feesUsd||0),extraGyd=locked?old.extraGyd:Number(b.extraGyd||0),feeNote=locked?old.feeNote:text(b.feeNote,500),orderTuesday=locked?old.orderTuesday:text(b.orderTuesday,10);
+   const rates=locked?await quoteRates(store,old):normalizeRates(b.rates??await quoteRates(store,old));
    const payments=paymentList(b.payments||[]);if(payments.length&&['new','review','needs_info','cancelled'].includes(status))throw Error('Record payments only on approved or sent orders.');
    const followUp=text(b.followUp,10);if(followUp&&!dateOk(followUp))throw Error('Invalid follow-up date.');
    let totals=null,delivery=null;
    if(['approved','sent','deposit_paid','ordered','arrived','paid'].includes(status)){
     const complete=normalizeItems(items,{complete:true,store:storeName});
-    totals=quoteTotals(complete,feesUsd,extraGyd,storeName);delivery=deliveryWindow(orderTuesday,storeName);
+    totals=locked&&old.totals?old.totals:quoteTotals(complete,feesUsd,extraGyd,storeName,rates);delivery=locked&&old.delivery?old.delivery:deliveryWindow(orderTuesday,storeName);
     if(storeName!=='SHEIN'&&!(locked?old.freightAcknowledged===true:b.freightAcknowledged===true))throw Error('Confirm freight review for this retailer; use extra GYD for applicable freight.');
     if(totals.unknownWeights&&(locked?old.weightsAcknowledged!==true:b.weightsAcknowledged!==true))throw Error('Acknowledge unknown weights before approving.');
     if((feesUsd||extraGyd)&&!feeNote)throw Error('Describe the added fees before approval.');
@@ -134,7 +153,7 @@ export default async(req,context)=>{
     if(status==='paid'&&paid<totals.overall)throw Error('Full payment has not been recorded.');
     if(paid>totals.overall)throw Error('Recorded payments exceed quotation total.');
    }
-   const stamp=now(),row={...old,approvedAt:status==='approved'&&!locked?stamp:totals?(old.approvedAt||old.updatedAt):null,retailer:storeName,freightAcknowledged:locked?old.freightAcknowledged:b.freightAcknowledged===true,items,feesUsd,extraGyd,feeNote,orderTuesday,totals,delivery,weightsAcknowledged:locked?old.weightsAcknowledged:b.weightsAcknowledged===true,followUp,ownerNotes:text(b.ownerNotes,3000),payments,status,updatedAt:stamp,version:old.version+1,events:[...old.events,{at:stamp,status}].slice(-200)};
+   const stamp=now(),row={...old,approvedAt:status==='approved'&&!locked?stamp:totals?(old.approvedAt||old.updatedAt):null,retailer:storeName,rates,freightAcknowledged:locked?old.freightAcknowledged:b.freightAcknowledged===true,items,feesUsd,extraGyd,feeNote,orderTuesday,totals,delivery,weightsAcknowledged:locked?old.weightsAcknowledged:b.weightsAcknowledged===true,followUp,ownerNotes:text(b.ownerNotes,3000),payments,status,updatedAt:stamp,version:old.version+1,events:[...old.events,{at:stamp,status}].slice(-200)};
    const saved=await store.setJSON(key(id),row,{onlyIfMatch:record.etag});
    if(saved?.modified===false)return json({error:'Another update occurred; refresh and retry.'},409);
    return json({quote:await withEvidence(store,row)});
